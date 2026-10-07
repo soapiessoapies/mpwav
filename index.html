@@ -28,16 +28,16 @@
     <button id="sound" class="sound" type="button" aria-pressed="false">
       <span class="dot" aria-hidden="true"></span>Sound <span class="state" aria-hidden="true">Off</span>
     </button>
-    <button id="play" class="play" type="button" aria-pressed="false" aria-keyshortcuts="Space">
-      <span class="icon" aria-hidden="true"></span>Play
+    <button id="play" class="play" type="button" aria-pressed="false" aria-keyshortcuts="Space" aria-label="Play">
+      <span class="icon" aria-hidden="true"></span><span class="btn-word">Play</span>
     </button>
-    <button id="record" class="record" type="button" aria-pressed="false" aria-describedby="record-help">
-      <span class="rec-dot" aria-hidden="true"></span>Rec<span class="wide-only">ord</span>
+    <button id="record" class="record" type="button" aria-pressed="false" aria-describedby="record-help" aria-label="Record">
+      <span class="rec-dot" aria-hidden="true"></span><span class="btn-word">Rec<span class="wide-only">ord</span></span>
     </button>
-    <button id="loop" class="loop" type="button" aria-pressed="true">
-      <span class="loop-icon" aria-hidden="true"></span>Loop
+    <button id="loop" class="loop" type="button" aria-pressed="true" aria-label="Loop">
+      <span class="loop-icon" aria-hidden="true"></span><span class="btn-word">Loop</span>
     </button>
-    <label class="tempo">Tempo <input id="tempo" type="number" inputmode="numeric" step="1"> <span aria-hidden="true">BPM</span></label>
+    <label class="tempo"><span class="tempo-word">Tempo</span> <input id="tempo" type="number" inputmode="numeric" step="1"> <span aria-hidden="true">BPM</span></label>
     <button id="settings-btn" class="settings-btn" type="button" aria-haspopup="dialog" aria-label="Settings">
       <span class="gear" aria-hidden="true"></span><span class="settings-word">Settings</span>
     </button>

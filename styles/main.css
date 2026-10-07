@@ -94,7 +94,7 @@ kbd {
 .studio > * { min-width: 0; }
 /* layout: wide (Settings > Layout, or chosen from the window width) */
 [data-layout="wide"] .studio {
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 380px;
     grid-template-areas:
       "transport title"
       "playbox notes"
@@ -242,9 +242,9 @@ kbd {
 }
 .pager { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
 .pages { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
-.pages [role="tab"] { min-height: 40px; padding: 0 10px; font-size: 0.9rem; font-weight: 600; }
+.pages [role="tab"] { flex: 1 1 auto; min-height: 40px; padding: 0 6px; font-size: 0.82rem; font-weight: 600; }
 .pages [role="tab"][aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.page-arrow { flex: 0 0 auto; width: 44px; padding: 0; }
+.page-arrow { flex: 0 0 auto; width: 36px; padding: 0; }
 .page { display: grid; gap: 12px; }
 [role="tabpanel"]:focus-visible { outline-offset: -3px; }
 
@@ -536,3 +536,9 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .credits { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .credits dt { color: var(--muted); }
 .credits dd { margin: 0; }
+
+/* Phones: the transport fits one row as icons; every button keeps its name for screen readers (aria-label). */
+[data-layout="compact"] .transport-bar { flex-wrap: nowrap; }
+[data-layout="compact"] .transport-bar button { min-width: 44px; justify-content: center; padding: 0 8px; }
+[data-layout="compact"] .btn-word,
+[data-layout="compact"] .tempo-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
