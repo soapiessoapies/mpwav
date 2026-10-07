@@ -4,16 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#121419">
-<meta name="description" content="A music studio in the browser: a mixing desk, step patterns, synths and a keyboard.">
+<meta name="description" content="A music studio in the browser: a timeline of clips, synths, a mixing desk and a keyboard.">
 <title>Sound Studio</title>
 <link rel="stylesheet" href="styles/main.css">
+<script>
+  // Pick the layout before the first paint (Settings > Layout; app.js keeps it up to date).
+  (function () {
+    var pick = "auto";
+    try { pick = (JSON.parse(localStorage.getItem("sound-studio.ui")) || {}).layout || "auto"; } catch (e) {}
+    var w = window.innerWidth;
+    document.documentElement.dataset.layout =
+      pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
+  })();
+</script>
 </head>
 <body>
-<a class="skip" href="#make">Skip to the editor</a>
+<a class="skip" href="#playbox">Skip to the playing box</a>
+<h1 class="sr-only">Sound Studio</h1>
 
-<header class="topbar">
-  <h1>Sound Studio</h1>
-  <div class="transport" role="group" aria-label="Transport">
+<main class="studio">
+  <!-- Transport: above the playing box -->
+  <div class="transport-bar" role="group" aria-label="Transport">
     <button id="sound" class="sound" type="button" aria-pressed="false">
       <span class="dot" aria-hidden="true"></span>Sound <span class="state" aria-hidden="true">Off</span>
     </button>
@@ -23,39 +34,64 @@
     <button id="record" class="record" type="button" aria-pressed="false" aria-describedby="record-help">
       <span class="rec-dot" aria-hidden="true"></span>Rec<span class="wide-only">ord</span>
     </button>
+    <button id="loop" class="loop" type="button" aria-pressed="true">
+      <span class="loop-icon" aria-hidden="true"></span>Loop
+    </button>
     <label class="tempo">Tempo <input id="tempo" type="number" inputmode="numeric" step="1"> <span aria-hidden="true">BPM</span></label>
+    <button id="settings-btn" class="settings-btn" type="button" aria-haspopup="dialog" aria-label="Settings">
+      <span class="gear" aria-hidden="true"></span><span class="settings-word">Settings</span>
+    </button>
   </div>
-</header>
 
-<main>
-  <div class="tabbar">
-    <div class="tabs" role="tablist" aria-label="Editor">
-      <button type="button" role="tab" id="tab-mixer" class="tab" aria-controls="mixer" hidden>Mixer</button>
-      <button type="button" role="tab" id="tab-make" class="tab" aria-controls="make">Make</button>
-      <button type="button" role="tab" id="tab-arrange" class="tab" aria-controls="arrange">Arrange</button>
-      <button type="button" role="tab" id="tab-sound" class="tab" aria-controls="sound-panel">Sound</button>
+  <!-- Title: top right -->
+  <header class="title-block">
+    <label for="song-title" class="sr-only">Song title</label>
+    <input id="song-title" class="song-title" type="text" maxlength="80" autocomplete="off" spellcheck="false">
+    <p class="byline">by Phie &amp; Claude</p>
+  </header>
+
+  <!-- Playing box: the timeline -->
+  <section id="playbox" class="panel playbox" aria-labelledby="playbox-h" tabindex="-1">
+    <div class="panel-head">
+      <h2 id="playbox-h">Playing box</h2>
+      <button id="new-clip" type="button" class="quiet">New clip</button>
+      <div class="loop-range" role="group" aria-label="Loop">
+        <label for="loop-start">Loop bars</label>
+        <input id="loop-start" type="number" inputmode="numeric" min="1" step="1">
+        <label for="loop-end"><span aria-hidden="true">to</span><span class="sr-only">Loop to bar</span></label>
+        <input id="loop-end" type="number" inputmode="numeric" min="1" step="1">
+      </div>
+      <div class="octave" role="group" aria-label="Zoom">
+        <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+        <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+      </div>
     </div>
-    <label class="inline track-pick"><span class="pick-label">Track</span> <select id="track-pick"></select></label>
-  </div>
-
-  <section id="mixer" class="panel mixer-panel" aria-labelledby="mixer-h">
-    <div class="panel-head"><h2 id="mixer-h">Mixer</h2></div>
-    <div id="mixer-strips" class="strips"></div>
+    <p id="playbox-help" class="help">
+      Drag a clip to move it and its right edge to stretch it (the loop repeats). Double-click or double-tap
+      a clip to edit its notes, or an empty spot to make a new clip. Click the ruler to choose where Play starts;
+      drag along it to set the loop. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
+      <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
+    </p>
+    <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
+    <p id="song-status" class="song-status"></p>
   </section>
 
-  <!-- Make: one track's 1-bar patterns, recorded from the keyboard or clicked in -->
-  <section id="make" class="make-panel" role="tabpanel" aria-labelledby="tab-make" tabindex="0">
-    <section id="pattern" class="panel pattern-panel" aria-labelledby="pattern-h">
-      <div class="panel-head">
-        <h2 id="pattern-h">Pattern</h2>
-        <fieldset class="slots">
-          <legend class="sr-only">Pattern slot</legend>
-          <div id="slot-picker" class="seg"></div>
-        </fieldset>
-      </div>
-      <p id="loop-status" class="loop-status"></p>
+  <!-- Clip editor: the open clip's notes -->
+  <section id="clip-editor" class="panel clip-editor" aria-labelledby="clip-h" tabindex="-1">
+    <div class="panel-head">
+      <h2 id="clip-h">Clip</h2>
+      <label class="inline clip-name-field">Name <input id="clip-name" type="text" maxlength="40" autocomplete="off"></label>
+      <label class="inline">Loop <select id="clip-bars"></select></label>
+      <button id="close-clip" type="button" class="quiet">Close</button>
+    </div>
+    <p id="clip-empty" class="help">
+      No clip open. Double-click a clip in the playing box (or select it and press <kbd>Enter</kbd>) to edit its notes.
+      To start from nothing, press New clip.
+    </p>
+    <div id="clip-body">
+      <p id="clip-status" class="loop-status"></p>
       <div class="pattern-tools">
-        <div class="octave" role="group" aria-label="Pattern rows">
+        <div class="octave" role="group" aria-label="Note rows">
           <button id="rows-down" type="button" aria-label="Rows lower">−</button>
           <span id="rows-label" class="oct-label"></span>
           <button id="rows-up" type="button" aria-label="Rows higher">+</button>
@@ -66,84 +102,115 @@
       </div>
       <p class="help">
         Click or tap a square to add a note, again to remove it. Drag with a mouse to paint.
-        With a keyboard, arrows move and <kbd>Enter</kbd> adds or removes.
-        <kbd>Space</kbd> plays and stops from anywhere.
+        With a keyboard, arrows move and <kbd>Enter</kbd> adds or removes. <kbd>Space</kbd> plays and stops from anywhere.
       </p>
       <p id="record-help" class="help">
-        Record: the loop plays and whatever you play on the keyboard is added to this pattern,
+        Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
         snapped to the nearest step. Each pass adds on top; Undo take removes the last recording.
       </p>
       <div class="grid-scroll"><table id="grid" class="grid"></table></div>
       <p id="off-grid" class="off-grid" aria-live="polite"></p>
-    </section>
-
-    <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
-      <div class="panel-head">
-        <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
-        <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
-      </div>
-      <div id="keys-body">
-        <div class="keys-tools">
-          <div class="octave" role="group" aria-label="Octave">
-            <button id="oct-down" type="button" aria-label="Octave down">−</button>
-            <span id="oct-label" class="oct-label"></span>
-            <button id="oct-up" type="button" aria-label="Octave up">+</button>
-          </div>
-          <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
-        </div>
-        <p id="keys-help" class="help">
-          Plays the selected track. Tap or click the keys, or use your computer keys
-          <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work from any tab, even with the keyboard hidden).
-          <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
-          On a focused key, arrows move and <kbd>Enter</kbd> plays.
-        </p>
-        <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
-             aria-label="Piano keyboard" aria-describedby="keys-help"></div>
-      </div>
-    </section>
-  </section>
-
-  <!-- Arrange: which pattern each track plays in each bar -->
-  <section id="arrange" class="panel arrange-panel" role="tabpanel" aria-labelledby="tab-arrange" tabindex="0" hidden>
-    <div class="panel-head">
-      <h2 id="arrange-h">Arrange</h2>
-      <fieldset class="mode">
-        <legend class="sr-only">When you press Play</legend>
-        <div class="seg">
-          <input type="radio" name="mode" id="mode-loop" value="loop"><label for="mode-loop">Loop pattern</label>
-          <input type="radio" name="mode" id="mode-song" value="song"><label for="mode-song">Play song</label>
-        </div>
-      </fieldset>
     </div>
-    <p id="song-status" class="loop-status"></p>
-    <p class="help">
-      Each square is one bar. Tap a square to choose which pattern plays there: A, B, C, D, then empty again.
-      Drag along a row with a mouse to repeat a pattern. With a keyboard, arrows move, <kbd>Enter</kbd> changes
-      the pattern and <kbd>Delete</kbd> empties the bar.
-    </p>
-    <div class="grid-scroll"><table id="arrange-grid" class="grid arrange"></table></div>
   </section>
 
-  <section id="sound-panel" class="panel synth-panel" role="tabpanel" aria-labelledby="tab-sound" tabindex="0" hidden>
+  <!-- Note Edit: paged settings for the selected track (note pages come next) -->
+  <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
     <div class="panel-head">
-      <h2 id="synth-h">Synth</h2>
+      <h2 id="note-edit-h">Note Edit</h2>
+      <span id="note-edit-track" class="track-chip"></span>
+    </div>
+    <div class="pager">
+      <button id="page-prev" type="button" class="page-arrow" aria-label="Previous page"><span aria-hidden="true">◀</span></button>
+      <div class="pages" role="tablist" aria-label="Note Edit pages">
+        <button type="button" role="tab" id="tab-p-sound" aria-controls="p-sound">Sound</button>
+        <button type="button" role="tab" id="tab-p-shape" aria-controls="p-shape">Shape</button>
+        <button type="button" role="tab" id="tab-p-filter" aria-controls="p-filter">Filter</button>
+        <button type="button" role="tab" id="tab-p-warp" aria-controls="p-warp">Warp</button>
+        <button type="button" role="tab" id="tab-p-mix" aria-controls="p-mix">Mix</button>
+      </div>
+      <button id="page-next" type="button" class="page-arrow" aria-label="Next page"><span aria-hidden="true">▶</span></button>
+    </div>
+    <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0">
       <div class="preset">
         <label for="preset">Preset</label>
         <select id="preset"></select>
       </div>
-    </div>
-    <div class="sound-body">
       <section class="morph-box" aria-labelledby="morph-h">
         <h3 id="morph-h">Morph</h3>
         <div id="morph"></div>
       </section>
-      <div id="synth-controls" class="groups"></div>
+    </div>
+    <div id="p-shape" class="page" role="tabpanel" aria-labelledby="tab-p-shape" tabindex="0" hidden></div>
+    <div id="p-filter" class="page" role="tabpanel" aria-labelledby="tab-p-filter" tabindex="0" hidden></div>
+    <div id="p-warp" class="page" role="tabpanel" aria-labelledby="tab-p-warp" tabindex="0" hidden></div>
+    <div id="p-mix" class="page" role="tabpanel" aria-labelledby="tab-p-mix" tabindex="0" hidden>
+      <div id="mixer-strips" class="strips"></div>
+    </div>
+    <div id="synth-controls" hidden></div>
+  </section>
+
+  <!-- Editor / inputs: the keyboard, along the bottom -->
+  <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
+    <div class="panel-head">
+      <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
+      <div class="octave" role="group" aria-label="Octave">
+        <button id="oct-down" type="button" aria-label="Octave down">−</button>
+        <span id="oct-label" class="oct-label"></span>
+        <button id="oct-up" type="button" aria-label="Octave up">+</button>
+      </div>
+      <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
+      <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
+    </div>
+    <div id="keys-body">
+      <p id="keys-help" class="help">
+        Plays the selected track. Tap or click the keys, or use your computer keys
+        <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work even with the keyboard hidden).
+        <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
+        On a focused key, arrows move and <kbd>Enter</kbd> plays.
+      </p>
+      <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
+           aria-label="Piano keyboard" aria-describedby="keys-help"></div>
     </div>
   </section>
 </main>
 
+<dialog id="settings" class="settings" aria-labelledby="settings-h">
+  <div class="settings-head">
+    <h2 id="settings-h">Settings</h2>
+    <button id="settings-close" type="button" class="quiet">Close</button>
+  </div>
+
+  <section aria-labelledby="set-display-h">
+    <h3 id="set-display-h">Display</h3>
+    <button id="fullscreen" type="button" aria-pressed="false">Fullscreen</button>
+    <p id="fullscreen-help" class="help">Fills the whole screen with no browser bars. <kbd>Esc</kbd> or this button again leaves it; on Windows <kbd>F11</kbd> does the same.</p>
+    <fieldset class="choice">
+      <legend>Layout</legend>
+      <div class="seg">
+        <input type="radio" name="layout" id="layout-auto" value="auto"><label for="layout-auto">Auto</label>
+        <input type="radio" name="layout" id="layout-desktop" value="desktop"><label for="layout-desktop">Desktop</label>
+        <input type="radio" name="layout" id="layout-phone" value="phone"><label for="layout-phone">Phone</label>
+      </div>
+    </fieldset>
+    <p class="help">Auto picks from the window's width. Desktop always uses the side-by-side layout; Phone always stacks everything with the keyboard pinned at the bottom.</p>
+  </section>
+
+  <section aria-labelledby="set-credits-h">
+    <h3 id="set-credits-h">Credits</h3>
+    <p class="credits-title"><strong>Sound Studio</strong> <span id="version"></span></p>
+    <dl class="credits">
+      <dt>Made by</dt><dd>Phie &amp; Claude</dd>
+      <dt>Design and direction</dt><dd>Phie</dd>
+      <dt>Code</dt><dd>Phie &amp; Claude (Anthropic)</dd>
+      <dt>Made for</dt><dd>Creative Coding &amp; Innovation</dd>
+      <dt>Sound</dt><dd>Synthesized live in your browser with the Web Audio API</dd>
+    </dl>
+  </section>
+</dialog>
+
 <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
+<script src="src/version.js"></script>
 <script src="src/audio/notes.js"></script>
 <script src="src/audio/params.js"></script>
 <script src="src/audio/envelope.js"></script>
@@ -161,7 +228,7 @@
 <script src="src/ui/meter.js"></script>
 <script src="src/ui/mixer-view.js"></script>
 <script src="src/ui/step-grid.js"></script>
-<script src="src/ui/arrange-grid.js"></script>
+<script src="src/ui/timeline.js"></script>
 <script src="src/ui/tabs.js"></script>
 <script src="src/ui/morph-pad.js"></script>
 <script src="src/ui/app.js"></script>

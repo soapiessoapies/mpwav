@@ -1,7 +1,9 @@
-// The pattern grid for the selected track: a table with a row per note
-// (highest at the top) and a numbered column per step. Each cell is a toggle
-// button, so a screen reader hears "E 4, step 5, pressed" and the table's
-// row and column headers come for free.
+// The note grid of the open clip: a table with a row per note (highest at
+// the top) and a numbered column per step, 16 to a bar. Each cell is a
+// toggle button, so a screen reader hears "E 4, step 5, pressed" (or "E 4,
+// bar 2 step 5" in a longer clip) and the table's headers come for free.
+//
+// render() takes a view of what to show: { name, gridBase, steps, has(step, midi) }.
 //
 //   - click / tap a cell to add or remove a note (drag with a mouse to paint)
 //   - keyboard: arrows move around the grid, Home/End jump along the row,
@@ -12,7 +14,7 @@
   const ROWS = 13; // an octave, C to C
 
   function create(table, { onToggle }) {
-    let track = null;
+    let view = null;
     let steps = 16;
     let focus = { row: 0, step: 0 }; // the one cell in the tab order
     let paint = null; // while dragging with a mouse: true adds, false removes
@@ -20,16 +22,19 @@
     let columns = []; // per step: the header and the cells' table cells, for the playhead
     let lit = [];
 
-    const rowMidi = (row) => track.gridBase + (ROWS - 1 - row);
+    const rowMidi = (row) => view.gridBase + (ROWS - 1 - row);
+    // "step 5", or "bar 2 step 5" once a clip runs past one bar.
+    const where = (s) => (steps > 16 ? `bar ${Math.floor(s / 16) + 1} step ${(s % 16) + 1}` : `step ${s + 1}`);
     const cellEl = (row, step) => table.querySelector(`[data-row="${row}"][data-step="${step}"]`);
 
-    function render(t, nSteps) {
-      track = t;
-      steps = nSteps;
+    function render(v) {
+      view = v;
+      steps = v.steps;
+      if (focus.step >= steps) focus.step = 0;
       const hadFocus = table.contains(document.activeElement);
       table.textContent = "";
       table.setAttribute("aria-label",
-        `${t.name} pattern, ${Notes.noteName(t.gridBase)} to ${Notes.noteName(t.gridBase + ROWS - 1)}`);
+        `${v.name} notes, ${Notes.noteName(v.gridBase)} to ${Notes.noteName(v.gridBase + ROWS - 1)}`);
 
       const thead = table.createTHead();
       const hr = thead.insertRow();
@@ -40,10 +45,11 @@
       for (let s = 0; s < steps; s++) {
         const th = document.createElement("th");
         th.scope = "col";
-        th.textContent = s + 1;
+        th.textContent = (s % 16) + 1;
         th.dataset.step = s;
         if (s % 4 === 0) th.classList.add("beat");
-        th.setAttribute("aria-label", "step " + (s + 1));
+        if (s % 16 === 0 && s > 0) th.classList.add("bar-start");
+        th.setAttribute("aria-label", where(s));
         hr.append(th);
       }
 
@@ -60,13 +66,14 @@
         for (let s = 0; s < steps; s++) {
           const td = tr.insertCell();
           if (s % 4 === 0) td.classList.add("beat");
+          if (s % 16 === 0 && s > 0) td.classList.add("bar-start");
           const b = document.createElement("button");
           b.type = "button";
           b.className = "cell";
           b.dataset.row = r;
           b.dataset.step = s;
-          b.setAttribute("aria-label", `${Notes.spokenName(midi)}, step ${s + 1}`);
-          b.setAttribute("aria-pressed", String(Song.hasNote(t, s, midi)));
+          b.setAttribute("aria-label", `${Notes.spokenName(midi)}, ${where(s)}`);
+          b.setAttribute("aria-pressed", String(v.has(s, midi)));
           b.tabIndex = r === focus.row && s === focus.step ? 0 : -1;
           td.append(b);
         }
@@ -154,7 +161,8 @@
 
     // Shows a note as on or off without redrawing the grid (recording).
     function mark(step, midi, on) {
-      const row = ROWS - 1 - (midi - track.gridBase);
+      if (!view) return;
+      const row = ROWS - 1 - (midi - view.gridBase);
       if (row < 0 || row >= ROWS) return;
       cellEl(row, step)?.setAttribute("aria-pressed", String(on));
     }

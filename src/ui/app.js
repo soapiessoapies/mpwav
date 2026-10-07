@@ -1,6 +1,7 @@
-// Wires the studio together: the song (tracks, patterns, arrangement, mixer
-// settings), one synth and mixer channel per track, the transport, and the
-// panels. Sound starts on the first key or button press (browsers don't
+// Wires the studio together, laid out like the sketch: the transport over
+// the playing box (the timeline of clips), the clip editor under it, the
+// title and the paged Note Edit panel on the right, and the keyboard along
+// the bottom. Sound starts on the first key or button press (browsers don't
 // allow it sooner).
 //
 // Space plays and stops from anywhere, except where Space is the only way to
@@ -23,7 +24,8 @@
       try {
         localStorage.setItem(SONG_KEY, JSON.stringify(song));
         localStorage.setItem(UI_KEY, JSON.stringify({
-          announceNotes: ui.announceNotes, kbBase: kb.base, tab: ui.tab, keysOpen: ui.keysOpen,
+          announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout,
+          open: open, picked: picked,
         }));
       } catch (e) { /* private window or storage blocked */ }
     }, 200);
@@ -31,11 +33,20 @@
 
   const savedSong = load(SONG_KEY);
   const song = savedSong ? Song.sanitize(savedSong) : Song.demoSong();
-  const ui = { announceNotes: false, tab: "tab-make", keysOpen: true, ...(load(UI_KEY) || {}) };
-  if (!$(ui.tab)) ui.tab = "tab-make"; // a tab from an older version
+  const ui = { announceNotes: false, page: "tab-p-sound", keysOpen: true, layout: "auto", ...(load(UI_KEY) || {}) };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
+
+  // The clip being edited, and the clip selected on the timeline: { trackId, clipId }.
+  let open = ui.open || null;
+  let picked = ui.picked || null;
+  function find(ref) {
+    if (!ref) return null;
+    const t = song.tracks.find((x) => x.id === ref.trackId);
+    const clip = t && t.clips.find((c) => c.id === ref.clipId);
+    return clip ? { t, clip, c: Song.content(song, clip) } : null;
+  }
 
   Announce.attach($("announcer"));
 
@@ -55,7 +66,11 @@
       }
       Meter.add(mixerView.meter("master"), Engine.peak, true);
       applyMix();
-      transport = Transport.create(ctx, { getBpm: () => song.bpm, getSteps: () => Song.loopSteps(song), onStep });
+      transport = Transport.create(ctx, {
+        getBpm: () => song.bpm,
+        getSteps: () => { const r = Song.playRange(song); return (r.end - r.start) * Song.STEPS; },
+        onStep,
+      });
     }
   }
 
@@ -72,28 +87,32 @@
   }
 
   // --- playback ---
-  // The transport counts steps from the top of the loop: one bar's worth
-  // when looping patterns, the whole arrangement in song mode.
-  const playheadQueue = []; // { step, bar, time } waiting to be shown
+  // The transport counts steps from the start of the play range (the loop,
+  // or the cursor to the end); `pos` is that step counted from bar 1.
+  const playheadQueue = []; // { pos, time } waiting to be shown
   const booked = [];        // recently scheduled steps, for snapping recorded notes
-  const skipOnce = new Set(); // "step:midi" just recorded live, so it isn't played twice
+  const skipOnce = new Set(); // "pos:midi" just recorded live, so it isn't played twice
+  let endAt = null;          // when a non-looping play reaches the end of the song
 
   function onStep(count, time, dur) {
-    const bar = Math.floor(count / Song.STEPS);
-    const step = count % Song.STEPS;
+    const r = Song.playRange(song);
+    if (endAt !== null) return; // reached the end; waiting to stop
+    const pos = r.start * Song.STEPS + count;
     for (const t of Song.audible(song)) {
-      const slot = Song.slotFor(song, t, bar);
-      if (!slot) continue;
       const { synth } = audio[t.id];
-      for (const midi of Song.notesAt(t, step, slot)) {
-        if (t.id === song.selected && skipOnce.delete(step + ":" + midi)) continue;
+      for (const midi of Song.notesAtPos(song, t, pos)) {
+        if (t.id === song.selected && skipOnce.delete(pos + ":" + midi)) continue;
         const v = synth.noteOn(midi, 0.85, time);
         synth.voiceOff(v, time + dur * t.length * 0.92);
       }
     }
-    playheadQueue.push({ step, bar, time });
-    booked.push({ step, time });
+    playheadQueue.push({ pos, time });
+    booked.push({ pos, time });
     if (booked.length > 32) booked.shift();
+    if (!r.repeat && count === (r.end - r.start) * Song.STEPS - 1) {
+      endAt = time + dur;
+      setTimeout(() => { if (endAt !== null) stopLoop(); }, (endAt - Engine.ctx.currentTime) * 1000 + 50);
+    }
   }
 
   // Runs only while playing.
@@ -103,8 +122,10 @@
     let shown = null;
     while (playheadQueue.length && playheadQueue[0].time <= now) shown = playheadQueue.shift();
     if (shown) {
-      grid.setPlayhead(shown.step);
-      arrangeGrid.setPlayhead(song.mode === "song" ? shown.bar : -1);
+      timeline.setPlayhead(shown.pos);
+      const o = find(open);
+      const bar = Math.floor(shown.pos / Song.STEPS);
+      grid.setPlayhead(o && bar >= o.clip.start && bar < Song.clipEnd(o.clip) ? Song.localStep(song, o.clip, shown.pos) : -1);
     }
     requestAnimationFrame(drawPlayhead);
   }
@@ -113,11 +134,12 @@
     if (!transport || !transport.playing) return;
     endTake();
     transport.stop();
+    endAt = null;
     playheadQueue.length = 0;
     booked.length = 0;
     skipOnce.clear();
+    timeline.setPlayhead(-1);
     grid.setPlayhead(-1);
-    arrangeGrid.setPlayhead(-1);
     $("play").setAttribute("aria-pressed", "false");
     Announce.say("Stopped");
   }
@@ -125,10 +147,12 @@
   async function togglePlay() {
     if (transport && transport.playing) { stopLoop(); return; }
     await ready();
+    endAt = null;
     transport.start();
     requestAnimationFrame(drawPlayhead);
     $("play").setAttribute("aria-pressed", "true");
-    Announce.say(song.mode === "song" ? "Playing the song" : "Playing");
+    const r = Song.playRange(song);
+    Announce.say(r.repeat ? `Playing, looping bars ${r.start + 1} to ${r.end}` : `Playing from bar ${r.start + 1}`);
   }
   $("play").addEventListener("click", togglePlay);
 
@@ -143,24 +167,75 @@
     save();
   });
 
-  // --- recording: while on, the loop plays and live notes are added to the
-  // selected track's pattern, snapped to the nearest step. A take is one
+  // --- the loop ---
+  const loopBtn = $("loop"), loopStart = $("loop-start"), loopEnd = $("loop-end");
+  function showLoop() {
+    loopBtn.setAttribute("aria-pressed", String(song.loop.on));
+    loopStart.value = song.loop.start + 1;
+    loopEnd.value = song.loop.end; // bars are numbered from 1, so the last bar looped = end
+    loopStart.disabled = loopEnd.disabled = !song.loop.on;
+    showSongStatus();
+  }
+  function setLoop(start, end, announce) {
+    start = Math.max(0, start);
+    end = Math.max(start + 1, end);
+    song.loop = { on: true, start, end };
+    showLoop();
+    timeline.render();
+    if (announce) Announce.say(`Looping bars ${start + 1} to ${end}`);
+    save();
+  }
+  loopBtn.addEventListener("click", () => {
+    song.loop.on = !song.loop.on;
+    showLoop();
+    timeline.render();
+    Announce.say(song.loop.on ? `Loop on, bars ${song.loop.start + 1} to ${song.loop.end}` : "Loop off: Play runs from the cursor to the end");
+    save();
+  });
+  const readBar = (input, fallback) => { const v = Math.round(Number(input.value)); return Number.isFinite(v) && v >= 1 ? v : fallback; };
+  loopStart.addEventListener("change", () => setLoop(readBar(loopStart, song.loop.start + 1) - 1, Math.max(song.loop.end, readBar(loopStart, 1)), true));
+  loopEnd.addEventListener("change", () => setLoop(song.loop.start, Math.max(readBar(loopEnd, song.loop.end), song.loop.start + 1), true));
+
+  function showSongStatus() {
+    const n = Song.songBars(song);
+    const r = Song.playRange(song);
+    $("song-status").textContent = (n ? `The song is ${n} bar${n > 1 ? "s" : ""} long. ` : "No clips yet. ") +
+      (r.repeat ? `Play loops bars ${r.start + 1} to ${r.end}.` : `Play runs from bar ${r.start + 1} to bar ${r.end}, then stops.`);
+  }
+
+  // --- recording: while on, Play runs and live notes go into the open clip
+  // (or one at the cursor), snapped to the nearest step. A take is one
   // stretch of recording; Undo take removes what it added. ---
-  let take = null;     // { trackId, slot, notes } while recording
+  let take = null;     // { contentId, trackId, notes } while recording
   let lastTake = null; // the finished take Undo take would remove
   const recBtn = $("record");
   const undoBtn = $("undo-take");
 
-  async function startTake() {
-    if (song.mode !== "loop") {
-      setMode("loop");
-      Announce.say("Switched to Loop pattern for recording");
-    }
+  // The clip to record into: the open one if it's on the selected track,
+  // else the one at the cursor, else a new 1-bar clip at the first free bar.
+  function recordTarget() {
     const t = sel();
-    take = { trackId: t.id, slot: t.slot, notes: [] };
+    const o = find(open);
+    if (o && o.t === t) return o;
+    let clip = Song.clipAt(t, song.cursor);
+    if (!clip) {
+      let bar = song.cursor;
+      while (!Song.fits(t, bar, 1)) bar++;
+      clip = Song.addClip(song, t, bar, 1);
+    }
+    openClip(t, clip, false);
+    return find(open);
+  }
+
+  async function startTake() {
+    const target = recordTarget();
+    const { clip, c, t } = target;
+    // Loop the clip while recording into it.
+    setLoop(clip.start, Song.clipEnd(clip), false);
+    take = { contentId: c.id, trackId: t.id, notes: [] };
     recBtn.setAttribute("aria-pressed", "true");
     if (!transport || !transport.playing) await togglePlay();
-    Announce.say(`Recording into ${t.name} pattern ${t.slot}`);
+    Announce.say(`Recording into ${c.name}, looping bars ${clip.start + 1} to ${Song.clipEnd(clip)}`);
   }
 
   function endTake() {
@@ -180,12 +255,13 @@
   undoBtn.addEventListener("click", () => {
     if (!lastTake) return;
     endTake();
-    const t = Song.track(song, lastTake.trackId);
-    Song.removeNotes(t, lastTake.slot, lastTake.notes);
-    Announce.say(`Take undone: ${lastTake.notes.length} note${lastTake.notes.length > 1 ? "s" : ""} removed from ${t.name} ${lastTake.slot}`);
+    const c = song.contents[lastTake.contentId];
+    if (c) Song.removeNotes(c, lastTake.notes);
+    Announce.say(`Take undone: ${lastTake.notes.length} note${lastTake.notes.length > 1 ? "s" : ""} removed`);
     lastTake = null;
     undoBtn.disabled = true;
-    renderPattern();
+    renderEditor();
+    timeline.render();
     save();
   });
 
@@ -193,7 +269,7 @@
   function nearestStep() {
     const now = Engine.ctx.currentTime;
     const ahead = transport.peek();
-    let best = ahead && { step: ahead.step % Song.STEPS, time: ahead.time, upcoming: true };
+    let best = ahead && { pos: Song.playRange(song).start * Song.STEPS + ahead.step, time: ahead.time, upcoming: true };
     for (const b of booked) {
       if (!best || Math.abs(b.time - now) < Math.abs(best.time - now)) best = { ...b, upcoming: false };
     }
@@ -204,13 +280,17 @@
     if (!take || !transport || !transport.playing) return;
     const t = Song.track(song, take.trackId);
     const at = nearestStep();
-    if (!at || !Song.addNote(t, at.step, m, take.slot)) return;
-    take.notes.push({ step: at.step, midi: m });
+    if (!at) return;
+    const clip = Song.clipAt(t, Math.floor(at.pos / Song.STEPS));
+    if (!clip || clip.contentId !== take.contentId) return;
+    const local = Song.localStep(song, clip, at.pos);
+    if (!Song.addNote(song.contents[take.contentId], local, m)) return;
+    take.notes.push({ step: local, midi: m });
     // You already heard it as you played it; don't play it again a moment later.
-    if (at.upcoming) skipOnce.add(at.step + ":" + m);
-    if (t.id === song.selected && t.slot === take.slot) grid.mark(at.step, m, true);
-    showSlots();
+    if (at.upcoming) skipOnce.add(at.pos + ":" + m);
+    grid.mark(local, m, true);
     showOffGrid();
+    timeline.render();
     save();
   }
 
@@ -268,10 +348,10 @@
 
   // --- on-screen keyboard ---
   const kb = Keyboard.create($("keys"), { onOn: noteOn, onOff: noteOff });
-  const narrow = matchMedia("(max-width: 640px)");
+  const compact = () => document.documentElement.dataset.layout === "compact";
 
   function setKeyboard(base, announce) {
-    const span = narrow.matches ? 12 : 24;
+    const span = compact() ? 12 : 24;
     base = Math.max(Song.LOWEST, Math.min(Song.HIGHEST - span, base));
     base -= Notes.pitchClass(base); // always start on a C
     kb.setRange(base, span);
@@ -283,7 +363,6 @@
     save();
   }
   setKeyboard(typeof ui.kbBase === "number" ? ui.kbBase : 60, false);
-  narrow.addEventListener("change", () => setKeyboard(kb.base, false));
   $("oct-down").addEventListener("click", () => setKeyboard(kb.base - 12, true));
   $("oct-up").addEventListener("click", () => setKeyboard(kb.base + 12, true));
   $("panic").addEventListener("click", () => { panic(); Announce.say("All notes stopped"); });
@@ -304,8 +383,11 @@
   // Controls that need Space to work (checkbox, radio) keep it.
   const spaceIsTheirs = (t) => typingInto(t) || (t.tagName === "INPUT" && ["checkbox", "radio"].includes(t.type));
 
+  // Settings is its own little window: keys typed there aren't music.
+  const inDialog = (t) => !!(t && t.closest && t.closest("dialog"));
+
   document.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || inDialog(e.target)) return;
     if (e.code === "Space") {
       if (spaceIsTheirs(e.target)) return;
       e.preventDefault(); // also stops a focused button from being pressed
@@ -328,6 +410,7 @@
     }
   });
   document.addEventListener("keyup", (e) => {
+    if (inDialog(e.target)) return;
     if (e.code === "Space" && !spaceIsTheirs(e.target)) { e.preventDefault(); return; }
     if (!compHeld.has(e.code)) return;
     noteOff(compHeld.get(e.code));
@@ -340,49 +423,145 @@
     kb.releaseAll();
   });
 
-  // --- mixer ---
-  const mixerView = MixerView.create($("mixer-strips"), song, {
-    select: selectTrack,
-    volume(id, db) { Song.track(song, id).volume = db; applyMix(); save(); },
-    pan(id, v) { Song.track(song, id).pan = v; applyMix(); save(); },
-    mute(id, on) { Song.track(song, id).mute = on; applyMix(); save(); },
-    solo(id, on) { Song.track(song, id).solo = on; applyMix(); save(); },
-    master(db) { song.master = db; applyMix(); save(); },
+  // --- the playing box ---
+  const timeline = Timeline.create($("timeline"), {
+    song: () => song,
+    selectedClip: () => (find(picked) || {}).clip || null,
+    onSelectTrack: (id, announce) => selectTrack(id, announce !== false),
+    onSelectClip(t, clip, announce) {
+      picked = { trackId: t.id, clipId: clip.id };
+      if (song.selected !== t.id) selectTrack(t.id, false);
+      else timeline.render();
+      if (announce) Announce.say("Selected " + Song.content(song, clip).name);
+      save();
+    },
+    onOpenClip: (t, clip) => openClip(t, clip, true),
+    onNewClip(t, bar) {
+      const clip = Song.addClip(song, t, bar, 1);
+      if (!clip) { Announce.say("There's already a clip there"); return; }
+      selectTrack(t.id, false);
+      openClip(t, clip, true);
+      Announce.say(`New clip ${Song.content(song, clip).name} at bar ${bar + 1}`);
+    },
+    onDeleteClip(t, clip) {
+      const name = Song.content(song, clip).name;
+      const i = t.clips.indexOf(clip);
+      if (open && open.clipId === clip.id) closeClip();
+      Song.removeClip(song, t, clip);
+      picked = null;
+      afterChange(`Deleted ${name}`);
+      const next = t.clips[i] || t.clips[i - 1];
+      if (next) timeline.focusClip(next);
+    },
+    onCursor(bar) {
+      song.cursor = bar;
+      timeline.render();
+      showSongStatus();
+      Announce.say(`Cursor at bar ${bar + 1}`);
+      save();
+    },
+    onLoop: (start, end) => setLoop(start, end, true),
+    onChanged: (text) => afterChange(text),
+    onZoom: showZoom,
   });
 
-  // --- pattern grid (Make tab) ---
+  function afterChange(text) {
+    timeline.render();
+    renderEditor();
+    showSongStatus();
+    if (text) Announce.say(text);
+    save();
+  }
+
+  function showZoom(z) {
+    $("zoom-in").disabled = !z.canIn;
+    $("zoom-out").disabled = !z.canOut;
+  }
+  $("zoom-in").addEventListener("click", () => showZoom(timeline.zoomIn()));
+  $("zoom-out").addEventListener("click", () => showZoom(timeline.zoomOut()));
+
+  $("new-clip").addEventListener("click", () => {
+    const t = sel();
+    let bar = song.cursor;
+    while (!Song.fits(t, bar, 1)) bar++;
+    const clip = Song.addClip(song, t, bar, 1);
+    openClip(t, clip, true);
+    Announce.say(`New clip ${Song.content(song, clip).name} on ${t.name}, bar ${bar + 1}`);
+  });
+
+  // --- the clip editor ---
   const grid = StepGrid.create($("grid"), {
     onToggle(step, midi) {
-      const t = sel();
-      const on = Song.toggleNote(t, step, midi);
-      if (on) preview(t, midi);
-      showSlots();
+      const o = find(open);
+      if (!o) return false;
+      const on = Song.toggleNote(o.c, step, midi);
+      if (on) preview(o.t, midi);
       showOffGrid();
+      timeline.render();
       save();
       return on;
     },
   });
 
+  const barsSel = $("clip-bars");
+  for (const n of Song.CONTENT_BARS) barsSel.add(new Option(n === 1 ? "1 bar" : n + " bars", n));
+  barsSel.addEventListener("change", () => {
+    const o = find(open);
+    if (!o) return;
+    Song.setContentBars(o.c, Number(barsSel.value));
+    afterChange(`${o.c.name} loops ${o.c.bars} bar${o.c.bars > 1 ? "s" : ""}`);
+  });
+
+  const nameField = $("clip-name");
+  nameField.addEventListener("change", () => {
+    const o = find(open);
+    if (!o) return;
+    o.c.name = nameField.value.trim().slice(0, 40) || o.c.name;
+    nameField.value = o.c.name;
+    afterChange();
+  });
+
   const lengthSel = $("note-length");
   for (const n of Song.LENGTHS) lengthSel.add(new Option(n === 1 ? "1 step" : n + " steps", n));
-  lengthSel.addEventListener("change", () => { sel().length = Number(lengthSel.value); save(); });
+  lengthSel.addEventListener("change", () => { sel().length = Number(lengthSel.value); timeline.render(); save(); });
+
+  function openClip(t, clip, focus) {
+    endTake();
+    resetUndo();
+    open = { trackId: t.id, clipId: clip.id };
+    picked = { trackId: t.id, clipId: clip.id };
+    if (song.selected !== t.id) selectTrack(t.id, false);
+    afterChange();
+    if (focus) {
+      $("clip-editor").focus();
+      Announce.say(`Editing ${Song.content(song, clip).name}`);
+    }
+  }
+
+  function closeClip() {
+    endTake();
+    open = null;
+    renderEditor();
+    save();
+  }
+  $("close-clip").addEventListener("click", () => { closeClip(); Announce.say("Clip closed"); });
 
   function setGridBase(base, announce) {
     const t = sel();
     t.gridBase = Math.max(Song.LOWEST, Math.min(Song.HIGHEST - 12, base));
-    renderPattern();
+    renderEditor();
     if (announce) Announce.say(`Rows ${Notes.noteName(t.gridBase)} to ${Notes.noteName(t.gridBase + 12)}`);
     save();
   }
   $("rows-down").addEventListener("click", () => setGridBase(sel().gridBase - 12, true));
   $("rows-up").addEventListener("click", () => setGridBase(sel().gridBase + 12, true));
 
-  // Notes that are in the pattern but above or below the rows on screen.
+  // Notes that are in the clip but above or below the rows on screen.
   function showOffGrid() {
-    const t = sel();
-    const notes = Song.notesOf(t);
-    const above = notes.filter((n) => n.midi > t.gridBase + 12).length;
-    const below = notes.filter((n) => n.midi < t.gridBase).length;
+    const o = find(open);
+    if (!o) { $("off-grid").textContent = ""; return; }
+    const above = o.c.notes.filter((n) => n.midi > o.t.gridBase + 12).length;
+    const below = o.c.notes.filter((n) => n.midi < o.t.gridBase).length;
     const parts = [];
     if (above) parts.push(`${above} note${above > 1 ? "s" : ""} higher up`);
     if (below) parts.push(`${below} lower down`);
@@ -392,137 +571,74 @@
   let undoClear = null;
   const clearBtn = $("clear");
   clearBtn.addEventListener("click", () => {
-    const t = sel();
+    const o = find(open);
+    if (!o) return;
     if (undoClear) {
-      Song.track(song, undoClear.id).patterns[undoClear.slot] = undoClear.notes;
+      const c = song.contents[undoClear.contentId];
+      if (c) c.notes = undoClear.notes;
       undoClear = null;
       clearBtn.textContent = "Clear";
-      Announce.say("Pattern restored");
+      Announce.say("Notes restored");
     } else {
-      if (!Song.notesOf(t).length) return;
+      if (!o.c.notes.length) return;
       endTake();
-      undoClear = { id: t.id, slot: t.slot, notes: Song.notesOf(t) };
-      t.patterns[t.slot] = [];
+      undoClear = { contentId: o.c.id, notes: o.c.notes };
+      o.c.notes = [];
       lastTake = null;
       undoBtn.disabled = true;
       clearBtn.textContent = "Undo clear";
-      Announce.say(`${t.name} pattern ${t.slot} cleared. Press Undo clear to bring it back.`);
+      Announce.say(`${o.c.name} cleared. Press Undo clear to bring the notes back.`);
     }
-    renderPattern();
-    save();
+    afterChange();
   });
   function resetUndo() {
     undoClear = null;
     clearBtn.textContent = "Clear";
   }
 
-  // --- pattern slots A-D ---
-  const slotPicker = $("slot-picker");
-  const slotInputs = {};
-  for (const slot of Song.SLOTS) {
-    const input = document.createElement("input");
-    input.type = "radio";
-    input.name = "slot";
-    input.id = "slot-" + slot;
-    input.value = slot;
-    input.addEventListener("change", () => { if (input.checked) setSlot(slot); });
-    const label = document.createElement("label");
-    label.htmlFor = input.id;
-    label.innerHTML = `${slot}<span class="slot-dot" aria-hidden="true"></span><span class="sr-only"></span>`;
-    slotPicker.append(input, label);
-    slotInputs[slot] = { input, label };
-  }
-
-  function setSlot(slot) {
-    const t = sel();
-    if (t.slot === slot) return;
-    endTake();
-    resetUndo();
-    t.slot = slot;
-    renderPattern();
-    Announce.say(`Pattern ${slot}${Song.notesOf(t).length ? "" : ", empty"}`);
-    save();
-  }
-
-  // Marks which slots have notes, and says what Play will do with this pattern.
-  function showSlots() {
-    const t = sel();
-    for (const slot of Song.SLOTS) {
-      const { input, label } = slotInputs[slot];
-      input.checked = slot === t.slot;
-      const used = t.patterns[slot].length > 0;
-      label.classList.toggle("used", used);
-      label.querySelector(".sr-only").textContent = used ? "" : " (empty)";
+  function renderEditor() {
+    const o = find(open);
+    if (open && !o) open = null; // the clip was deleted
+    $("clip-empty").hidden = !!o;
+    $("clip-body").hidden = !o;
+    nameField.disabled = barsSel.disabled = $("close-clip").disabled = !o;
+    if (!o) {
+      $("clip-h").textContent = "Clip";
+      nameField.value = "";
+      return;
     }
-    showLoopStatus();
-  }
-
-  // Bar numbers as short ranges: [0,1,2,5] -> "1–3, 6".
-  function barList(bars) {
-    const out = [];
-    for (let i = 0; i < bars.length; i++) {
-      let j = i;
-      while (j + 1 < bars.length && bars[j + 1] === bars[j] + 1) j++;
-      out.push(i === j ? `${bars[i] + 1}` : `${bars[i] + 1}–${bars[j] + 1}`);
-      i = j;
-    }
-    return out.join(", ");
-  }
-
-  function showLoopStatus() {
-    const t = sel();
-    if (song.mode === "loop") {
-      $("loop-status").textContent = `Pattern ${t.slot} · 1 bar · repeats while playing`;
-    } else {
-      const bars = t.arrange.map((s, i) => (s === t.slot ? i : -1)).filter((i) => i >= 0);
-      $("loop-status").textContent = bars.length
-        ? `Song mode: pattern ${t.slot} plays in bar${bars.length > 1 ? "s" : ""} ${barList(bars)}`
-        : `Song mode: pattern ${t.slot} isn't placed in the arrangement yet`;
-    }
-    const n = Song.songBars(song);
-    $("song-status").textContent = n
-      ? `The song is ${n} bar${n > 1 ? "s" : ""} long. ${song.mode === "song" ? "Play runs it from bar 1, then starts again." : "Choose Play song to hear it."}`
-      : "The arrangement is empty. Tap squares to place patterns in bars.";
-  }
-
-  function renderPattern() {
-    const t = sel();
-    grid.render(t, song.steps);
-    $("pattern-h").textContent = t.name;
+    const { t, clip, c } = o;
+    $("clip-h").textContent = "Clip: " + t.name;
+    $("clip-editor").style.setProperty("--track", `var(--c-${t.color})`);
+    nameField.value = c.name;
+    barsSel.value = c.bars;
+    const links = Song.linkCount(song, c.id);
+    const span = clip.length === 1 ? `bar ${clip.start + 1}` : `bars ${clip.start + 1}–${Song.clipEnd(clip)}`;
+    $("clip-status").textContent = `${c.bars}-bar loop · this clip covers ${span}` +
+      (clip.length > c.bars ? ", repeating it" : "") +
+      (links > 1 ? ` · linked: edits change all ${links} copies` : "");
+    grid.render({ name: c.name, gridBase: t.gridBase, steps: c.bars * Song.STEPS, has: (s, m) => Song.hasNote(c, s, m) });
     $("rows-label").textContent = `${Notes.noteName(t.gridBase)} to ${Notes.noteName(t.gridBase + 12)}`;
     $("rows-down").disabled = t.gridBase <= Song.LOWEST;
     $("rows-up").disabled = t.gridBase + 12 >= Song.HIGHEST;
     lengthSel.value = t.length;
-    showSlots();
     showOffGrid();
   }
 
-  // --- arrangement (Arrange tab) ---
-  const arrangeGrid = ArrangeGrid.create($("arrange-grid"), {
-    onSet(t, bar, slot) {
-      t.arrange[bar] = slot;
-      showLoopStatus();
-      save();
-    },
-    onSelectTrack: (id) => selectTrack(id),
-  });
-
-  function setMode(mode) {
-    song.mode = mode;
-    $("mode-" + mode).checked = true;
-    showLoopStatus();
+  // --- title ---
+  const titleField = $("song-title");
+  titleField.value = song.title;
+  const showTitle = () => { document.title = `${song.title} — Sound Studio`; };
+  titleField.addEventListener("input", () => { song.title = titleField.value.slice(0, 80); showTitle(); save(); });
+  titleField.addEventListener("change", () => {
+    song.title = titleField.value.trim() || "Untitled song";
+    titleField.value = song.title;
+    showTitle();
     save();
-  }
-  for (const mode of Song.MODES) {
-    $("mode-" + mode).addEventListener("change", (e) => {
-      if (!e.target.checked) return;
-      setMode(mode);
-      Announce.say(mode === "song" ? "Play runs the whole song" : "Play repeats the patterns you're editing");
-    });
-  }
-  $("mode-" + song.mode).checked = true;
+  });
+  showTitle();
 
-  // --- synth panel (Sound tab, for the selected track) ---
+  // --- Note Edit: paged settings for the selected track ---
   const controls = Controls.build($("synth-controls"), {
     get: () => sel().params,
     onChange(id, value) {
@@ -532,6 +648,22 @@
       save();
     },
   });
+  // The control groups go onto their pages.
+  const pageFor = { osc: "p-shape", env: "p-shape", filter: "p-filter", out: "p-filter", warp: "p-warp" };
+  for (const [g, page] of Object.entries(pageFor)) $(page).append(document.querySelector(".group-" + g));
+
+  const pages = Tabs.create(document.querySelector(".pages"), {
+    onSelect(id) { ui.page = id; save(); },
+  });
+  pages.select($(ui.page) ? ui.page : "tab-p-sound", false);
+  const pageIds = [...document.querySelectorAll(".pages [role=tab]")].map((t) => t.id);
+  const turnPage = (dir) => {
+    const i = (pageIds.indexOf(pages.current) + dir + pageIds.length) % pageIds.length;
+    pages.select(pageIds.at(i), false);
+    Announce.say(`${$(pageIds.at(i)).textContent} page, ${i + 1} of ${pageIds.length}`);
+  };
+  $("page-prev").addEventListener("click", () => turnPage(-1));
+  $("page-next").addEventListener("click", () => turnPage(1));
 
   const presetSel = $("preset");
   for (const p of Presets.PRESETS) presetSel.add(new Option(p.name, p.id));
@@ -546,7 +678,6 @@
     save();
   });
 
-  // --- morph pad (for the selected track) ---
   const morphPad = MorphPad.create($("morph"), {
     onChange(pos) {
       const t = sel();
@@ -559,63 +690,42 @@
     },
   });
 
-  // --- track picker (handy on phones, where the mixer is behind a tab) ---
-  const trackPick = $("track-pick");
-  for (const t of song.tracks) trackPick.add(new Option(t.name, t.id));
-  trackPick.addEventListener("change", () => selectTrack(trackPick.value));
+  const mixerView = MixerView.create($("mixer-strips"), song, {
+    select: selectTrack,
+    volume(id, db) { Song.track(song, id).volume = db; applyMix(); save(); },
+    pan(id, v) { Song.track(song, id).pan = v; applyMix(); save(); },
+    mute(id, on) { Song.track(song, id).mute = on; applyMix(); timeline.render(); save(); },
+    solo(id, on) { Song.track(song, id).solo = on; applyMix(); timeline.render(); save(); },
+    master(db) { song.master = db; applyMix(); save(); },
+  });
 
   function selectTrack(id, announce = true) {
     if (song.selected !== id) {
       panic();
       endTake();
-      resetUndo();
     }
     song.selected = id;
     const t = sel();
-    $("synth-h").textContent = "Synth: " + t.name;
+    const chip = $("note-edit-track");
+    chip.textContent = t.name;
+    chip.style.setProperty("--track", `var(--c-${t.color})`);
     presetSel.value = t.preset;
-    trackPick.value = t.id;
     morphPad.set(t.morph);
     controls.refresh(t.params);
     mixerView.refresh();
-    arrangeGrid.render(song);
-    renderPattern();
-    if (announce) Announce.say("Editing " + t.name);
+    timeline.render();
+    renderEditor();
+    if (announce) Announce.say("Selected " + t.name);
     save();
   }
-  selectTrack(song.selected, false);
-
-  // --- tabs: Make, Arrange and Sound, plus Mixer on phones (on bigger
-  // screens the mixer is always on show beside them) ---
-  const tabs = Tabs.create(document.querySelector(".tabs"), {
-    onSelect(id) { ui.tab = id; save(); },
-  });
-  function layoutMixer() {
-    const mixer = $("mixer"), tab = $("tab-mixer");
-    tab.hidden = !narrow.matches;
-    if (narrow.matches) {
-      mixer.setAttribute("role", "tabpanel");
-      mixer.setAttribute("aria-labelledby", "tab-mixer");
-      mixer.tabIndex = 0;
-    } else {
-      mixer.removeAttribute("role");
-      mixer.setAttribute("aria-labelledby", "mixer-h");
-      mixer.removeAttribute("tabindex");
-      mixer.hidden = false;
-    }
-    tabs.refresh();
-  }
-  tabs.select(ui.tab, false);
-  layoutMixer();
-  narrow.addEventListener("change", layoutMixer);
 
   // --- show / hide the keyboard (the computer keys keep working) ---
   const keysToggle = $("keys-toggle");
-  function showKeys(open) {
-    ui.keysOpen = open;
-    keysToggle.setAttribute("aria-expanded", String(open));
-    $("keys-body").hidden = !open;
-    if (!open) kb.releaseAll();
+  function showKeys(isOpen) {
+    ui.keysOpen = isOpen;
+    keysToggle.setAttribute("aria-expanded", String(isOpen));
+    $("keys-body").hidden = !isOpen;
+    if (!isOpen) kb.releaseAll();
     save();
   }
   keysToggle.addEventListener("click", () => showKeys(keysToggle.getAttribute("aria-expanded") !== "true"));
@@ -635,4 +745,65 @@
     soundBtn.setAttribute("aria-pressed", String(on));
     soundBtn.querySelector(".state").textContent = on ? "On" : "Off";
   });
+
+  // --- settings: layout, fullscreen, credits ---
+  // The layout comes from the setting, or from the window's width on Auto.
+  function applyLayout() {
+    const w = window.innerWidth;
+    const want = ui.layout === "desktop" ? "wide" : ui.layout === "phone" ? "compact"
+      : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
+    if (document.documentElement.dataset.layout !== want) {
+      document.documentElement.dataset.layout = want;
+      setKeyboard(kb.base, false);
+    }
+  }
+  window.addEventListener("resize", applyLayout);
+
+  const settings = $("settings");
+  $("version").textContent = "v" + window.STUDIO_VERSION;
+  $("settings-btn").addEventListener("click", () => {
+    $("layout-" + ui.layout).checked = true;
+    settings.showModal();
+  });
+  $("settings-close").addEventListener("click", () => settings.close());
+  // A click on the dim backdrop (outside the box) closes it too.
+  settings.addEventListener("click", (e) => { if (e.target === settings) settings.close(); });
+  settings.addEventListener("close", () => $("settings-btn").focus());
+
+  for (const choice of ["auto", "desktop", "phone"]) {
+    $("layout-" + choice).addEventListener("change", (e) => {
+      if (!e.target.checked) return;
+      ui.layout = choice;
+      applyLayout();
+      Announce.say(`${choice === "auto" ? "Automatic" : choice === "desktop" ? "Desktop" : "Phone"} layout`);
+      save();
+    });
+  }
+
+  const fsBtn = $("fullscreen");
+  if (!document.fullscreenEnabled) {
+    // iPhones only allow fullscreen for video; add to the home screen instead.
+    fsBtn.disabled = true;
+    $("fullscreen-help").textContent = "This browser doesn't allow fullscreen pages. On a phone, add Sound Studio to your home screen instead.";
+  }
+  fsBtn.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+    } catch (e) {
+      Announce.say("Fullscreen isn't available here");
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    const on = !!document.fullscreenElement;
+    fsBtn.setAttribute("aria-pressed", String(on));
+    Announce.say(on ? "Fullscreen" : "Left fullscreen");
+  });
+
+  // --- first paint ---
+  if (!find(picked)) picked = null;
+  applyLayout();
+  selectTrack(song.selected, false);
+  showLoop();
+  showZoom({ canIn: true, canOut: true });
 })();

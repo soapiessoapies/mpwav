@@ -1,6 +1,6 @@
 {
   "name": "sound-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A music studio in the browser: synths, a keyboard, an arrangement view and a mixer. No-build browser app; open index.html, or run \"npm run serve\".",
   "private": true,
   "scripts": {
