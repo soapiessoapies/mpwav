@@ -30,6 +30,8 @@ level of sound design.
 
 ## Running it
 
+- **Live:** https://soapiessoapies.github.io/sound-studio/ (GitHub Pages, redeploys on every push to `main`)
+
 - **Double-click `Sound Studio.cmd`** to open it in Chrome as an app window.
 - **To test on a phone:** run `npm run serve` and open the "on your network" address it prints
   from a phone on the same Wi-Fi.
