@@ -29,6 +29,8 @@ test("Y moves from tight to spacious through the envelope", () => {
   assert.ok(Math.abs(spacious.attack - 0.16) < 1e-9);
   assert.ok(tight.sustain < 0.5 && spacious.sustain > 0.5);
   assert.equal(spacious.cutoff, 1000, "Y leaves the filter alone");
+  assert.equal(spacious.reverb, 0.5, "spacious adds reverb");
+  assert.equal(tight.reverb, 0, "tight doesn't remove the track's own reverb");
 });
 
 test("results always stay inside each parameter's range", () => {

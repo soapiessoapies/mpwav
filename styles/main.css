@@ -210,13 +210,13 @@ main > * { min-width: 0; }
 
 .groups {
   display: grid; gap: var(--gap);
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .group {
-  background: var(--panel-2); border-radius: 8px; padding: 12px;
-  display: grid; gap: 12px; align-content: start;
+  background: var(--panel-2); border-radius: 8px; padding: 10px 12px;
+  display: grid; gap: 6px; align-content: start;
 }
 .group > legend {
   float: left; width: 100%; padding: 0; margin-bottom: 2px;
@@ -231,7 +231,7 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 
 input[type="range"]:not(.fader) {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 32px; margin: 0; background: transparent; cursor: pointer;
+  width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer;
 }
 input[type="range"]:not(.fader)::-webkit-slider-runnable-track {
   height: 6px; border-radius: 3px; background: var(--line);

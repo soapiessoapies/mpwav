@@ -17,6 +17,8 @@
     let focus = { row: 0, step: 0 }; // the one cell in the tab order
     let paint = null; // while dragging with a mouse: true adds, false removes
     let playhead = -1;
+    let columns = []; // per step: the header and the cells' table cells, for the playhead
+    let lit = [];
 
     const rowMidi = (row) => track.gridBase + (ROWS - 1 - row);
     const cellEl = (row, step) => table.querySelector(`[data-row="${row}"][data-step="${step}"]`);
@@ -69,6 +71,12 @@
           td.append(b);
         }
       }
+      columns = [];
+      for (let st = 0; st < steps; st++) {
+        columns.push([table.querySelector(`th[data-step="${st}"]`),
+          ...[...table.querySelectorAll(`.cell[data-step="${st}"]`)].map((b) => b.parentElement)]);
+      }
+      lit = [];
       setPlayhead(playhead);
       if (hadFocus) cellEl(focus.row, focus.step)?.focus();
     }
@@ -139,10 +147,9 @@
     // Lights the column that's playing (or nothing, with -1).
     function setPlayhead(step) {
       playhead = step;
-      for (const el of table.querySelectorAll(".now")) el.classList.remove("now");
-      if (step < 0) return;
-      table.querySelector(`th[data-step="${step}"]`)?.classList.add("now");
-      for (const b of table.querySelectorAll(`.cell[data-step="${step}"]`)) b.parentElement.classList.add("now");
+      for (const el of lit) el.classList.remove("now");
+      lit = step >= 0 && columns[step] ? columns[step] : [];
+      for (const el of lit) el.classList.add("now");
     }
 
     return { render, setPlayhead, ROWS };

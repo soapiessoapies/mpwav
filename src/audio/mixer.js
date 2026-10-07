@@ -13,7 +13,7 @@
     const fader = ctx.createGain();
     const mute = ctx.createGain();
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
+    analyser.fftSize = 256; // only read for peaks; small is enough
     input.connect(pan);
     pan.connect(fader);
     fader.connect(mute);

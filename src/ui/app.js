@@ -47,7 +47,7 @@
       const ctx = Engine.ctx;
       for (const t of song.tracks) {
         const channel = Mixer.createChannel(ctx, Engine.input);
-        const synth = Synth.create(ctx, channel.input, live(t));
+        const synth = Synth.create(ctx, channel.input, live(t), { reverb: Engine.reverb, bpm: song.bpm });
         audio[t.id] = { synth, channel };
         Meter.add(mixerView.meter(t.id), channel.peak, true);
       }
@@ -83,16 +83,15 @@
     playheadQueue.push({ step, time });
   }
 
+  // Runs only while the loop plays.
   function drawPlayhead() {
-    if (transport && transport.playing) {
-      const now = Engine.ctx.currentTime;
-      let shown = null;
-      while (playheadQueue.length && playheadQueue[0].time <= now) shown = playheadQueue.shift().step;
-      if (shown != null) grid.setPlayhead(shown);
-    }
+    if (!transport || !transport.playing) return;
+    const now = Engine.ctx.currentTime;
+    let shown = null;
+    while (playheadQueue.length && playheadQueue[0].time <= now) shown = playheadQueue.shift().step;
+    if (shown != null) grid.setPlayhead(shown);
     requestAnimationFrame(drawPlayhead);
   }
-  requestAnimationFrame(drawPlayhead);
 
   function stopLoop() {
     if (!transport || !transport.playing) return;
@@ -107,6 +106,7 @@
     if (transport && transport.playing) { stopLoop(); return; }
     await ready();
     transport.start();
+    requestAnimationFrame(drawPlayhead);
     $("play").setAttribute("aria-pressed", "true");
     Announce.say("Playing");
   }
@@ -119,6 +119,7 @@
     const v = Math.round(Number(tempo.value));
     song.bpm = Number.isFinite(v) ? Math.min(Song.BPM.max, Math.max(Song.BPM.min, v)) : song.bpm;
     tempo.value = song.bpm;
+    for (const id in audio) audio[id].synth.setTempo(song.bpm);
     save();
   });
 

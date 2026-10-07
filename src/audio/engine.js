@@ -1,5 +1,7 @@
 // The audio engine: one AudioContext for the whole studio, and the master bus
 // every instrument plays into (master volume -> limiter -> meter -> speakers).
+// It also owns the one reverb that every track sends into: one shared room
+// sounds more natural than four, and costs a quarter of the CPU.
 //
 // Browsers only allow sound after the user taps or presses something, so the
 // context is made on the first gesture (start()). On iPhones Web Audio is also
@@ -9,7 +11,7 @@
   "use strict";
 
   let ctx = null;
-  let bus = null; // { input, master, limiter, analyser }
+  let bus = null; // { input, master, limiter, analyser, reverb }
   const listeners = new Set();
 
   const isIOS = () =>
@@ -31,15 +33,39 @@
     limiter.attack.value = 0.002;
     limiter.release.value = 0.1;
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
+    analyser.fftSize = 256; // only read for peaks; small is enough
 
     input.connect(master);
     master.connect(limiter);
     limiter.connect(analyser);
     analyser.connect(ctx.destination);
-    bus = { input, master, limiter, analyser };
+
+    const reverb = ctx.createGain(); // tracks' reverb sends connect here
+    const room = ctx.createConvolver();
+    room.buffer = roomImpulse(ctx, 2.4);
+    reverb.connect(room);
+    room.connect(master);
+    bus = { input, master, limiter, analyser, reverb };
 
     ctx.onstatechange = emit;
+  }
+
+  // A made-up room: stereo noise fading away over `seconds`, a little
+  // brighter at the start, like early reflections.
+  function roomImpulse(ctx, seconds) {
+    const len = Math.round(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        const white = Math.random() * 2 - 1;
+        lp += (white - lp) * (0.6 - 0.45 * t); // darker as it fades
+        d[i] = lp * Math.pow(1 - t, 3) * 0.6;
+      }
+    }
+    return buf;
   }
 
   // Lets iPhones play through the silent switch. Newer Safari has a setting
@@ -128,6 +154,7 @@
     onChange,
     get ctx() { return ctx; },
     get input() { return bus && bus.input; },
+    get reverb() { return bus && bus.reverb; },
     get state() { return ctx ? ctx.state : "off"; },
   };
   root.Engine = api;

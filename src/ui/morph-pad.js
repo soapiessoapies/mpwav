@@ -62,12 +62,19 @@
 
     // --- dragging on the square ---
     let dragging = null;
+    let pending = null; // the latest pointer position, applied once per frame
     function fromPointer(e) {
-      const r = pad.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * 2 - 1;
-      const y = 1 - ((e.clientY - r.top) / r.height) * 2; // up is spacious
-      set({ x, y });
-      onChange(pos);
+      const first = !pending;
+      pending = { cx: e.clientX, cy: e.clientY };
+      if (!first) return;
+      requestAnimationFrame(() => {
+        const r = pad.getBoundingClientRect();
+        const x = ((pending.cx - r.left) / r.width) * 2 - 1;
+        const y = 1 - ((pending.cy - r.top) / r.height) * 2; // up is spacious
+        pending = null;
+        set({ x, y });
+        onChange(pos);
+      });
     }
     pad.addEventListener("pointerdown", (e) => {
       if (e.button > 0) return;

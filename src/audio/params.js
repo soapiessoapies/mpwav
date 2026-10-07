@@ -37,6 +37,14 @@
     { id: "resonance", label: "Resonance", group: "filter", kind: "range", min: 0.1, max: 20, scale: "log", def: 1, unit: "q" },
     { id: "filterEnv", label: "Envelope amount", group: "filter", kind: "range", min: 0, max: 4, def: 0, unit: "octaves" },
     { id: "volume", label: "Volume", group: "out", kind: "range", min: -48, max: 0, step: 0.5, def: -6, unit: "dB" },
+    // Warp: movement and effects. Every one is off at its default.
+    { id: "lfoRate", label: "Wobble speed", group: "warp", kind: "range", min: 0.1, max: 16, scale: "log", def: 4, unit: "rate" },
+    { id: "vibrato", label: "Vibrato", group: "warp", kind: "range", min: 0, max: 100, step: 1, def: 0, unit: "depth" },
+    { id: "wobble", label: "Filter wobble", group: "warp", kind: "range", min: 0, max: 4, def: 0, unit: "octaves" },
+    { id: "drive", label: "Drive", group: "warp", kind: "range", min: 0, max: 1, def: 0, unit: "amount" },
+    { id: "crush", label: "Bit crush", group: "warp", kind: "range", min: 0, max: 1, def: 0, unit: "amount" },
+    { id: "echo", label: "Echo", group: "warp", kind: "range", min: 0, max: 1, def: 0, unit: "amount" },
+    { id: "reverb", label: "Reverb", group: "warp", kind: "range", min: 0, max: 1, def: 0, unit: "amount" },
   ];
 
   const BY_ID = Object.fromEntries(DEFS.map((d) => [d.id, d]));
@@ -93,6 +101,12 @@
         return signed(value, s) + (s ? " cents" : " ct");
       case "oct":
         return value === 0 ? (s ? "no shift" : "0") : signed(value, s) + (s ? (Math.abs(value) === 1 ? " octave" : " octaves") : "");
+      case "rate":
+        return num(value) + (s ? " hertz" : " Hz");
+      case "depth":
+        return value === 0 ? (s ? "off" : "Off") : Math.round(value) + (s ? " cents" : " ct");
+      case "amount":
+        return value === 0 ? (s ? "off" : "Off") : Math.round(value * 100) + (s ? " percent" : "%");
       case "octaves":
         return value === 0 ? (s ? "off" : "Off") : num(value) + (s ? " octaves" : " oct");
       default:
@@ -120,9 +134,18 @@
     return out;
   }
 
+  // One parameter's value made valid (cheaper than sanitizing the whole set,
+  // for things that change many times a second like the morph pad).
+  function clean(id, value) {
+    const d = BY_ID[id];
+    if (!d) return undefined;
+    if (d.kind === "choice") return d.options.some((o) => o.id === value) ? value : d.def;
+    return typeof value === "number" && Number.isFinite(value) ? snap(d, value) : d.def;
+  }
+
   const dbToGain = (db) => Math.pow(10, db / 20);
 
-  const api = { STEPS, WAVES, FILTERS, DEFS, BY_ID, toPos, fromPos, format, defaults, sanitize, dbToGain };
+  const api = { STEPS, WAVES, FILTERS, DEFS, BY_ID, toPos, fromPos, format, defaults, sanitize, clean, dbToGain };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Params = api;
 })(typeof window !== "undefined" ? window : globalThis);

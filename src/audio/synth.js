@@ -1,8 +1,12 @@
 // A polyphonic subtractive synth: one oscillator (or noise) per note, through
-// its own filter and envelope, into the synth's volume. Wave shapes include the
-// NES-style pulse widths and a stepped noise channel for 8-bit sounds.
+// its own filter and envelope, into the synth's volume and warp effects.
+// Wave shapes include the NES-style pulse widths and a stepped noise channel
+// for 8-bit sounds.
 //
-//   source -> filter (cutoff, resonance, envelope on detune) -> amp envelope -> volume -> out
+//   source -> filter -> amp envelope -> volume -> drive -> bit crush -> out
+//                                                                  +-> echo -> out
+//                                                                  +-> reverb send
+// One LFO per synth wobbles every voice's pitch (vibrato) and filter (wobble).
 (function (root) {
   "use strict";
 
@@ -53,16 +57,86 @@
     return c.noise;
   }
 
+  // Shaper curves, cached by amount so dragging a slider doesn't rebuild them
+  // over and over. Amount 0 means no curve at all: the shaper passes the
+  // sound straight through, costing nothing.
+  const curves = new Map();
+  function curve(kind, amount) {
+    if (amount <= 0) return null;
+    const key = kind + Math.round(amount * 100);
+    if (!curves.has(key)) {
+      const n = 4096, c = new Float32Array(n);
+      if (kind === "drive") {
+        const k = 1 + amount * 20;
+        const norm = Math.tanh(k);
+        for (let i = 0; i < n; i++) c[i] = Math.tanh(k * (i / (n - 1) * 2 - 1)) / norm;
+      } else {
+        // Fewer volume steps the more it's crushed: 12 bits down to 2. The
+        // synth's signal sits well below full scale (around a quarter), so
+        // the steps are sized to that, or quiet notes would just turn into
+        // loud square waves.
+        const levels = Math.pow(2, Math.round(12 - amount * 10) - 1) * CRUSH_SCALE;
+        for (let i = 0; i < n; i++) c[i] = Math.round((i / (n - 1) * 2 - 1) * levels) / levels;
+      }
+      curves.set(key, c);
+    }
+    return curves.get(key);
+  }
+
+  const CRUSH_SCALE = 4;
+  // Driving a quiet signal into the curve makes it much louder; this much
+  // turn-down keeps a fully driven sound close to the clean one's level.
+  const DRIVE_MAKEUP = 7;
+  const ECHO_STEPS = 3;      // echo every 3 sixteenths (a dotted eighth), in time with the song
+  const ECHO_FEEDBACK = 0.38;
+
   // Web Audio wants low/high-pass resonance in decibels, band-pass as a ratio.
   const filterQ = (type, r) => (type === "bandpass" ? r : 20 * Math.log10(r));
 
-  function create(ctx, destination, initial) {
+  // opts: { reverb: the shared reverb's input, bpm: the song's tempo }
+  function create(ctx, destination, initial, opts = {}) {
     let p = Params.sanitize(initial);
     const pool = Voices.createPool(MAX_VOICES);
 
-    const out = ctx.createGain();
+    // --- output chain ---
+    const out = ctx.createGain(); // the synth's volume
     out.gain.value = volumeGain(p.volume);
-    out.connect(destination);
+    const drive = ctx.createWaveShaper();
+    drive.oversample = "2x"; // less harsh aliasing when driven hard
+    const crush = ctx.createWaveShaper();
+    const post = ctx.createGain();
+    out.connect(drive);
+    drive.connect(crush);
+    crush.connect(post);
+    post.connect(destination);
+
+    const echoSend = ctx.createGain();
+    const delay = ctx.createDelay(2);
+    const echoTone = ctx.createBiquadFilter(); // each repeat a little darker
+    echoTone.type = "lowpass";
+    echoTone.frequency.value = 3500;
+    const feedback = ctx.createGain();
+    feedback.gain.value = ECHO_FEEDBACK;
+    post.connect(echoSend);
+    echoSend.connect(delay);
+    delay.connect(echoTone);
+    echoTone.connect(feedback);
+    feedback.connect(delay);
+    echoTone.connect(destination);
+
+    const reverbSend = ctx.createGain();
+    post.connect(reverbSend);
+    if (opts.reverb) reverbSend.connect(opts.reverb);
+
+    // --- the LFO ---
+    const lfo = ctx.createOscillator();
+    const vib = ctx.createGain(); // cents of pitch wobble
+    const wob = ctx.createGain(); // cents of filter wobble
+    lfo.connect(vib);
+    lfo.connect(wob);
+    lfo.start();
+
+    let bpm = opts.bpm || 120;
 
     function volumeGain(db) {
       return db <= Params.BY_ID.volume.min ? 0 : Params.dbToGain(db);
@@ -99,6 +173,8 @@
       src.connect(filter);
       filter.connect(vca);
       vca.connect(out);
+      vib.connect(src.detune);
+      wob.connect(filter.detune);
 
       const env = {
         start: when, attack: p.attack, decay: p.decay, sustain: p.sustain,
@@ -112,6 +188,7 @@
 
       const voice = { midi, src, filter, vca, env, fenv };
       src.onended = () => {
+        vib.disconnect(src.detune); wob.disconnect(filter.detune);
         src.disconnect(); filter.disconnect(); vca.disconnect();
         pool.remove(voice);
       };
@@ -155,18 +232,36 @@
       for (const v of pool.all()) cutVoice(v);
     }
 
-    // Changes a parameter. Filter, tuning and volume changes are heard on
-    // notes already playing; the rest apply from the next note.
+    // Changes a parameter. Filter, tuning, volume and warp changes are heard
+    // on notes already playing; the rest apply from the next note.
     function set(id, value) {
-      p = Params.sanitize({ ...p, [id]: value });
+      const v = Params.clean(id, value);
+      if (v === undefined) return;
+      p[id] = v;
       const now = ctx.currentTime;
-      const glide = (param, v) => param.setTargetAtTime(v, now, 0.015);
-      if (id === "volume") glide(out.gain, volumeGain(p.volume));
-      for (const v of pool.all()) {
-        if (id === "cutoff") glide(v.filter.frequency, p.cutoff);
-        else if (id === "resonance") glide(v.filter.Q, filterQ(v.filter.type, p.resonance));
-        else if (id === "detune") glide(v.src.detune, p.detune);
+      const glide = (param, x) => param.setTargetAtTime(x, now, 0.015);
+      switch (id) {
+        case "volume": glide(out.gain, volumeGain(v)); break;
+        case "lfoRate": glide(lfo.frequency, v); break;
+        case "vibrato": glide(vib.gain, v); break;
+        case "wobble": glide(wob.gain, v * 1200); break;
+        case "drive":
+          drive.curve = curve("drive", v);
+          glide(post.gain, 1 / (1 + v * DRIVE_MAKEUP));
+          break;
+        case "crush": crush.curve = curve("crush", v); break;
+        case "echo": glide(echoSend.gain, v * 0.7); break;
+        case "reverb": glide(reverbSend.gain, v); break;
+        case "cutoff": for (const x of pool.all()) glide(x.filter.frequency, v); break;
+        case "resonance": for (const x of pool.all()) glide(x.filter.Q, filterQ(x.filter.type, v)); break;
+        case "detune": for (const x of pool.all()) glide(x.src.detune, v); break;
       }
+    }
+
+    // Keeps the echo in time when the tempo changes.
+    function setTempo(newBpm) {
+      bpm = newBpm;
+      delay.delayTime.setTargetAtTime(Math.min(2, (ECHO_STEPS * 60) / bpm / 4), ctx.currentTime, 0.05);
     }
 
     // Replaces every parameter at once (a preset).
@@ -175,8 +270,13 @@
       for (const d of Params.DEFS) set(d.id, next[d.id]);
     }
 
+    // Start with every effect where the settings say.
+    for (const id of ["lfoRate", "vibrato", "wobble", "drive", "crush", "echo", "reverb"]) set(id, p[id]);
+    setTempo(bpm);
+    delay.delayTime.value = Math.min(2, (ECHO_STEPS * 60) / bpm / 4);
+
     return {
-      noteOn, noteOff, voiceOff, allOff, set, load,
+      noteOn, noteOff, voiceOff, allOff, set, load, setTempo,
       held: () => pool.held(),
       get params() { return { ...p }; },
       output: out,

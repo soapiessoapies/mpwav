@@ -1,7 +1,7 @@
 // The morph pad's math: one point on a square moves several synth settings
 // at once, between opposites.
 //   X: dark  <-> bright    (filter cutoff, a little resonance on the bright side)
-//   Y: tight <-> spacious  (attack, decay, sustain and release)
+//   Y: tight <-> spacious  (attack, decay, sustain and release; spacious adds reverb)
 // The middle of the pad leaves the track's own settings exactly as they are,
 // so the pad always works on top of whatever the sliders say.
 // Positions run -1..1 on each axis; 0, 0 is the middle.
@@ -17,7 +17,7 @@
   const ATTACK_RANGE = 4;    // spacious softens the attack up to 16x (never sharper)
 
   // The settings that the pad changes (the synth refreshes just these).
-  const AFFECTS = ["cutoff", "resonance", "attack", "decay", "sustain", "release"];
+  const AFFECTS = ["cutoff", "resonance", "attack", "decay", "sustain", "release", "reverb"];
 
   const clamp1 = (v) => Math.max(-1, Math.min(1, Number(v) || 0));
 
@@ -32,6 +32,7 @@
     if (y > 0) q.attack = p.attack * Math.pow(2, y * ATTACK_RANGE);
     // Tight notes also drop their sustain (more staccato); spacious lifts it.
     q.sustain = y < 0 ? p.sustain * (1 + y * 0.7) : p.sustain + (1 - p.sustain) * y * 0.4;
+    if (y > 0) q.reverb = p.reverb + (1 - p.reverb) * y * 0.5;
     return Params.sanitize(q);
   }
 

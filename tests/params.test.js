@@ -43,6 +43,23 @@ test("format: short on screen, spelled out for screen readers", () => {
   assert.equal(f(P.BY_ID.filterEnv, 0), "Off");
   assert.equal(f(P.BY_ID.wave, "pulse12", true), "Pulse 12.5 percent");
   assert.equal(f(P.BY_ID.wave, "sawtooth"), "Saw");
+  assert.equal(f(P.BY_ID.lfoRate, 0.25), "0.25 Hz");
+  assert.equal(f(P.BY_ID.vibrato, 0, true), "off");
+  assert.equal(f(P.BY_ID.vibrato, 12), "12 ct");
+  assert.equal(f(P.BY_ID.drive, 0.4, true), "40 percent");
+  assert.equal(f(P.BY_ID.reverb, 0), "Off");
+});
+
+test("clean checks one value the way sanitize would", () => {
+  assert.equal(P.clean("cutoff", 99999), P.BY_ID.cutoff.max);
+  assert.equal(P.clean("wave", "kazoo"), P.BY_ID.wave.def);
+  assert.equal(P.clean("echo", NaN), 0);
+  assert.equal(P.clean("nope", 1), undefined);
+});
+
+test("every warp effect is off by default", () => {
+  const d = P.defaults();
+  for (const id of ["vibrato", "wobble", "drive", "crush", "echo", "reverb"]) assert.equal(d[id], 0, id);
 });
 
 test("sanitize fills gaps and throws out junk", () => {

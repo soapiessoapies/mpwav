@@ -15,7 +15,7 @@
 
   // canvas: where to draw; getPeak: () => 0..1; vertical: fills bottom-up.
   function add(canvas, getPeak, vertical = false) {
-    meters.push({ canvas, g: canvas.getContext("2d"), getPeak, vertical, level: 0, hold: 0, holdAt: 0 });
+    meters.push({ canvas, g: canvas.getContext("2d"), getPeak, vertical, level: 0, hold: 0, holdAt: 0, idle: false });
     if (!running) { running = true; requestAnimationFrame(frame); }
   }
 
@@ -28,15 +28,19 @@
     const dpr = window.devicePixelRatio || 1;
     for (const m of meters) {
       if (!m.canvas.isConnected) continue;
-      const w = m.canvas.clientWidth, h = m.canvas.clientHeight;
-      if (!w || !h) continue;
-      if (m.canvas.width !== Math.round(w * dpr)) { m.canvas.width = Math.round(w * dpr); m.canvas.height = Math.round(h * dpr); }
-      const g = m.g;
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-
       const p = m.getPeak();
       m.level = Math.max(p, m.level * 0.88); // fast up, smooth down
       if (p >= m.hold || now - m.holdAt > HOLD_MS) { m.hold = p; m.holdAt = now; }
+      // Silent and already drawn empty: nothing to redraw.
+      const silent = m.level < 1e-4 && m.hold < 1e-4;
+      if (silent && m.idle) continue;
+      m.idle = silent;
+
+      const w = m.canvas.clientWidth, h = m.canvas.clientHeight;
+      if (!w || !h) { m.idle = false; continue; }
+      if (m.canvas.width !== Math.round(w * dpr)) { m.canvas.width = Math.round(w * dpr); m.canvas.height = Math.round(h * dpr); }
+      const g = m.g;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       g.fillStyle = colors["meter-bg"];
       g.fillRect(0, 0, w, h);

@@ -11,6 +11,7 @@
     { id: "env", label: "Envelope" },
     { id: "filter", label: "Filter" },
     { id: "out", label: "Output" },
+    { id: "warp", label: "Warp" },
   ];
 
   // Arrow keys on a 0..STEPS slider move 1% (Shift: 0.1%), Page keys 10%.
