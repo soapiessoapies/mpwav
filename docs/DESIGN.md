@@ -19,9 +19,10 @@ The screen splits into three areas: the timeline on the left, a paged editing pa
 
 ![Layout sketch: playing box, Note Edit mode panel, editor/inputs strip](../styles/scassin_ss_styleprevis.png)
 
-- **Playing box** (left, most of the screen): the timeline. Track rows, bar lines, blocks of different widths, and "…" where it keeps growing.
+- **Transport bar** (above the playing box): Play, Record, tempo.
+- **Playing box** (left, most of the screen): the timeline of clips. Track rows, bar lines, clips of different widths, and "…" where it keeps growing.
 - **Title** (top right): the song's title and "by Phie & Claude".
-- **Note Edit mode** (right): rows of sliders, a page at a time, with arrows to the next page. Settings come in short pages instead of one long column.
+- **Note Edit mode** (right): rows of sliders, a page at a time, with arrows between pages. Some pages edit the selected notes (length, loudness, pitch); the others edit the selected track's sound (synth, morph pad, Warp, output).
 - **Editor / inputs** (bottom strip, full width): the keyboard and other input controls.
 
 ## The timeline (main view)
@@ -127,11 +128,11 @@ One app serves both, following the layout sketch: Windows shows the playing box,
 
 | Area | Windows (wide screen) | Phone |
 | --- | --- | --- |
+| Transport (Play, Record, tempo) | Bar above the playing box | Top bar |
 | Playing box (timeline) | Left, most of the screen | Full screen, all tracks |
 | Title | Top right, above the Note Edit panel | Top bar, shortened |
 | Note Edit panel | Right side, paged sliders with ◀ ▶ arrows | Slides up from the bottom, one page at a time |
 | Editor / inputs | Strip across the bottom: keyboard and input controls | Pinned at the bottom, can be hidden |
-| Transport (Play, Record, tempo) | In the inputs strip or above the playing box (to confirm) | Top bar |
 
 **Accessibility (WCAG AA):**
 
@@ -146,9 +147,9 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 
 **Open questions**
 
-- [ ] Note Edit mode: do its sliders edit the selected notes (length, loudness, pitch), the selected track's sound (today's Sound tab, paged), or both on different pages?
-- [ ] Where do notes get placed: straight into the playing box (the small blocks in the sketch), or in a clip editor that opens from a block?
-- [ ] Where do Play, Record and tempo sit: the inputs strip, or a bar above the playing box?
+- [x] Note Edit mode: both, on different pages — note pages for the selected notes, sound pages for the selected track.
+- [x] Notes live in clips; open a clip in the playing box to edit its notes.
+- [x] Play, Record and tempo sit in a bar above the playing box.
 - [ ] Should linked copies be the default when dragging a clip, or normal copies?
 - [ ] Which track colors and how many tracks should a new song start with?
 - [ ] Is the Week 9 phone test about writing a beat from scratch, or remixing the demo? It decides what the MVP must have.
