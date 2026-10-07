@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121419">
+<meta name="description" content="A music studio in the browser: a mixing desk, step patterns, synths and a keyboard.">
+<title>Sound Studio</title>
+<link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+<a class="skip" href="#pattern">Skip to pattern</a>
+
+<header class="topbar">
+  <h1>Sound Studio</h1>
+  <div class="transport" role="group" aria-label="Transport">
+    <button id="sound" class="sound" type="button" aria-pressed="false">
+      <span class="dot" aria-hidden="true"></span>Sound <span class="state" aria-hidden="true">Off</span>
+    </button>
+    <button id="play" class="play" type="button" aria-pressed="false" aria-keyshortcuts="Space">
+      <span class="icon" aria-hidden="true"></span>Play
+    </button>
+    <label class="tempo">Tempo <input id="tempo" type="number" inputmode="numeric" step="1"> <span aria-hidden="true">BPM</span></label>
+  </div>
+</header>
+
+<main>
+  <div class="tabbar">
+    <div class="tabs" role="tablist" aria-label="Editor">
+      <button type="button" role="tab" id="tab-mixer" class="tab" aria-controls="mixer" hidden>Mixer</button>
+      <button type="button" role="tab" id="tab-pattern" class="tab" aria-controls="pattern">Pattern</button>
+      <button type="button" role="tab" id="tab-sound" class="tab" aria-controls="sound-panel">Sound</button>
+    </div>
+    <label class="inline track-pick"><span class="pick-label">Track</span> <select id="track-pick"></select></label>
+  </div>
+
+  <section id="mixer" class="panel mixer-panel" aria-labelledby="mixer-h">
+    <div class="panel-head"><h2 id="mixer-h">Mixer</h2></div>
+    <div id="mixer-strips" class="strips"></div>
+  </section>
+
+  <section id="pattern" class="panel pattern-panel" role="tabpanel" aria-labelledby="tab-pattern" tabindex="0">
+    <div class="panel-head">
+      <h2 id="pattern-h">Pattern</h2>
+      <div class="octave" role="group" aria-label="Pattern rows">
+        <button id="rows-down" type="button" aria-label="Rows lower">−</button>
+        <span id="rows-label" class="oct-label"></span>
+        <button id="rows-up" type="button" aria-label="Rows higher">+</button>
+      </div>
+      <label class="inline">Note length <select id="note-length"></select></label>
+      <button id="clear" type="button" class="quiet">Clear</button>
+    </div>
+    <p class="help">
+      Click or tap a square to add a note, again to remove it. Drag with a mouse to paint.
+      With a keyboard, arrows move and <kbd>Enter</kbd> adds or removes.
+      <kbd>Space</kbd> plays and stops the loop from anywhere.
+    </p>
+    <div class="grid-scroll"><table id="grid" class="grid"></table></div>
+    <p id="off-grid" class="off-grid" aria-live="polite"></p>
+  </section>
+
+  <section id="sound-panel" class="panel synth-panel" role="tabpanel" aria-labelledby="tab-sound" tabindex="0" hidden>
+    <div class="panel-head">
+      <h2 id="synth-h">Synth</h2>
+      <div class="preset">
+        <label for="preset">Preset</label>
+        <select id="preset"></select>
+      </div>
+    </div>
+    <div class="sound-body">
+      <section class="morph-box" aria-labelledby="morph-h">
+        <h3 id="morph-h">Morph</h3>
+        <div id="morph"></div>
+      </section>
+      <div id="synth-controls" class="groups"></div>
+    </div>
+  </section>
+
+  <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
+    <div class="panel-head">
+      <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
+      <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
+    </div>
+    <div id="keys-body">
+      <div class="keys-tools">
+        <div class="octave" role="group" aria-label="Octave">
+          <button id="oct-down" type="button" aria-label="Octave down">−</button>
+          <span id="oct-label" class="oct-label"></span>
+          <button id="oct-up" type="button" aria-label="Octave up">+</button>
+        </div>
+        <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
+      </div>
+      <p id="keys-help" class="help">
+        Plays the selected track. Tap or click the keys, or use your computer keys
+        <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work even with the keyboard hidden).
+        <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
+        On a focused key, arrows move and <kbd>Enter</kbd> plays.
+      </p>
+      <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
+           aria-label="Piano keyboard" aria-describedby="keys-help"></div>
+    </div>
+  </section>
+</main>
+
+<div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<script src="src/audio/notes.js"></script>
+<script src="src/audio/params.js"></script>
+<script src="src/audio/envelope.js"></script>
+<script src="src/audio/voices.js"></script>
+<script src="src/audio/engine.js"></script>
+<script src="src/audio/synth.js"></script>
+<script src="src/audio/mixer.js"></script>
+<script src="src/audio/transport.js"></script>
+<script src="src/audio/morph.js"></script>
+<script src="src/state/presets.js"></script>
+<script src="src/state/song.js"></script>
+<script src="src/ui/announce.js"></script>
+<script src="src/ui/controls.js"></script>
+<script src="src/ui/keyboard.js"></script>
+<script src="src/ui/meter.js"></script>
+<script src="src/ui/mixer-view.js"></script>
+<script src="src/ui/step-grid.js"></script>
+<script src="src/ui/tabs.js"></script>
+<script src="src/ui/morph-pad.js"></script>
+<script src="src/ui/app.js"></script>
+</body>
+</html>
