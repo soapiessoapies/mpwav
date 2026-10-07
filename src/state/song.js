@@ -3,8 +3,9 @@
 //   song.tracks[]    one synth sound each, with its mixer settings and its
 //                    clips: { id, contentId, start, length } in bars
 //   song.contents{}  what clips play: { id, trackId, name, bars, notes[] },
-//                    a loop of `bars` bars; notes are { step, midi } with
-//                    16 steps (sixteenths) to a bar. Clips that share a
+//                    a loop of `bars` bars; notes are { step, midi, len, vel }:
+//                    where it starts (16 steps, sixteenths, to a bar), its
+//                    pitch, how many steps it lasts and how loud (0..1). Clips that share a
 //                    content are linked: edit one, they all change. A clip
 //                    longer than its content repeats it.
 //   song.loop        { on, start, end } in bars: the stretch Play repeats.
@@ -27,7 +28,8 @@
   const BPM = { min: 40, max: 240, def: 110 };
   const FADER = { min: -48, max: 6, step: 0.5, def: 0 }; // dB; the bottom is off
   const LOWEST = 24, HIGHEST = 108; // C1..C8, the range notes and grid rows can use
-  const LENGTHS = [1, 2, 4, 8, 16]; // how many steps each note lasts
+  const LENGTHS = [1, 2, 4, 8, 16]; // lengths offered for new notes, in steps
+  const VEL = 0.85; // a new note's loudness
   const COLORS = ["orange", "mint", "sky", "violet", "rose", "lime", "gold", "coral"];
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -40,7 +42,7 @@
       params: Params.sanitize(Presets.find(preset).params),
       clips: [], // { id, contentId, start, length } in bars, sorted by start, never overlapping
       gridBase,  // lowest row shown in the clip editor (a C)
-      length,    // steps each note lasts
+      length,    // steps a new note lasts
       morph: { x: 0, y: 0 }, // the morph pad's point, -1..1 each way (0, 0 changes nothing)
       volume: FADER.def,
       pan: 0,
@@ -149,33 +151,61 @@
     song.tracks.reduce((n, t) => n + t.clips.filter((c) => c.contentId === contentId).length, 0);
 
   // --- notes in a clip's content ---
-  const hasNote = (c, step, midi) => c.notes.some((n) => n.step === step && n.midi === midi);
-  const notesAt = (c, step) => c.notes.filter((n) => n.step === step).map((n) => n.midi);
+  const loopSteps = (c) => c.bars * STEPS;
+  // The note that starts at this step and pitch (only one may).
+  const noteStarting = (c, step, midi) => c.notes.find((n) => n.step === step && n.midi === midi) || null;
+  const hasNote = (c, step, midi) => !!noteStarting(c, step, midi);
+  // The note sounding at this step and pitch: it may have started earlier.
+  const noteAt = (c, step, midi) => c.notes.find((n) => n.midi === midi && step >= n.step && step < n.step + n.len) || null;
+  // Notes that start at a step.
+  const notesAt = (c, step) => c.notes.filter((n) => n.step === step);
 
-  // Adds the note if it isn't there, removes it if it is. Returns whether it's on now.
-  function toggleNote(c, step, midi) {
-    const i = c.notes.findIndex((n) => n.step === step && n.midi === midi);
-    if (i >= 0) { c.notes.splice(i, 1); return false; }
-    c.notes.push({ step, midi });
-    return true;
+  // Adds a note unless one already starts there. Returns it, or null.
+  function addNote(c, step, midi, len = 1, vel = VEL) {
+    if (step < 0 || step >= loopSteps(c) || hasNote(c, step, midi)) return null;
+    const n = { step, midi, len: Math.max(1, Math.min(len, loopSteps(c) - step)), vel };
+    c.notes.push(n);
+    return n;
   }
 
-  // Adds a note unless it's already there (recording). Returns whether it was added.
-  function addNote(c, step, midi) {
-    if (hasNote(c, step, midi)) return false;
-    c.notes.push({ step, midi });
-    return true;
+  // Removes the note sounding there if there is one, else adds one.
+  // Returns whether a note is there now.
+  function toggleNote(c, step, midi, len = 1) {
+    const n = noteAt(c, step, midi);
+    if (n) { c.notes.splice(c.notes.indexOf(n), 1); return false; }
+    return !!addNote(c, step, midi, len);
   }
 
-  // Takes notes back out (undoing a recorded take).
+  // Takes notes back out (deleting, or undoing a recorded take).
   function removeNotes(c, notes) {
-    c.notes = c.notes.filter((n) => !notes.some((m) => m.step === n.step && m.midi === n.midi));
+    c.notes = c.notes.filter((n) => !notes.some((m) => m === n || (m.step === n.step && m.midi === n.midi)));
   }
 
-  // Changes how many bars a content loops; notes past the new end are dropped.
+  // Moves a note, kept inside the loop and the playable range. It won't land
+  // where another note already starts. Returns whether it moved.
+  function moveNote(c, n, step, midi) {
+    step = Math.max(0, Math.min(step, loopSteps(c) - n.len));
+    midi = Math.max(LOWEST, Math.min(HIGHEST, midi));
+    if (step === n.step && midi === n.midi) return false;
+    const other = noteStarting(c, step, midi);
+    if (other && other !== n) return false;
+    n.step = step;
+    n.midi = midi;
+    return true;
+  }
+
+  // Stretches or shortens a note: at least a step, no further than the loop's end.
+  function resizeNote(c, n, len) {
+    n.len = Math.max(1, Math.min(Math.round(len), loopSteps(c) - n.step));
+    return n.len;
+  }
+
+  // Changes how many bars a content loops; notes past the new end are
+  // dropped and notes running over it are cut short.
   function setContentBars(c, bars) {
     c.bars = bars;
-    c.notes = c.notes.filter((n) => n.step < bars * STEPS);
+    c.notes = c.notes.filter((n) => n.step < loopSteps(c));
+    for (const n of c.notes) n.len = Math.min(n.len, loopSteps(c) - n.step);
   }
 
   // --- playing ---
@@ -217,12 +247,12 @@
   function demoSong() {
     const s = createSong();
     const t = (id) => s.tracks.find((x) => x.id === id);
-    const notes = (list) => list.map(([step, midi]) => ({ step, midi }));
-    const lead = makeContent(s, "lead", "Lead riff", 1, notes([[0, 72], [2, 67], [4, 69], [6, 72], [8, 71], [10, 72], [12, 69], [14, 67]]));
-    const bass = makeContent(s, "bass", "Bass line", 1, notes([[0, 48], [3, 48], [6, 55], [8, 53], [11, 53], [14, 55]]));
-    const pad = makeContent(s, "pad", "Chords", 1, notes([[0, 60], [0, 64], [0, 67], [8, 57], [8, 60], [8, 64]]));
-    const hat = makeContent(s, "hat", "Hats", 1, notes([0, 2, 4, 6, 8, 10, 12, 14].map((st) => [st, 72])));
-    const hats16 = makeContent(s, "hat", "Hats busy", 1, notes([...Array(16).keys()].map((st) => [st, 72])));
+    const notes = (list) => list.map(([step, midi, len = 1, vel = VEL]) => ({ step, midi, len, vel }));
+    const lead = makeContent(s, "lead", "Lead riff", 1, notes([[0, 72, 2], [2, 67], [4, 69, 2], [6, 72], [8, 71, 2], [10, 72], [12, 69, 2], [14, 67, 2]]));
+    const bass = makeContent(s, "bass", "Bass line", 1, notes([[0, 48, 2], [3, 48, 2], [6, 55, 2], [8, 53, 2], [11, 53, 2], [14, 55, 2]]));
+    const pad = makeContent(s, "pad", "Chords", 1, notes([[0, 60, 8], [0, 64, 8], [0, 67, 8], [8, 57, 8], [8, 60, 8], [8, 64, 8]]));
+    const hat = makeContent(s, "hat", "Hats", 1, notes([0, 2, 4, 6, 8, 10, 12, 14].map((st) => [st, 72, 1, st % 4 ? 0.6 : 0.9])));
+    const hats16 = makeContent(s, "hat", "Hats busy", 1, notes([...Array(16).keys()].map((st) => [st, 72, 1, st % 4 ? 0.55 : 0.9])));
     addClip(s, t("lead"), 0, 8, lead.id);
     addClip(s, t("bass"), 0, 8, bass.id);
     addClip(s, t("pad"), 0, 8, pad.id);
@@ -234,12 +264,19 @@
     return s;
   }
 
-  function cleanNotes(list, bars) {
+  // Valid notes from anything. Notes from before lengths take the track's
+  // note length (what they played as), and every note gets a loudness.
+  function cleanNotes(list, bars, defLen = 1) {
+    const loop = bars * STEPS;
     return (Array.isArray(list) ? list : [])
       .filter((n) => n && Number.isInteger(n.step) && Number.isInteger(n.midi))
-      .filter((n) => n.step >= 0 && n.step < bars * STEPS && n.midi >= LOWEST && n.midi <= HIGHEST)
+      .filter((n) => n.step >= 0 && n.step < loop && n.midi >= LOWEST && n.midi <= HIGHEST)
       .filter((n, i, all) => all.findIndex((m) => m.step === n.step && m.midi === n.midi) === i)
-      .map((n) => ({ step: n.step, midi: n.midi }));
+      .map((n) => ({
+        step: n.step, midi: n.midi,
+        len: clamp(int(n.len, defLen), 1, loop - n.step),
+        vel: clamp(num(n.vel, VEL), 0.05, 1),
+      }));
   }
 
   // Older saves (before the timeline) had per-track patterns A-D and a
@@ -250,7 +287,7 @@
     const patterns = s.patterns && typeof s.patterns === "object" ? s.patterns : { A: s.notes };
     const made = {};
     const contentFor = (slot) => {
-      if (!made[slot]) made[slot] = makeContent(out, t.id, `${t.name} ${slot}`, 1, cleanNotes(patterns[slot], 1));
+      if (!made[slot]) made[slot] = makeContent(out, t.id, `${t.name} ${slot}`, 1, cleanNotes(patterns[slot], 1, t.length));
       return made[slot];
     };
     const arrange = Array.isArray(s.arrange) ? s.arrange : [];
@@ -282,13 +319,18 @@
     const v3 = input.version === VERSION && input.contents && typeof input.contents === "object";
 
     if (v3) {
+      // A note without a length played for its track's note length.
+      const lenFor = (trackId) => {
+        const st = saved.find((x) => x && x.id === trackId);
+        return st && LENGTHS.includes(st.length) ? st.length : (DEFAULT_TRACKS.find((d) => d.id === trackId).length || 1);
+      };
       for (const [id, c] of Object.entries(input.contents)) {
         if (!c || !out.tracks.some((t) => t.id === c.trackId)) continue;
         const bars = CONTENT_BARS.includes(c.bars) ? c.bars : 1;
         out.contents[id] = {
           id, trackId: c.trackId, bars,
           name: typeof c.name === "string" && c.name.trim() ? c.name.trim().slice(0, 40) : "Clip",
-          notes: cleanNotes(c.notes, bars),
+          notes: cleanNotes(c.notes, bars, lenFor(c.trackId)),
         };
       }
     }
@@ -337,10 +379,10 @@
   }
 
   const api = {
-    VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS,
+    VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,
-    hasNote, notesAt, toggleNote, addNote, removeNotes, setContentBars,
+    noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,
     localStep, notesAtPos, songBars, viewBars, playRange, audible,
   };
   if (node) module.exports = api;

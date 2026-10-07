@@ -25,7 +25,6 @@
     //      onNewClip(t, bar), onCursor(bar), onLoop(start, end), onChanged(text) }
     let zoom = 3;
     let lastTap = { id: null, at: 0 };
-    let shades = {}; // track color -> 12 shades by key
 
     const barW = () => ZOOMS.at(zoom);
     const el = (tag, cls, attrs = {}) => {
@@ -34,18 +33,6 @@
       for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
       return e;
     };
-
-    // Shades of a track's color by key: C deepest, B lightest.
-    function shadesFor(color) {
-      if (shades[color]) return shades[color];
-      const hex = getComputedStyle(document.documentElement).getPropertyValue("--c-" + color).trim() || "#ffb547";
-      const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-      shades[color] = Array.from({ length: 12 }, (_, pc) => {
-        const k = 0.72 - (pc / 11) * 0.5; // how much darker than the clip
-        return `rgb(${rgb.map((c) => Math.round(c * (1 - k))).join(",")})`;
-      });
-      return shades[color];
-    }
 
     const span = (c) => (c.length === 1 ? `bar ${c.start + 1}` : `bars ${c.start + 1} to ${c.start + c.length}`);
     function clipLabel(song, t, clip) {
@@ -67,7 +54,6 @@
       if (!c.notes.length) return svg;
       const lo = Math.min(...c.notes.map((n) => n.midi)), hi = Math.max(...c.notes.map((n) => n.midi));
       const rows = Math.max(hi - lo + 1, 6), rowH = 24 / rows;
-      const colors = shadesFor(t.color);
       for (let off = 0; off < total; off += loop) {
         for (const n of c.notes) {
           const x = off + n.step;
@@ -75,9 +61,11 @@
           const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
           r.setAttribute("x", x);
           r.setAttribute("y", (hi - n.midi) * rowH + (rows - (hi - lo + 1)) * rowH / 2);
-          r.setAttribute("width", Math.max(0.8, Math.min(t.length, total - x) - 0.2));
+          r.setAttribute("width", Math.max(0.8, Math.min(n.len, total - x) - 0.2));
           r.setAttribute("height", Math.max(rowH - 0.4, 1.2));
-          r.setAttribute("fill", colors.at(Notes.pitchClass(n.midi)));
+          r.setAttribute("fill", Colors.noteColor(t.color, n.midi));
+          r.setAttribute("stroke", "#1a1205");
+          r.setAttribute("stroke-width", "0.15");
           svg.append(r);
         }
       }

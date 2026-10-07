@@ -57,7 +57,7 @@ test("a clip longer than its content repeats it", () => {
   const clip = S.addClip(s, lead(s), 2, 1);
   S.resizeClip(lead(s), clip, 3);
   S.toggleNote(S.content(s, clip), 4, 64);
-  const at = (bar, step) => S.notesAtPos(s, lead(s), bar * 16 + step);
+  const at = (bar, step) => S.notesAtPos(s, lead(s), bar * 16 + step).map((n) => n.midi);
   assert.deepEqual(at(2, 4), [64]);
   assert.deepEqual(at(3, 4), [64], "second bar repeats the 1-bar content");
   assert.deepEqual(at(4, 4), [64]);
@@ -65,17 +65,44 @@ test("a clip longer than its content repeats it", () => {
   assert.deepEqual(at(1, 4), [], "before the clip: silence");
 });
 
-test("notes: toggle, record without duplicates, undo a take, shrink the loop", () => {
+test("notes: add with a length and loudness, toggle, no duplicate starts, take back out", () => {
   const s = S.createSong();
   const c = S.content(s, S.addClip(s, lead(s), 0, 2));
-  assert.equal(S.toggleNote(c, 0, 60), true);
-  assert.equal(S.addNote(c, 0, 60), false, "already there");
+  const n = S.addNote(c, 0, 60, 4);
+  assert.deepEqual(n, { step: 0, midi: 60, len: 4, vel: S.VEL });
+  assert.equal(S.addNote(c, 0, 60), null, "one note per start and pitch");
+  assert.equal(S.noteAt(c, 3, 60), n, "a long note covers the steps after its start");
+  assert.equal(S.noteAt(c, 4, 60), null);
+  assert.equal(S.toggleNote(c, 2, 60), false, "toggling inside a long note removes it");
+  assert.equal(S.toggleNote(c, 2, 60), true);
   S.addNote(c, 4, 62);
   S.addNote(c, 20, 64);
   S.removeNotes(c, [{ step: 4, midi: 62 }]);
-  assert.deepEqual(c.notes.map((n) => n.step), [0, 20]);
+  assert.deepEqual(c.notes.map((x) => x.step), [2, 20]);
+  assert.equal(S.addNote(c, 30, 50, 8).len, 2, "a note can't run past the loop's end");
+});
+
+test("moving and stretching notes stays inside the loop and the range", () => {
+  const s = S.createSong();
+  const c = S.content(s, S.addClip(s, lead(s), 0, 1));
+  const a = S.addNote(c, 0, 60, 4);
+  const b = S.addNote(c, 8, 62, 2);
+  assert.equal(S.moveNote(c, a, 14, 61), true);
+  assert.deepEqual([a.step, a.midi], [12, 61], "4 steps long, so it can start no later than 12");
+  assert.equal(S.moveNote(c, a, 8, 62), false, "b already starts there");
+  S.moveNote(c, a, 0, 200);
+  assert.equal(a.midi, S.HIGHEST);
+  assert.equal(S.resizeNote(c, b, 30), 8, "up to the loop's end");
+  assert.equal(S.resizeNote(c, b, 0), 1, "at least a step");
+});
+
+test("shrinking a clip's loop drops notes past the end and trims long ones", () => {
+  const s = S.createSong();
+  const c = S.content(s, S.addClip(s, lead(s), 0, 2));
+  S.addNote(c, 12, 60, 10);
+  S.addNote(c, 20, 64);
   S.setContentBars(c, 1);
-  assert.deepEqual(c.notes, [{ step: 0, midi: 60 }], "the note in bar 2 goes with it");
+  assert.deepEqual(c.notes, [{ step: 12, midi: 60, len: 4, vel: S.VEL }]);
 });
 
 test("play range: the loop, or the cursor to the end of the song", () => {
@@ -122,7 +149,8 @@ test("an arrangement-era save becomes linked clips and sounds the same", () => {
   const hat = S.track(s, "hat");
   assert.deepEqual(hat.clips.map((c) => [c.start, c.length]), [[0, 2], [2, 1], [4, 1]], "runs of one pattern merge");
   assert.equal(hat.clips[0].contentId, hat.clips[2].contentId, "both A clips are linked");
-  assert.deepEqual(S.notesAtPos(s, hat, 2 * 16 + 8), [72], "bar 3 plays pattern B");
+  assert.deepEqual(S.notesAtPos(s, hat, 2 * 16 + 8).map((n) => n.midi), [72], "bar 3 plays pattern B");
+  assert.equal(S.notesAtPos(s, hat, 2 * 16 + 8)[0].len, 1, "old notes keep the track's note length");
   assert.deepEqual(s.loop, { on: true, start: 0, end: 5 });
   assert.equal(s.selected, "hat");
 });
@@ -131,7 +159,7 @@ test("a save from before slots: its notes become a 1-bar clip", () => {
   const s = S.sanitize({ tracks: [{ id: "lead", notes: [{ step: 2, midi: 60 }] }] });
   const c = lead(s).clips[0];
   assert.deepEqual([c.start, c.length], [0, 1]);
-  assert.deepEqual(S.content(s, c).notes, [{ step: 2, midi: 60 }]);
+  assert.deepEqual(S.content(s, c).notes, [{ step: 2, midi: 60, len: 1, vel: S.VEL }]);
 });
 
 test("sanitize repairs a damaged save", () => {
@@ -153,7 +181,7 @@ test("sanitize repairs a damaged save", () => {
   assert.equal(s.title, "My song");
   const t = lead(s);
   assert.deepEqual(t.clips.map((c) => c.id), ["c1"], "the overlapping clip and the other track's content are dropped");
-  assert.deepEqual(s.contents.n1, { id: "n1", trackId: "lead", name: "Clip", bars: 1, notes: [{ step: 0, midi: 60 }] });
+  assert.deepEqual(s.contents.n1, { id: "n1", trackId: "lead", name: "Clip", bars: 1, notes: [{ step: 0, midi: 60, len: 1, vel: S.VEL }] });
   assert.equal(s.contents.n3, undefined, "content no clip uses is dropped");
   assert.equal(t.color, "orange");
   assert.equal(t.volume, S.FADER.max);

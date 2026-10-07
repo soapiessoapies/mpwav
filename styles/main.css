@@ -542,3 +542,78 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 [data-layout="compact"] .transport-bar button { min-width: 44px; justify-content: center; padding: 0 8px; }
 [data-layout="compact"] .btn-word,
 [data-layout="compact"] .tempo-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- piano roll ---------- */
+.roll {
+  position: relative; height: 320px; overflow: auto; overscroll-behavior: contain;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+}
+.roll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.roll-inner { position: relative; }
+.roll-rows { position: absolute; top: 0; left: 46px; right: 0; }
+.roll-row { height: var(--row-h); border-bottom: 1px solid var(--bar-line); }
+.roll-row.sharp { background: rgba(0, 0, 0, 0.22); }
+.roll-row.c { border-bottom-color: var(--line); }
+.roll-lines {
+  position: absolute; top: 0; bottom: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right, var(--line) 0 2px, transparent 2px calc(var(--step-w) * 16)),
+    repeating-linear-gradient(to right, rgba(255, 255, 255, 0.14) 0 1px, transparent 1px calc(var(--step-w) * 4)),
+    repeating-linear-gradient(to right, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px var(--step-w));
+}
+.roll-keys {
+  position: sticky; left: 0; z-index: 3; width: 46px;
+  background: var(--white-key); border-right: 1px solid var(--line);
+}
+.roll-key {
+  height: var(--row-h); border-bottom: 1px solid #c4c9d4; cursor: pointer;
+  font-size: 0.65rem; font-weight: 700; color: var(--white-key-ink);
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 4px;
+}
+.roll-key.sharp { background: var(--black-key); border-bottom-color: var(--black-key); margin-right: 14px; }
+.roll-notes { position: absolute; inset: 0; }
+.note {
+  position: absolute; margin: 1px 0 0 1px; padding-left: 3px; overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.6); border-radius: 3px;
+  font-size: 0.65rem; font-weight: 700; line-height: calc(var(--row-h) - 4px); white-space: nowrap;
+  touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+}
+.note.selected { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+.note-vel { position: absolute; left: 0; bottom: 0; height: 2px; background: currentColor; opacity: 0.75; pointer-events: none; }
+.note-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.roll-cursor {
+  position: absolute; display: none; pointer-events: none; z-index: 2;
+  outline: 2px dashed var(--focus); outline-offset: -2px;
+}
+.roll.focused .roll-cursor { display: block; }
+.roll-playhead { position: absolute; top: 0; left: 0; bottom: 0; width: 2px; background: var(--playhead); pointer-events: none; z-index: 2; }
+.note-pitch { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-pitch button { flex: 1 1 40%; padding: 0 8px; font-size: 0.85rem; }
+#note-controls { display: grid; gap: 10px; }
+.pages { flex-wrap: wrap; }
+[data-layout="compact"] .roll { height: 300px; }
+
+/* ---------- backgrounds (Settings > Background) ----------
+   High contrast (the :root colors above) is the default. The others tint
+   the dark backgrounds only; every text and control color stays the same,
+   and tests/contrast.test.js checks each theme against WCAG AA. */
+:root[data-theme="midnight"] {
+  --bg: #0f1424; --panel: #172036; --panel-2: #1b2540;
+  --cell: #263354; --cell-beat: #2f3d63; --bar-line: #33416a; --meter-bg: #1b2540;
+}
+:root[data-theme="plum"] {
+  --bg: #1a1220; --panel: #241930; --panel-2: #2f2140;
+  --cell: #3a2a4f; --cell-beat: #46335e; --bar-line: #4a3a60; --meter-bg: #2f2140;
+}
+:root[data-theme="forest"] {
+  --bg: #0f1a15; --panel: #15241d; --panel-2: #192a21;
+  --cell: #263e32; --cell-beat: #2f4a3c; --bar-line: #36523f; --meter-bg: #192a21;
+}
+:root[data-theme="ember"] {
+  --bg: #1c1410; --panel: #271c16; --panel-2: #33251d;
+  --cell: #3f2f25; --cell-beat: #4b382c; --bar-line: #574131; --meter-bg: #33251d;
+}
+.theme-swatch {
+  display: inline-block; width: 14px; height: 14px; margin-right: 6px; border-radius: 3px;
+  border: 1px solid var(--cell-edge); vertical-align: -2px;
+}

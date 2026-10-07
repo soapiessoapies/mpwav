@@ -24,7 +24,7 @@
       try {
         localStorage.setItem(SONG_KEY, JSON.stringify(song));
         localStorage.setItem(UI_KEY, JSON.stringify({
-          announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout,
+          announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
           open: open, picked: picked,
         }));
       } catch (e) { /* private window or storage blocked */ }
@@ -33,7 +33,7 @@
 
   const savedSong = load(SONG_KEY);
   const song = savedSong ? Song.sanitize(savedSong) : Song.demoSong();
-  const ui = { announceNotes: false, page: "tab-p-sound", keysOpen: true, layout: "auto", ...(load(UI_KEY) || {}) };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", ...(load(UI_KEY) || {}) };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -100,10 +100,10 @@
     const pos = r.start * Song.STEPS + count;
     for (const t of Song.audible(song)) {
       const { synth } = audio[t.id];
-      for (const midi of Song.notesAtPos(song, t, pos)) {
-        if (t.id === song.selected && skipOnce.delete(pos + ":" + midi)) continue;
-        const v = synth.noteOn(midi, 0.85, time);
-        synth.voiceOff(v, time + dur * t.length * 0.92);
+      for (const n of Song.notesAtPos(song, t, pos)) {
+        if (t.id === song.selected && skipOnce.delete(pos + ":" + n.midi)) continue;
+        const v = synth.noteOn(n.midi, n.vel, time);
+        synth.voiceOff(v, time + dur * (n.len - 0.08));
       }
     }
     playheadQueue.push({ pos, time });
@@ -125,7 +125,7 @@
       timeline.setPlayhead(shown.pos);
       const o = find(open);
       const bar = Math.floor(shown.pos / Song.STEPS);
-      grid.setPlayhead(o && bar >= o.clip.start && bar < Song.clipEnd(o.clip) ? Song.localStep(song, o.clip, shown.pos) : -1);
+      roll.setPlayhead(o && bar >= o.clip.start && bar < Song.clipEnd(o.clip) ? Song.localStep(song, o.clip, shown.pos) : -1);
     }
     requestAnimationFrame(drawPlayhead);
   }
@@ -139,7 +139,7 @@
     booked.length = 0;
     skipOnce.clear();
     timeline.setPlayhead(-1);
-    grid.setPlayhead(-1);
+    roll.setPlayhead(-1);
     $("play").setAttribute("aria-pressed", "false");
     Announce.say("Stopped");
   }
@@ -232,7 +232,7 @@
     const { clip, c, t } = target;
     // Loop the clip while recording into it.
     setLoop(clip.start, Song.clipEnd(clip), false);
-    take = { contentId: c.id, trackId: t.id, notes: [] };
+    take = { contentId: c.id, trackId: t.id, notes: [], held: new Map() };
     recBtn.setAttribute("aria-pressed", "true");
     if (!transport || !transport.playing) await togglePlay();
     Announce.say(`Recording into ${c.name}, looping bars ${clip.start + 1} to ${Song.clipEnd(clip)}`);
@@ -284,12 +284,25 @@
     const clip = Song.clipAt(t, Math.floor(at.pos / Song.STEPS));
     if (!clip || clip.contentId !== take.contentId) return;
     const local = Song.localStep(song, clip, at.pos);
-    if (!Song.addNote(song.contents[take.contentId], local, m)) return;
-    take.notes.push({ step: local, midi: m });
+    const n = Song.addNote(song.contents[take.contentId], local, m, 1);
+    if (!n) return;
+    take.notes.push(n);
+    take.held.set(m, { n, from: Engine.ctx.currentTime });
     // You already heard it as you played it; don't play it again a moment later.
     if (at.upcoming) skipOnce.add(at.pos + ":" + m);
-    grid.mark(local, m, true);
-    showOffGrid();
+    renderEditor();
+    timeline.render();
+    save();
+  }
+
+  // When a recorded key lets go, its note becomes as long as it was held.
+  function recordRelease(m) {
+    const h = take && take.held.get(m);
+    if (!h) return;
+    take.held.delete(m);
+    const steps = (Engine.ctx.currentTime - h.from) / (60 / song.bpm / 4);
+    Song.resizeNote(song.contents[take.contentId], h.n, Math.max(1, Math.round(steps)));
+    renderEditor();
     timeline.render();
     save();
   }
@@ -324,10 +337,11 @@
     if (--h.n > 0) return;
     holds.delete(m);
     kb.setLit(m, false);
+    recordRelease(m);
     if (audio[h.trackId]) audio[h.trackId].synth.noteOff(m);
   }
 
-  // A quick listen when a note is added to the grid (only while stopped:
+  // A quick listen when a note is added in the piano roll (only while stopped:
   // during playback you'll hear it come round).
   function preview(t, midi) {
     if (transport && transport.playing) return;
@@ -490,17 +504,35 @@
   });
 
   // --- the clip editor ---
-  const grid = StepGrid.create($("grid"), {
-    onToggle(step, midi) {
+  const selNotes = new Set(); // notes selected in the open clip (the Note page edits them)
+
+  const roll = PianoRoll.create($("roll"), {
+    onAdd(step, midi) {
       const o = find(open);
-      if (!o) return false;
-      const on = Song.toggleNote(o.c, step, midi);
-      if (on) preview(o.t, midi);
-      showOffGrid();
-      timeline.render();
-      save();
-      return on;
+      if (!o) return null;
+      const n = Song.addNote(o.c, step, midi, o.t.length);
+      if (n) preview(o.t, midi);
+      return n;
     },
+    onRemove(notes) {
+      const o = find(open);
+      if (!o) return;
+      for (const n of notes) selNotes.delete(n);
+      Song.removeNotes(o.c, notes);
+      afterChange();
+    },
+    onMove(n, step, midi) {
+      const o = find(open);
+      return !!o && Song.moveNote(o.c, n, step, midi);
+    },
+    onResize(n, len) {
+      const o = find(open);
+      return o ? Song.resizeNote(o.c, n, len) : n.len;
+    },
+    onSelect: () => renderNotePage(),
+    onChanged: (text) => afterChange(text),
+    onPreview: (midi) => preview(sel(), midi),
+    say: (text) => Announce.say(text),
   });
 
   const barsSel = $("clip-bars");
@@ -528,6 +560,7 @@
   function openClip(t, clip, focus) {
     endTake();
     resetUndo();
+    selNotes.clear();
     open = { trackId: t.id, clipId: clip.id };
     picked = { trackId: t.id, clipId: clip.id };
     if (song.selected !== t.id) selectTrack(t.id, false);
@@ -541,32 +574,11 @@
   function closeClip() {
     endTake();
     open = null;
+    selNotes.clear();
     renderEditor();
     save();
   }
   $("close-clip").addEventListener("click", () => { closeClip(); Announce.say("Clip closed"); });
-
-  function setGridBase(base, announce) {
-    const t = sel();
-    t.gridBase = Math.max(Song.LOWEST, Math.min(Song.HIGHEST - 12, base));
-    renderEditor();
-    if (announce) Announce.say(`Rows ${Notes.noteName(t.gridBase)} to ${Notes.noteName(t.gridBase + 12)}`);
-    save();
-  }
-  $("rows-down").addEventListener("click", () => setGridBase(sel().gridBase - 12, true));
-  $("rows-up").addEventListener("click", () => setGridBase(sel().gridBase + 12, true));
-
-  // Notes that are in the clip but above or below the rows on screen.
-  function showOffGrid() {
-    const o = find(open);
-    if (!o) { $("off-grid").textContent = ""; return; }
-    const above = o.c.notes.filter((n) => n.midi > o.t.gridBase + 12).length;
-    const below = o.c.notes.filter((n) => n.midi < o.t.gridBase).length;
-    const parts = [];
-    if (above) parts.push(`${above} note${above > 1 ? "s" : ""} higher up`);
-    if (below) parts.push(`${below} lower down`);
-    $("off-grid").textContent = parts.join(", ");
-  }
 
   let undoClear = null;
   const clearBtn = $("clear");
@@ -605,6 +617,8 @@
     if (!o) {
       $("clip-h").textContent = "Clip";
       nameField.value = "";
+      selNotes.clear();
+      renderNotePage();
       return;
     }
     const { t, clip, c } = o;
@@ -617,13 +631,74 @@
     $("clip-status").textContent = `${c.bars}-bar loop · this clip covers ${span}` +
       (clip.length > c.bars ? ", repeating it" : "") +
       (links > 1 ? ` · linked: edits change all ${links} copies` : "");
-    grid.render({ name: c.name, gridBase: t.gridBase, steps: c.bars * Song.STEPS, has: (s, m) => Song.hasNote(c, s, m) });
-    $("rows-label").textContent = `${Notes.noteName(t.gridBase)} to ${Notes.noteName(t.gridBase + 12)}`;
-    $("rows-down").disabled = t.gridBase <= Song.LOWEST;
-    $("rows-up").disabled = t.gridBase + 12 >= Song.HIGHEST;
+    for (const n of [...selNotes]) if (!c.notes.includes(n)) selNotes.delete(n);
+    roll.render({ c, color: t.color, name: c.name, steps: c.bars * Song.STEPS, selected: selNotes });
     lengthSel.value = t.length;
-    showOffGrid();
+    renderNotePage();
   }
+
+  // --- Note page: the selected notes' length, loudness and pitch ---
+  const noteLen = $("note-len"), noteVel = $("note-vel");
+  const steps = (n) => `${n} step${n > 1 ? "s" : ""}`;
+
+  function renderNotePage() {
+    const list = [...selNotes];
+    const o = find(open);
+    $("note-controls").hidden = !list.length;
+    if (!o) {
+      $("note-sel").textContent = "Open a clip to edit its notes.";
+      return;
+    }
+    if (!list.length) {
+      $("note-sel").textContent = "No notes selected. Click a note in the piano roll, or Shift-click to pick several.";
+      return;
+    }
+    const first = list[0];
+    $("note-sel").textContent = list.length === 1
+      ? `${Notes.noteName(first.midi)} at ${o.c.bars > 1 ? `bar ${Math.floor(first.step / 16) + 1} ` : ""}step ${(first.step % 16) + 1}`
+      : `${list.length} notes selected`;
+    noteLen.max = o.c.bars * Song.STEPS;
+    noteLen.value = first.len;
+    noteVel.value = Math.round(first.vel * 100);
+    const same = (k) => list.every((n) => n[k] === first[k]);
+    $("note-len-out").textContent = same("len") ? steps(first.len) : "mixed";
+    $("note-vel-out").textContent = same("vel") ? Math.round(first.vel * 100) + "%" : "mixed";
+    noteLen.setAttribute("aria-valuetext", same("len") ? steps(first.len) : `mixed, ${steps(first.len)} on the first`);
+    noteVel.setAttribute("aria-valuetext", same("vel") ? Math.round(first.vel * 100) + " percent" : "mixed");
+  }
+
+  // Applies a change to every selected note, then redraws.
+  function editNotes(fn, text) {
+    const o = find(open);
+    if (!o || !selNotes.size) return;
+    for (const n of selNotes) fn(o.c, n);
+    afterChange(text);
+  }
+  noteLen.addEventListener("input", () => editNotes((c, n) => Song.resizeNote(c, n, Number(noteLen.value))));
+  noteVel.addEventListener("input", () => editNotes((c, n) => { n.vel = Number(noteVel.value) / 100; }));
+  const transpose = (by, words) => () => {
+    const o = find(open);
+    if (!o || !selNotes.size) return;
+    // Highest first going up (lowest first going down) so notes don't block each other.
+    const list = [...selNotes].sort((a, b) => (by > 0 ? b.midi - a.midi : a.midi - b.midi));
+    let blocked = 0;
+    for (const n of list) if (!Song.moveNote(o.c, n, n.step, n.midi + by)) blocked++;
+    afterChange(blocked ? `${words}; ${blocked} couldn't move` : words);
+    const first = [...selNotes][0];
+    if (first && selNotes.size === 1) preview(o.t, first.midi);
+  };
+  $("note-up").addEventListener("click", transpose(1, "Up a key"));
+  $("note-down").addEventListener("click", transpose(-1, "Down a key"));
+  $("note-oct-up").addEventListener("click", transpose(12, "Up an octave"));
+  $("note-oct-down").addEventListener("click", transpose(-12, "Down an octave"));
+  $("note-delete").addEventListener("click", () => {
+    const o = find(open);
+    if (!o || !selNotes.size) return;
+    const n = selNotes.size;
+    Song.removeNotes(o.c, [...selNotes]);
+    selNotes.clear();
+    afterChange(`Deleted ${n} note${n > 1 ? "s" : ""}`);
+  });
 
   // --- title ---
   const titleField = $("song-title");
@@ -655,7 +730,7 @@
   const pages = Tabs.create(document.querySelector(".pages"), {
     onSelect(id) { ui.page = id; save(); },
   });
-  pages.select($(ui.page) ? ui.page : "tab-p-sound", false);
+  pages.select($(ui.page) ? ui.page : "tab-p-note", false);
   const pageIds = [...document.querySelectorAll(".pages [role=tab]")].map((t) => t.id);
   const turnPage = (dir) => {
     const i = (pageIds.indexOf(pages.current) + dir + pageIds.length) % pageIds.length;
@@ -755,6 +830,7 @@
     if (document.documentElement.dataset.layout !== want) {
       document.documentElement.dataset.layout = want;
       setKeyboard(kb.base, false);
+      roll.rebuild();
     }
   }
   window.addEventListener("resize", applyLayout);
@@ -763,6 +839,7 @@
   $("version").textContent = "v" + window.STUDIO_VERSION;
   $("settings-btn").addEventListener("click", () => {
     $("layout-" + ui.layout).checked = true;
+    ($("theme-" + ui.theme) || $("theme-contrast")).checked = true;
     settings.showModal();
   });
   $("settings-close").addEventListener("click", () => settings.close());
@@ -776,6 +853,20 @@
       ui.layout = choice;
       applyLayout();
       Announce.say(`${choice === "auto" ? "Automatic" : choice === "desktop" ? "Desktop" : "Phone"} layout`);
+      save();
+    });
+  }
+
+  // Background: high contrast unless another one was chosen and saved.
+  const THEME_NAMES = { contrast: "High contrast", midnight: "Midnight", plum: "Plum", forest: "Forest", ember: "Ember" };
+  for (const theme of Object.keys(THEME_NAMES)) {
+    $("theme-" + theme).addEventListener("change", (e) => {
+      if (!e.target.checked) return;
+      ui.theme = theme;
+      if (theme === "contrast") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = theme;
+      Meter.resetColors();
+      Announce.say(`${THEME_NAMES[theme]} background`);
       save();
     });
   }

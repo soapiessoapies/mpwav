@@ -10,8 +10,13 @@
 <script>
   // Pick the layout before the first paint (Settings > Layout; app.js keeps it up to date).
   (function () {
-    var pick = "auto";
-    try { pick = (JSON.parse(localStorage.getItem("sound-studio.ui")) || {}).layout || "auto"; } catch (e) {}
+    var pick = "auto", theme = "contrast";
+    try {
+      var saved = JSON.parse(localStorage.getItem("sound-studio.ui")) || {};
+      pick = saved.layout || "auto";
+      theme = saved.theme || "contrast";
+    } catch (e) {}
+    if (theme !== "contrast") document.documentElement.dataset.theme = theme;
     var w = window.innerWidth;
     document.documentElement.dataset.layout =
       pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
@@ -91,29 +96,26 @@
     <div id="clip-body">
       <p id="clip-status" class="loop-status"></p>
       <div class="pattern-tools">
-        <div class="octave" role="group" aria-label="Note rows">
-          <button id="rows-down" type="button" aria-label="Rows lower">−</button>
-          <span id="rows-label" class="oct-label"></span>
-          <button id="rows-up" type="button" aria-label="Rows higher">+</button>
-        </div>
-        <label class="inline">Note length <select id="note-length"></select></label>
+        <label class="inline">New notes <select id="note-length"></select></label>
         <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
         <button id="clear" type="button" class="quiet">Clear</button>
       </div>
-      <p class="help">
-        Click or tap a square to add a note, again to remove it. Drag with a mouse to paint.
-        With a keyboard, arrows move and <kbd>Enter</kbd> adds or removes. <kbd>Space</kbd> plays and stops from anywhere.
+      <p id="roll-help" class="help">
+        Scroll up and down for higher and lower notes. Click an empty spot to add a note (drag right as you click to draw it longer);
+        drag a note to move it and its right edge to stretch it; double-click a note to delete it. On a phone, tap to add.
+        With a keyboard: arrows move the cursor (<kbd>Ctrl</kbd> a beat, <kbd>Page Up</kbd>/<kbd>Page Down</kbd> an octave),
+        <kbd>Enter</kbd> adds or removes a note, <kbd>Shift</kbd> + arrows stretch it, <kbd>Alt</kbd> + arrows move it,
+        <kbd>Delete</kbd> removes the selected notes. <kbd>Space</kbd> plays and stops from anywhere.
       </p>
       <p id="record-help" class="help">
         Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
-        snapped to the nearest step. Each pass adds on top; Undo take removes the last recording.
+        snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
       </p>
-      <div class="grid-scroll"><table id="grid" class="grid"></table></div>
-      <p id="off-grid" class="off-grid" aria-live="polite"></p>
+      <div id="roll" class="roll" aria-describedby="roll-help"></div>
     </div>
   </section>
 
-  <!-- Note Edit: paged settings for the selected track (note pages come next) -->
+  <!-- Note Edit: paged settings for the selected notes and the selected track -->
   <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
     <div class="panel-head">
       <h2 id="note-edit-h">Note Edit</h2>
@@ -122,6 +124,7 @@
     <div class="pager">
       <button id="page-prev" type="button" class="page-arrow" aria-label="Previous page"><span aria-hidden="true">◀</span></button>
       <div class="pages" role="tablist" aria-label="Note Edit pages">
+        <button type="button" role="tab" id="tab-p-note" aria-controls="p-note">Note</button>
         <button type="button" role="tab" id="tab-p-sound" aria-controls="p-sound">Sound</button>
         <button type="button" role="tab" id="tab-p-shape" aria-controls="p-shape">Shape</button>
         <button type="button" role="tab" id="tab-p-filter" aria-controls="p-filter">Filter</button>
@@ -130,7 +133,27 @@
       </div>
       <button id="page-next" type="button" class="page-arrow" aria-label="Next page"><span aria-hidden="true">▶</span></button>
     </div>
-    <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0">
+    <div id="p-note" class="page" role="tabpanel" aria-labelledby="tab-p-note" tabindex="0">
+      <p id="note-sel" class="loop-status" aria-live="polite"></p>
+      <div id="note-controls">
+        <div class="ctl">
+          <div class="ctl-head"><label for="note-len">Length</label><output id="note-len-out" for="note-len" aria-hidden="true"></output></div>
+          <input type="range" id="note-len" min="1" max="64" step="1">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="note-vel">Loudness</label><output id="note-vel-out" for="note-vel" aria-hidden="true"></output></div>
+          <input type="range" id="note-vel" min="5" max="100" step="5">
+        </div>
+        <div class="note-pitch" role="group" aria-label="Pitch">
+          <button type="button" id="note-oct-down">Octave down</button>
+          <button type="button" id="note-down">Key down</button>
+          <button type="button" id="note-up">Key up</button>
+          <button type="button" id="note-oct-up">Octave up</button>
+        </div>
+        <button type="button" id="note-delete" class="quiet">Delete notes</button>
+      </div>
+    </div>
+    <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
       <div class="preset">
         <label for="preset">Preset</label>
         <select id="preset"></select>
@@ -193,6 +216,17 @@
       </div>
     </fieldset>
     <p class="help">Auto picks from the window's width. Desktop always uses the side-by-side layout; Phone always stacks everything with the keyboard pinned at the bottom.</p>
+    <fieldset class="choice">
+      <legend>Background</legend>
+      <div class="seg">
+        <input type="radio" name="theme" id="theme-contrast" value="contrast"><label for="theme-contrast"><span class="theme-swatch" style="background:#121419"></span>High contrast</label>
+        <input type="radio" name="theme" id="theme-midnight" value="midnight"><label for="theme-midnight"><span class="theme-swatch" style="background:#172036"></span>Midnight</label>
+        <input type="radio" name="theme" id="theme-plum" value="plum"><label for="theme-plum"><span class="theme-swatch" style="background:#241930"></span>Plum</label>
+        <input type="radio" name="theme" id="theme-forest" value="forest"><label for="theme-forest"><span class="theme-swatch" style="background:#15241d"></span>Forest</label>
+        <input type="radio" name="theme" id="theme-ember" value="ember"><label for="theme-ember"><span class="theme-swatch" style="background:#271c16"></span>Ember</label>
+      </div>
+    </fieldset>
+    <p class="help">High contrast is the default. Every background keeps all text and controls at full readability (WCAG AA).</p>
   </section>
 
   <section aria-labelledby="set-credits-h">
@@ -227,7 +261,8 @@
 <script src="src/ui/keyboard.js"></script>
 <script src="src/ui/meter.js"></script>
 <script src="src/ui/mixer-view.js"></script>
-<script src="src/ui/step-grid.js"></script>
+<script src="src/ui/colors.js"></script>
+<script src="src/ui/piano-roll.js"></script>
 <script src="src/ui/timeline.js"></script>
 <script src="src/ui/tabs.js"></script>
 <script src="src/ui/morph-pad.js"></script>

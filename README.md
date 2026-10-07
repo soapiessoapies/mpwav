@@ -35,18 +35,22 @@ level of sound design.
 - **Double-click `Sound Studio.cmd`** to open it in Chrome as an app window.
 - **To test on a phone:** run `npm run serve` and open the "on your network" address it prints
   from a phone on the same Wi-Fi.
-- **Tests:** `npm test` covers the note math, envelopes, voices, presets, and the WCAG AA
-  contrast of every color pair.
+- **Tests:** `npm test` covers the song model, note math, envelopes, voices, presets, and the WCAG AA
+  contrast of every color pair in every background theme.
 
 ## Playing
 
 | | |
 |---|---|
-| Play / stop the loop | `Space` (from anywhere), or the Play button |
-| Pick a track to edit | Click its name on the mixer (Lead, Bass, Pad, Hat) |
-| Add / remove a note | Click or tap a square in the pattern; drag with a mouse to paint |
-| Pattern with a keyboard | Arrows move, `Enter` adds or removes |
-| Mix | Faders, pan, M (mute) and S (solo) on each channel strip |
+| Play / stop | `Space` (from anywhere), or the Play button; Loop repeats the loop range, off plays from the cursor to the end |
+| Pick a track | Click its name in the playing box (Lead, Bass, Pad, Hat) |
+| Clips | Double-click an empty spot for a new clip; drag to move, drag the right edge to stretch (the loop repeats); double-click or `Enter` to open; `Delete` removes |
+| Notes (piano roll) | Click to add (drag right to draw it longer), drag to move, drag the edge to stretch, double-click to delete; scroll for higher/lower notes |
+| Notes with a keyboard | Arrows move the cursor, `Enter` adds/removes, `Shift` + arrows stretch, `Alt` + arrows move, `Delete` removes the selection |
+| Note page | Length, loudness and pitch of the selected notes |
+| Record | Plays and adds what you play to the open clip, as long as you held each key; Undo take removes the last recording |
+| Mix | Note Edit › Mix: faders, pan, M (mute) and S (solo) per track |
+| Settings | Layout (Auto / Desktop / Phone), background, fullscreen, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |
 | Stop every note | `Esc`, or Stop all notes |

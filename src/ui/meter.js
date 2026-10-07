@@ -59,5 +59,8 @@
     requestAnimationFrame(frame);
   }
 
-  root.Meter = { add };
+  // The page's colors changed (a new background): read them again.
+  const resetColors = () => { colors = null; for (const m of meters) m.idle = false; };
+
+  root.Meter = { add, resetColors };
 })(window);
