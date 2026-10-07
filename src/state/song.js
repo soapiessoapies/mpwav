@@ -38,6 +38,20 @@
   const LENGTHS = [1, 2, 4, 8, 16]; // lengths offered for new notes, in steps
   const VEL = 0.85; // a new note's loudness
   const COLORS = ["orange", "mint", "sky", "violet", "rose", "lime", "gold", "coral"];
+  const MAX_TRACKS = 12;
+  const ID_RE = /^[a-z0-9-]{1,20}$/;
+  const SNAPS = [1, 2, 4, 8, 16]; // in steps: 1/16, 1/8, 1/4, 1/2, a bar
+  const SWING_MAX = 0.5; // of a step
+  // Scales as the steps (semitones above the key) they use.
+  const SCALES = {
+    none: null,
+    major: [0, 2, 4, 5, 7, 9, 11],
+    minor: [0, 2, 3, 5, 7, 8, 10],
+    "pentatonic-major": [0, 2, 4, 7, 9],
+    "pentatonic-minor": [0, 3, 5, 7, 10],
+    blues: [0, 3, 5, 6, 7, 10],
+    dorian: [0, 2, 3, 5, 7, 9, 10],
+  };
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const num = (v, d) => (typeof v === "number" && Number.isFinite(v) ? v : d);
@@ -77,6 +91,9 @@
       selected: DEFAULT_TRACKS[0].id,
       cursor: 0, // bar Play starts from when the loop is off
       loop: { on: true, start: 0, end: 4 },
+      key: { root: 0, scale: "none", keep: false }, // root: 0 = C ... 11 = B
+      snap: 1,   // steps notes snap to in the piano roll
+      swing: 0,  // how late every other sixteenth plays, as a share of a step
       nextId: 1,
     };
   }
@@ -272,6 +289,61 @@
   }
 
   const Song_track = (song, id) => song.tracks.find((t) => t.id === id);
+
+  // --- the track list ---
+  const cleanName = (v, max = 24) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+  // A new track at the end, in the first color not in use. Returns it, or null at the limit.
+  function addTrack(song, { name, preset = "chip-lead", color } = {}) {
+    if (song.tracks.length >= MAX_TRACKS) return null;
+    const used = new Set(song.tracks.map((t) => t.color));
+    const t = createTrack({
+      id: newId(song, "t"),
+      name: cleanName(name) || `Track ${song.tracks.length + 1}`,
+      preset: Presets.find(preset) ? preset : "init",
+      color: COLORS.includes(color) ? color : COLORS.find((c) => !used.has(c)) || COLORS[song.tracks.length % COLORS.length],
+    });
+    song.tracks.push(t);
+    return t;
+  }
+
+  // Removes a track and its clips. The last track can't go. Returns whether it went.
+  function removeTrack(song, id) {
+    if (song.tracks.length <= 1) return false;
+    const i = song.tracks.findIndex((t) => t.id === id);
+    if (i < 0) return false;
+    song.tracks.splice(i, 1);
+    for (const [cid, c] of Object.entries(song.contents)) if (c.trackId === id) delete song.contents[cid];
+    if (song.selected === id) song.selected = song.tracks[Math.min(i, song.tracks.length - 1)].id;
+    return true;
+  }
+
+  // Moves a track up (-1) or down (+1) in the list. Returns whether it moved.
+  function moveTrack(song, id, dir) {
+    const i = song.tracks.findIndex((t) => t.id === id), j = i + Math.sign(dir);
+    if (i < 0 || j < 0 || j >= song.tracks.length) return false;
+    [song.tracks[i], song.tracks[j]] = [song.tracks[j], song.tracks[i]];
+    return true;
+  }
+
+  // --- key and snap ---
+  const inKey = (song, midi) => {
+    const sc = SCALES[song.key.scale];
+    return !sc || sc.includes((((midi - song.key.root) % 12) + 12) % 12);
+  };
+
+  // The nearest pitch in the key: searching in `dir` first (+1 up, -1 down), else either way.
+  function nearestInKey(song, midi, dir = 0) {
+    if (inKey(song, midi)) return midi;
+    for (let d = 1; d < 12; d++) {
+      const order = dir < 0 ? [-d, d] : [d, -d];
+      for (const o of order) if (inKey(song, midi + o) && midi + o >= LOWEST && midi + o <= HIGHEST) return midi + o;
+    }
+    return midi;
+  }
+
+  // A step moved back onto the snap grid.
+  const snapStep = (song, step) => Math.floor(step / song.snap) * song.snap;
 
   const linkCount = (song, contentId) =>
     song.tracks.reduce((n, t) => n + t.clips.filter((c) => c.contentId === contentId).length, 0);
@@ -510,14 +582,43 @@
       out.tempos.sort((a, b) => a.bar - b.bar);
     }
     out.nextId = Math.max(1, int(input.nextId, 1));
-    const saved = Array.isArray(input.tracks) ? input.tracks : [];
     const v3 = input.version === VERSION && input.contents && typeof input.contents === "object";
+    let saved = Array.isArray(input.tracks) ? input.tracks : [];
+
+    // The track list. A current save keeps its own tracks (any number, up
+    // to MAX_TRACKS, in its order); older saves had the four default tracks.
+    if (v3) {
+      saved = saved.filter((x, i, all) => x && typeof x.id === "string" && ID_RE.test(x.id) &&
+        all.findIndex((y) => y && y.id === x.id) === i).slice(0, MAX_TRACKS);
+      if (saved.length) {
+        out.tracks = saved.map((x, i) => {
+          const def = DEFAULT_TRACKS.find((d) => d.id === x.id) || {};
+          return createTrack({
+            id: x.id,
+            name: cleanName(x.name) || def.name || "Track",
+            preset: Presets.find(x.preset) ? x.preset : def.preset || "init",
+            color: COLORS.includes(x.color) ? x.color : def.color || COLORS[i % COLORS.length],
+            gridBase: def.gridBase, length: def.length,
+          });
+        });
+      }
+    }
+
+    // Key, snap and swing.
+    const k = input.key && typeof input.key === "object" ? input.key : {};
+    out.key = {
+      root: Number.isInteger(k.root) && k.root >= 0 && k.root < 12 ? k.root : 0,
+      scale: Object.prototype.hasOwnProperty.call(SCALES, k.scale) ? k.scale : "none",
+      keep: k.keep === true,
+    };
+    if (SNAPS.includes(input.snap)) out.snap = input.snap;
+    out.swing = clamp(num(input.swing, 0), 0, SWING_MAX);
 
     if (v3) {
       // A note without a length played for its track's note length.
       const lenFor = (trackId) => {
         const st = saved.find((x) => x && x.id === trackId);
-        return st && LENGTHS.includes(st.length) ? st.length : (DEFAULT_TRACKS.find((d) => d.id === trackId).length || 1);
+        return st && LENGTHS.includes(st.length) ? st.length : ((DEFAULT_TRACKS.find((d) => d.id === trackId) || {}).length || 1);
       };
       for (const [id, c] of Object.entries(input.contents)) {
         if (!c || !out.tracks.some((t) => t.id === c.trackId)) continue;
@@ -579,6 +680,8 @@
 
   const api = {
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
+    MAX_TRACKS, SNAPS, SWING_MAX, SCALES,
+    addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,
     freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, insertBars, deleteBars, duplicateBars,

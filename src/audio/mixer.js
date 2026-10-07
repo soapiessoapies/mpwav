@@ -28,6 +28,8 @@
       setVolume(db, offAt) { glide(fader.gain, db <= offAt ? 0 : Math.pow(10, db / 20)); },
       setPan(v) { glide(pan.pan, v); },
       setAudible(on) { glide(mute.gain, on ? 1 : 0); },
+      // The track was removed: unplug the channel.
+      dispose() { input.disconnect(); analyser.disconnect(); },
       peak() {
         if (!buf) buf = new Float32Array(analyser.fftSize);
         analyser.getFloatTimeDomainData(buf);

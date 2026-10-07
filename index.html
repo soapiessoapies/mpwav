@@ -169,11 +169,13 @@
       <button id="page-prev" type="button" class="page-arrow" aria-label="Previous page"><span aria-hidden="true">◀</span></button>
       <div class="pages" role="tablist" aria-label="Note Edit pages">
         <button type="button" role="tab" id="tab-p-note" aria-controls="p-note">Note</button>
+        <button type="button" role="tab" id="tab-p-track" aria-controls="p-track">Track</button>
         <button type="button" role="tab" id="tab-p-sound" aria-controls="p-sound">Sound</button>
         <button type="button" role="tab" id="tab-p-shape" aria-controls="p-shape">Shape</button>
         <button type="button" role="tab" id="tab-p-filter" aria-controls="p-filter">Filter</button>
         <button type="button" role="tab" id="tab-p-warp" aria-controls="p-warp">Warp</button>
         <button type="button" role="tab" id="tab-p-mix" aria-controls="p-mix">Mix</button>
+        <button type="button" role="tab" id="tab-p-song" aria-controls="p-song">Song</button>
       </div>
       <button id="page-next" type="button" class="page-arrow" aria-label="Next page"><span aria-hidden="true">▶</span></button>
     </div>
@@ -196,6 +198,41 @@
         </div>
         <button type="button" id="note-delete" class="quiet">Delete notes</button>
       </div>
+    </div>
+    <div id="p-track" class="page" role="tabpanel" aria-labelledby="tab-p-track" tabindex="0" hidden>
+      <div class="ctl">
+        <label for="track-name">Name</label>
+        <input id="track-name" class="text-field" type="text" maxlength="24" autocomplete="off">
+      </div>
+      <fieldset class="choice">
+        <legend>Color</legend>
+        <div id="track-colors" class="seg"></div>
+      </fieldset>
+      <div class="note-pitch" role="group" aria-label="Order">
+        <button type="button" id="track-up">Move up</button>
+        <button type="button" id="track-down">Move down</button>
+      </div>
+      <button type="button" id="track-remove" class="quiet">Remove this track</button>
+      <hr class="divider">
+      <button type="button" id="track-add">Add a track</button>
+      <p id="track-count" class="help"></p>
+    </div>
+    <div id="p-song" class="page" role="tabpanel" aria-labelledby="tab-p-song" tabindex="0" hidden>
+      <fieldset class="choice">
+        <legend>Key</legend>
+        <div class="key-row">
+          <label class="inline"><span class="sr-only">Key note</span><select id="key-root"></select></label>
+          <label class="inline"><span class="sr-only">Scale</span><select id="key-scale"></select></label>
+        </div>
+      </fieldset>
+      <label class="check"><input type="checkbox" id="key-keep"> Keep new notes in key</label>
+      <p class="help">With a scale chosen, piano roll rows outside it are dimmed. Keep in key moves notes you place or drag onto the nearest note that fits; what you play and record stays as played.</p>
+      <label class="inline">Snap <select id="snap"></select></label>
+      <div class="ctl">
+        <div class="ctl-head"><label for="swing">Swing</label><output id="swing-out" for="swing" aria-hidden="true"></output></div>
+        <input type="range" id="swing" min="0" max="50" step="5">
+      </div>
+      <p class="help">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
     </div>
     <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
       <div class="preset">

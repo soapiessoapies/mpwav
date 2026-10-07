@@ -67,24 +67,41 @@
   const audio = {}; // track id -> { synth, channel }
   let transport = null;
 
+  // Once sound is on, every track has a synth and a mixer channel: tracks
+  // added later get theirs straight away, removed ones are unplugged.
+  function syncAudio() {
+    const ctx = Engine.ctx;
+    if (!ctx || !transport) return;
+    for (const t of song.tracks) {
+      if (audio[t.id]) continue;
+      const channel = Mixer.createChannel(ctx, Engine.input);
+      const synth = Synth.create(ctx, channel.input, live(t), { reverb: Engine.reverb, bpm: song.bpm });
+      audio[t.id] = { synth, channel };
+      // A brand-new track has no strip until the mixer is redrawn; rebuildMixer hooks its meter up then.
+      const canvas = mixerView.meter(t.id);
+      if (canvas) Meter.add(canvas, channel.peak, true);
+    }
+    for (const id of Object.keys(audio)) {
+      if (song.tracks.some((t) => t.id === id)) continue;
+      audio[id].synth.dispose();
+      audio[id].channel.dispose();
+      delete audio[id];
+    }
+    applyMix();
+  }
+
   async function ready() {
     await Engine.start();
     if (!transport) {
       const ctx = Engine.ctx;
-      for (const t of song.tracks) {
-        const channel = Mixer.createChannel(ctx, Engine.input);
-        const synth = Synth.create(ctx, channel.input, live(t), { reverb: Engine.reverb, bpm: song.bpm });
-        audio[t.id] = { synth, channel };
-        Meter.add(mixerView.meter(t.id), channel.peak, true);
-      }
       Meter.add(mixerView.meter("master"), Engine.peak, true);
-      applyMix();
       transport = Transport.create(ctx, {
         // A count-in (steps below zero) runs at the tempo where play starts.
         stepLength: (count) => Song.stepSeconds(song, Song.playRange(song).start * Song.STEPS + Math.max(0, count)),
         getSteps: () => { const r = Song.playRange(song); return (r.end - r.start) * Song.STEPS; },
         onStep,
       });
+      syncAudio();
     }
   }
 
@@ -93,6 +110,7 @@
     const on = new Set(Song.audible(song).map((t) => t.id));
     for (const t of song.tracks) {
       const a = audio[t.id];
+      if (!a) continue;
       a.channel.setVolume(t.volume, Song.FADER.min);
       a.channel.setPan(t.pan);
       a.channel.setAudible(on.has(t.id));
@@ -127,10 +145,11 @@
     }
     for (const t of Song.audible(song)) {
       const { synth } = audio[t.id];
+      const at = pos % 2 ? time + song.swing * dur : time; // swing: offbeat sixteenths play late
       for (const n of Song.notesAtPos(song, t, pos)) {
         if (t.id === song.selected && skipOnce.delete(pos + ":" + n.midi)) continue;
-        const v = synth.noteOn(n.midi, n.vel, time);
-        synth.voiceOff(v, time + dur * (n.len - 0.08));
+        const v = synth.noteOn(n.midi, n.vel, at);
+        synth.voiceOff(v, at + dur * (n.len - 0.08));
       }
     }
     playheadQueue.push({ pos, time });
@@ -544,6 +563,7 @@
     onAdd(step, midi) {
       const o = find(open);
       if (!o) return null;
+      if (song.key.keep) midi = Song.nearestInKey(song, midi);
       const n = Song.addNote(o.c, step, midi, o.t.length);
       if (n) preview(o.t, midi);
       return n;
@@ -557,6 +577,7 @@
     },
     onMove(n, step, midi) {
       const o = find(open);
+      if (o && song.key.keep && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
       return !!o && Song.moveNote(o.c, n, step, midi);
     },
     onResize(n, len) {
@@ -666,7 +687,10 @@
       (clip.length > c.bars ? ", repeating it" : "") +
       (links > 1 ? ` · linked: edits change all ${links} copies` : "");
     for (const n of [...selNotes]) if (!c.notes.includes(n)) selNotes.delete(n);
-    roll.render({ c, color: t.color, name: c.name, steps: c.bars * Song.STEPS, selected: selNotes });
+    roll.render({
+      c, color: t.color, name: c.name, steps: c.bars * Song.STEPS, selected: selNotes, snap: song.snap,
+      inKey: (m) => Song.inKey(song, m), keySig: `${song.key.root}:${song.key.scale}`,
+    });
     lengthSel.value = t.length;
     renderNotePage();
   }
@@ -758,10 +782,13 @@
       audio[t.id].synth.load(live(t));
       audio[t.id].synth.setTempo(song.bpm);
     }
+    syncAudio();
+    rebuildMixer();
     applyMix();
     selectTrack(song.selected, false);
     showLoop();
     renderTempoList();
+    renderSongPage();
     history.sync(historyJson());
     writeNowQuiet();
   }
@@ -1057,6 +1084,107 @@
     list.hidden = !song.tempos.length;
   }
 
+  // --- Track page: name, color, order, remove, add ---
+  const trackName = $("track-name");
+  const COLOR_NAMES = { orange: "Orange", mint: "Mint", sky: "Sky", violet: "Violet", rose: "Rose", lime: "Lime", gold: "Gold", coral: "Coral" };
+  for (const c of Song.COLORS) {
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "track-color";
+    input.id = "track-color-" + c;
+    input.value = c;
+    const label = document.createElement("label");
+    label.htmlFor = input.id;
+    label.innerHTML = `<span class="theme-swatch" style="background: var(--c-${c})"></span>${COLOR_NAMES[c]}`;
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      sel().color = c;
+      selectTrack(song.selected, false);
+      afterChange(`${sel().name} is ${COLOR_NAMES[c].toLowerCase()}`);
+    });
+    $("track-colors").append(input, label);
+  }
+
+  function renderTrackPage() {
+    const t = sel();
+    if (document.activeElement !== trackName) trackName.value = t.name;
+    for (const c of Song.COLORS) $("track-color-" + c).checked = t.color === c;
+    const i = song.tracks.indexOf(t);
+    $("track-up").disabled = i === 0;
+    $("track-down").disabled = i === song.tracks.length - 1;
+    $("track-remove").disabled = song.tracks.length <= 1;
+    $("track-add").disabled = song.tracks.length >= Song.MAX_TRACKS;
+    $("track-count").textContent = `${song.tracks.length} of ${Song.MAX_TRACKS} tracks.`;
+  }
+
+  trackName.addEventListener("change", () => {
+    const t = sel();
+    const name = trackName.value.trim().slice(0, 24);
+    if (!name) { trackName.value = t.name; return; }
+    t.name = name;
+    rebuildMixer();
+    selectTrack(t.id, false);
+    afterChange(`Renamed to ${name}`);
+  });
+  const moveSelected = (dir) => {
+    const t = sel();
+    if (!Song.moveTrack(song, t.id, dir)) return;
+    rebuildMixer();
+    selectTrack(t.id, false);
+    afterChange(`${t.name} moved ${dir < 0 ? "up" : "down"}`);
+  };
+  $("track-up").addEventListener("click", () => moveSelected(-1));
+  $("track-down").addEventListener("click", () => moveSelected(1));
+  $("track-remove").addEventListener("click", () => {
+    const t = sel();
+    if (open && open.trackId === t.id) closeClip();
+    if (picked && picked.trackId === t.id) picked = null;
+    if (!Song.removeTrack(song, t.id)) return;
+    syncAudio();
+    rebuildMixer();
+    selectTrack(song.selected, false);
+    afterChange(`Removed ${t.name}. Undo brings it back.`);
+  });
+  $("track-add").addEventListener("click", () => {
+    const t = Song.addTrack(song);
+    if (!t) { Announce.say(`${Song.MAX_TRACKS} tracks is the most a song can have`); return; }
+    syncAudio();
+    rebuildMixer();
+    selectTrack(t.id, false);
+    afterChange(`Added ${t.name}`);
+    trackName.focus();
+    trackName.select();
+  });
+
+  // --- Song page: key, snap, swing ---
+  const keyRoot = $("key-root"), keyScale = $("key-scale"), keyKeep = $("key-keep"), snapSel = $("snap"), swing = $("swing");
+  const ROOTS = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+  const SCALE_NAMES = { none: "No scale", major: "Major", minor: "Minor", "pentatonic-major": "Pentatonic major", "pentatonic-minor": "Pentatonic minor", blues: "Blues", dorian: "Dorian" };
+  const SNAP_NAMES = { 1: "1/16 (a step)", 2: "1/8", 4: "1/4 (a beat)", 8: "1/2", 16: "1 bar" };
+  ROOTS.forEach((r, i) => keyRoot.add(new Option(r, i)));
+  for (const k of Object.keys(Song.SCALES)) keyScale.add(new Option(SCALE_NAMES[k], k));
+  for (const n of Song.SNAPS) snapSel.add(new Option(SNAP_NAMES[n], n));
+
+  function renderSongPage() {
+    keyRoot.value = song.key.root;
+    keyScale.value = song.key.scale;
+    keyKeep.checked = song.key.keep;
+    keyRoot.disabled = keyKeep.disabled = song.key.scale === "none";
+    snapSel.value = song.snap;
+    swing.value = Math.round(song.swing * 100);
+    $("swing-out").textContent = swing.value === "0" ? "Off" : swing.value + "%";
+    swing.setAttribute("aria-valuetext", swing.value === "0" ? "off" : swing.value + " percent");
+  }
+  const keyWords = () => (song.key.scale === "none" ? "No scale" : `${ROOTS[song.key.root]} ${SCALE_NAMES[song.key.scale].toLowerCase()}`);
+  keyRoot.addEventListener("change", () => { song.key.root = Number(keyRoot.value); renderSongPage(); afterChange(keyWords()); });
+  keyScale.addEventListener("change", () => { song.key.scale = keyScale.value; renderSongPage(); afterChange(keyWords()); });
+  keyKeep.addEventListener("change", () => {
+    song.key.keep = keyKeep.checked;
+    afterChange(keyKeep.checked ? "New notes stay in key" : "Notes can go anywhere");
+  });
+  snapSel.addEventListener("change", () => { song.snap = Number(snapSel.value); afterChange(`Snap to ${SNAP_NAMES[song.snap]}`); });
+  swing.addEventListener("input", () => { song.swing = Number(swing.value) / 100; renderSongPage(); save(); });
+
   // --- title ---
   const titleField = $("song-title");
   titleField.value = song.title;
@@ -1122,14 +1250,23 @@
     },
   });
 
-  const mixerView = MixerView.create($("mixer-strips"), song, {
-    select: selectTrack,
-    volume(id, db) { Song.track(song, id).volume = db; applyMix(); save(); },
-    pan(id, v) { Song.track(song, id).pan = v; applyMix(); save(); },
-    mute(id, on) { Song.track(song, id).mute = on; applyMix(); timeline.render(); save(); },
-    solo(id, on) { Song.track(song, id).solo = on; applyMix(); timeline.render(); save(); },
-    master(db) { song.master = db; applyMix(); save(); },
-  });
+  // The mixer is drawn from the track list, so adding, removing, renaming
+  // or reordering tracks redraws it (and hooks its meters back up).
+  let mixerView = null;
+  function rebuildMixer() {
+    $("mixer-strips").textContent = "";
+    mixerView = MixerView.create($("mixer-strips"), song, {
+      select: selectTrack,
+      volume(id, db) { Song.track(song, id).volume = db; applyMix(); save(); },
+      pan(id, v) { Song.track(song, id).pan = v; applyMix(); save(); },
+      mute(id, on) { Song.track(song, id).mute = on; applyMix(); timeline.render(); save(); },
+      solo(id, on) { Song.track(song, id).solo = on; applyMix(); timeline.render(); save(); },
+      master(db) { song.master = db; applyMix(); save(); },
+    });
+    for (const t of song.tracks) if (audio[t.id]) Meter.add(mixerView.meter(t.id), audio[t.id].channel.peak, true);
+    if (transport) Meter.add(mixerView.meter("master"), Engine.peak, true);
+  }
+  rebuildMixer();
 
   function selectTrack(id, announce = true) {
     if (song.selected !== id) {
@@ -1147,6 +1284,7 @@
     mixerView.refresh();
     timeline.render();
     renderEditor();
+    renderTrackPage();
     if (announce) Announce.say("Selected " + t.name);
     save();
   }
@@ -1259,4 +1397,5 @@
   showUndo();
   showTempoTools();
   renderTempoList();
+  renderSongPage();
 })();

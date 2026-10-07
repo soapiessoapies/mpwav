@@ -25,7 +25,7 @@
   function create(el, h) {
     // h: { onAdd(step, midi), onRemove(notes), onMove(note, step, midi), onResize(note, len),
     //      onSelect(), onChanged(text), onPreview(midi), say(text) }
-    let view = null; // { c, color, name, steps, defLen, selected: Set }
+    let view = null; // { c, color, name, steps, selected: Set, snap, inKey(midi), keySig }
     let cursor = { step: 0, midi: 60 };
     let builtFor = ""; // steps + sizes the background was built for
     let notesLayer = null, cursorEl = null, playheadEl = null;
@@ -40,6 +40,9 @@
     const xOf = (step) => KEYS_W + step * stepW();
     const where = (s) => (view.steps > 16 ? `bar ${Math.floor(s / 16) + 1} step ${(s % 16) + 1}` : `step ${s + 1}`);
     const lenWords = (n) => `${n} step${n > 1 ? "s" : ""}`;
+    const snapOf = () => view.snap || 1;
+    const snapDown = (st) => Math.floor(st / snapOf()) * snapOf();
+    const sig = () => `${view.steps}:${rowH()}:${stepW()}:${view.keySig || ""}`;
 
     el.tabIndex = 0;
     el.setAttribute("role", "application");
@@ -64,10 +67,11 @@
       for (let m = TOP; m >= BOTTOM; m--) {
         const black = Notes.isBlack(m);
         const r = document.createElement("div");
-        r.className = "roll-row" + (black ? " sharp" : "") + (Notes.pitchClass(m) === 0 ? " c" : "");
+        const out = view.inKey && !view.inKey(m);
+        r.className = "roll-row" + (black ? " sharp" : "") + (Notes.pitchClass(m) === 0 ? " c" : "") + (out ? " out" : "");
         rows.append(r);
         const k = document.createElement("div");
-        k.className = "roll-key" + (black ? " sharp" : "");
+        k.className = "roll-key" + (black ? " sharp" : "") + (out ? " out" : "");
         k.dataset.midi = m;
         if (Notes.pitchClass(m) === 0) k.textContent = Notes.noteName(m);
         keys.append(k);
@@ -88,7 +92,7 @@
       playheadEl.hidden = true;
       inner.append(rows, lines, notesLayer, cursorEl, playheadEl, keys);
       el.append(inner);
-      builtFor = `${view.steps}:${rowH()}:${stepW()}`;
+      builtFor = sig();
     }
 
     function drawNotes() {
@@ -127,7 +131,7 @@
       view = v;
       if (cursor.step >= v.steps) cursor.step = 0;
       sw = fitStepW();
-      if (builtFor !== `${v.steps}:${rowH()}:${stepW()}`) {
+      if (builtFor !== sig()) {
         buildBackground();
         // Its vertical scrollbar can appear only now, leaving a little less
         // room than measured: fit again so a short clip never scrolls sideways.
@@ -208,6 +212,7 @@
         drawNotes();
         return;
       }
+      cell.step = snapDown(cell.step);
       if (e.pointerType === "mouse") {
         e.preventDefault();
         el.focus({ preventScroll: true });
@@ -232,7 +237,8 @@
         if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > TAP_SLOP) drag = null;
         return;
       }
-      const ds = Math.round((e.clientX - drag.x0) / stepW());
+      const raw = (e.clientX - drag.x0) / stepW();
+      const ds = Math.round(raw / snapOf()) * snapOf(); // whole snap units
       if (drag.mode === "move") {
         const dm = -Math.round((e.clientY - drag.y0) / rowH());
         const before = drag.n.midi;
@@ -243,7 +249,8 @@
           drawNotes();
         }
       } else {
-        const len = h.onResize(drag.n, drag.len0 + ds);
+        const want = Math.max(snapOf(), Math.round((drag.len0 + raw) / snapOf()) * snapOf());
+        const len = h.onResize(drag.n, want);
         if (len !== drag.n.len || ds !== 0) { drag.changed = true; drawNotes(); }
       }
     });
@@ -282,7 +289,7 @@
         // Move the note under the cursor; the cursor goes with it.
         const n = here();
         if (!n) { h.say("No note here to move"); e.preventDefault(); return; }
-        const ok = h.onMove(n, n.step + (step || 0), n.midi + (pitch || 0));
+        const ok = h.onMove(n, n.step + (step || 0) * snapOf(), n.midi + (pitch || 0));
         if (ok) { cursor = { step: n.step, midi: n.midi }; h.onChanged(); }
         else h.say("Can't move it there");
         moved = ok;
@@ -290,12 +297,12 @@
         const n = here();
         if (!n) { h.say("No note here to stretch"); e.preventDefault(); return; }
         const before = n.len;
-        h.onResize(n, n.len + step);
+        h.onResize(n, Math.max(snapOf(), n.len + step * snapOf()));
         h.onChanged();
         if (n.len === before) h.say("Can't stretch it further");
         moved = n.len !== before;
       } else if (step) {
-        cursor.step = Math.max(0, Math.min(view.steps - 1, cursor.step + step * (e.ctrlKey ? 4 : 1)));
+        cursor.step = Math.max(0, Math.min(view.steps - 1, snapDown(cursor.step) + step * snapOf() * (e.ctrlKey ? 4 : 1)));
         moved = true;
       } else if (pitch) {
         cursor.midi = Math.max(BOTTOM, Math.min(TOP, cursor.midi + pitch));

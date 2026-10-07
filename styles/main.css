@@ -652,3 +652,15 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .tempo-list .check { min-height: 40px; }
 .tempo-list button { min-height: 36px; }
 #metronome[aria-pressed="true"], #count-in[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---------- track and song pages; notes outside the key ---------- */
+.roll-row.out { background: rgba(0, 0, 0, 0.42); }
+.roll-row.out.sharp { background: rgba(0, 0, 0, 0.5); }
+.roll-key.out { opacity: 0.55; }
+.text-field {
+  width: 100%; min-height: 44px; padding: 0 10px; font: inherit; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+}
+.key-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.divider { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+#track-colors label { padding: 0 8px; }

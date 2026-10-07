@@ -319,3 +319,78 @@ test("tempo changes follow inserted and deleted bars", () => {
   assert.deepEqual(back.tempos, s.tempos);
   assert.deepEqual(S.sanitize({ tempos: [{ bar: 0, bpm: 99 }, { bar: 3, bpm: 999 }, { bar: 3, bpm: 50 }, "x"] }).tempos, [{ bar: 3, bpm: S.BPM.max, ramp: false }]);
 });
+
+test("adding tracks: named in order, the next unused color, up to the limit", () => {
+  const s = S.createSong();
+  const t = S.addTrack(s);
+  assert.equal(t.name, "Track 5");
+  assert.equal(t.color, "rose", "orange, mint, violet and sky are taken");
+  assert.equal(t.preset, "chip-lead");
+  assert.ok(/^t\d+$/.test(t.id));
+  while (S.addTrack(s)) { /* fill up */ }
+  assert.equal(s.tracks.length, S.MAX_TRACKS);
+});
+
+test("removing a track takes its clips with it, but never the last track", () => {
+  const s = S.demoSong();
+  s.selected = "pad";
+  assert.equal(S.removeTrack(s, "pad"), true);
+  assert.deepEqual(s.tracks.map((t) => t.id), ["lead", "bass", "hat"]);
+  assert.ok(!Object.values(s.contents).some((c) => c.trackId === "pad"));
+  assert.equal(s.selected, "hat", "the selection moves to a neighbour");
+  S.removeTrack(s, "lead"); S.removeTrack(s, "bass");
+  assert.equal(S.removeTrack(s, "hat"), false);
+  assert.equal(s.tracks.length, 1);
+});
+
+test("moving tracks up and down", () => {
+  const s = S.createSong();
+  assert.equal(S.moveTrack(s, "pad", -1), true);
+  assert.deepEqual(s.tracks.map((t) => t.id), ["lead", "pad", "bass", "hat"]);
+  assert.equal(S.moveTrack(s, "lead", -1), false, "already first");
+});
+
+test("a saved song keeps its own tracks, names, colors and order", () => {
+  const s = S.demoSong();
+  const t = S.addTrack(s, { name: "Strings", preset: "warm-pad", color: "gold" });
+  S.addClip(s, t, 2, 1);
+  for (let i = 0; i < 4; i++) S.moveTrack(s, t.id, -1);
+  S.removeTrack(s, "bass");
+  s.tracks[1].name = "Main riff";
+  s.key = { root: 9, scale: "minor", keep: true };
+  s.snap = 4;
+  s.swing = 0.3;
+  const back = S.sanitize(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(back, s);
+  assert.deepEqual(back.tracks.map((x) => x.name), ["Strings", "Main riff", "Pad", "Hat"]);
+});
+
+test("key: which notes fit, and the nearest that does", () => {
+  const s = S.createSong();
+  assert.equal(S.inKey(s, 61), true, "no scale: everything fits");
+  s.key = { root: 9, scale: "minor", keep: false }; // A minor: A B C D E F G
+  assert.equal(S.inKey(s, 69), true);
+  assert.equal(S.inKey(s, 70), false, "A#");
+  assert.equal(S.nearestInKey(s, 70, 1), 71, "up to B");
+  assert.equal(S.nearestInKey(s, 70, -1), 69, "down to A");
+  assert.equal(S.nearestInKey(s, 66, 0), 67, "F# -> G, trying up first");
+});
+
+test("snap rounds a step down onto the grid", () => {
+  const s = S.createSong();
+  s.snap = 4;
+  assert.equal(S.snapStep(s, 7), 4);
+  assert.equal(S.snapStep(s, 8), 8);
+});
+
+test("sanitize repairs bad track lists, keys, snaps and swings", () => {
+  const bad = S.sanitize({
+    version: 3, contents: {},
+    tracks: [{ id: "Bad Id!" }, { id: "x1", name: "  A very long name that goes on and on  ", color: "plaid", preset: "nope" }, { id: "x1" }],
+    key: { root: 14, scale: "lydian-ish", keep: "yes" }, snap: 3, swing: 9,
+  });
+  assert.deepEqual(bad.tracks.map((t) => [t.id, t.name, t.color, t.preset]), [["x1", "A very long name that go", "orange", "init"]]);
+  assert.deepEqual(bad.key, { root: 0, scale: "none", keep: false });
+  assert.equal(bad.snap, 1);
+  assert.equal(bad.swing, S.SWING_MAX);
+});

@@ -275,8 +275,15 @@
     setTempo(bpm);
     delay.delayTime.value = Math.min(2, (ECHO_STEPS * 60) / bpm / 4);
 
+    // The track was removed: silence it and unplug everything it owns.
+    function dispose() {
+      allOff();
+      try { lfo.stop(); } catch (e) { /* already stopped */ }
+      for (const n of [out, post, echoTone, reverbSend, lfo]) n.disconnect();
+    }
+
     return {
-      noteOn, noteOff, voiceOff, allOff, set, load, setTempo,
+      noteOn, noteOff, voiceOff, allOff, set, load, setTempo, dispose,
       held: () => pool.held(),
       get params() { return { ...p }; },
       output: out,

@@ -152,7 +152,8 @@
 
     return {
       refresh,
-      meter: (id) => (id === "master" ? mf.meter : strips[id].fader.meter),
+      // A strip's meter canvas, or null for a track the mixer doesn't show yet.
+      meter: (id) => (id === "master" ? mf.meter : strips[id] ? strips[id].fader.meter : null),
     };
   }
 
