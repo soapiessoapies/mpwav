@@ -1,9 +1,10 @@
-// Wires the studio together: the song (tracks, patterns, mixer settings),
-// one synth and mixer channel per track, the loop, and the panels. Sound
-// starts on the first key or button press (browsers don't allow it sooner).
+// Wires the studio together: the song (tracks, patterns, arrangement, mixer
+// settings), one synth and mixer channel per track, the transport, and the
+// panels. Sound starts on the first key or button press (browsers don't
+// allow it sooner).
 //
-// Space plays and stops the loop from anywhere, except where Space is the
-// only way to work a control (checkboxes, radio buttons, drop-downs, text).
+// Space plays and stops from anywhere, except where Space is the only way to
+// work a control (checkboxes, radio buttons, drop-downs, text).
 (function () {
   "use strict";
 
@@ -30,7 +31,8 @@
 
   const savedSong = load(SONG_KEY);
   const song = savedSong ? Song.sanitize(savedSong) : Song.demoSong();
-  const ui = { announceNotes: false, tab: "tab-pattern", keysOpen: true, ...(load(UI_KEY) || {}) };
+  const ui = { announceNotes: false, tab: "tab-make", keysOpen: true, ...(load(UI_KEY) || {}) };
+  if (!$(ui.tab)) ui.tab = "tab-make"; // a tab from an older version
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -53,7 +55,7 @@
       }
       Meter.add(mixerView.meter("master"), Engine.peak, true);
       applyMix();
-      transport = Transport.create(ctx, { getBpm: () => song.bpm, getSteps: () => song.steps, onStep });
+      transport = Transport.create(ctx, { getBpm: () => song.bpm, getSteps: () => Song.loopSteps(song), onStep });
     }
   }
 
@@ -69,35 +71,53 @@
     Engine.setMasterVolume(song.master <= Song.FADER.min ? 0 : Math.pow(10, song.master / 20));
   }
 
-  // --- the loop ---
-  const playheadQueue = []; // { step, time } waiting to be shown
+  // --- playback ---
+  // The transport counts steps from the top of the loop: one bar's worth
+  // when looping patterns, the whole arrangement in song mode.
+  const playheadQueue = []; // { step, bar, time } waiting to be shown
+  const booked = [];        // recently scheduled steps, for snapping recorded notes
+  const skipOnce = new Set(); // "step:midi" just recorded live, so it isn't played twice
 
-  function onStep(step, time, dur) {
+  function onStep(count, time, dur) {
+    const bar = Math.floor(count / Song.STEPS);
+    const step = count % Song.STEPS;
     for (const t of Song.audible(song)) {
+      const slot = Song.slotFor(song, t, bar);
+      if (!slot) continue;
       const { synth } = audio[t.id];
-      for (const midi of Song.notesAt(t, step)) {
+      for (const midi of Song.notesAt(t, step, slot)) {
+        if (t.id === song.selected && skipOnce.delete(step + ":" + midi)) continue;
         const v = synth.noteOn(midi, 0.85, time);
         synth.voiceOff(v, time + dur * t.length * 0.92);
       }
     }
-    playheadQueue.push({ step, time });
+    playheadQueue.push({ step, bar, time });
+    booked.push({ step, time });
+    if (booked.length > 32) booked.shift();
   }
 
-  // Runs only while the loop plays.
+  // Runs only while playing.
   function drawPlayhead() {
     if (!transport || !transport.playing) return;
     const now = Engine.ctx.currentTime;
     let shown = null;
-    while (playheadQueue.length && playheadQueue[0].time <= now) shown = playheadQueue.shift().step;
-    if (shown != null) grid.setPlayhead(shown);
+    while (playheadQueue.length && playheadQueue[0].time <= now) shown = playheadQueue.shift();
+    if (shown) {
+      grid.setPlayhead(shown.step);
+      arrangeGrid.setPlayhead(song.mode === "song" ? shown.bar : -1);
+    }
     requestAnimationFrame(drawPlayhead);
   }
 
   function stopLoop() {
     if (!transport || !transport.playing) return;
+    endTake();
     transport.stop();
     playheadQueue.length = 0;
+    booked.length = 0;
+    skipOnce.clear();
     grid.setPlayhead(-1);
+    arrangeGrid.setPlayhead(-1);
     $("play").setAttribute("aria-pressed", "false");
     Announce.say("Stopped");
   }
@@ -108,7 +128,7 @@
     transport.start();
     requestAnimationFrame(drawPlayhead);
     $("play").setAttribute("aria-pressed", "true");
-    Announce.say("Playing");
+    Announce.say(song.mode === "song" ? "Playing the song" : "Playing");
   }
   $("play").addEventListener("click", togglePlay);
 
@@ -122,6 +142,77 @@
     for (const id in audio) audio[id].synth.setTempo(song.bpm);
     save();
   });
+
+  // --- recording: while on, the loop plays and live notes are added to the
+  // selected track's pattern, snapped to the nearest step. A take is one
+  // stretch of recording; Undo take removes what it added. ---
+  let take = null;     // { trackId, slot, notes } while recording
+  let lastTake = null; // the finished take Undo take would remove
+  const recBtn = $("record");
+  const undoBtn = $("undo-take");
+
+  async function startTake() {
+    if (song.mode !== "loop") {
+      setMode("loop");
+      Announce.say("Switched to Loop pattern for recording");
+    }
+    const t = sel();
+    take = { trackId: t.id, slot: t.slot, notes: [] };
+    recBtn.setAttribute("aria-pressed", "true");
+    if (!transport || !transport.playing) await togglePlay();
+    Announce.say(`Recording into ${t.name} pattern ${t.slot}`);
+  }
+
+  function endTake() {
+    if (!take) return;
+    const done = take;
+    take = null;
+    recBtn.setAttribute("aria-pressed", "false");
+    if (done.notes.length) {
+      lastTake = done;
+      undoBtn.disabled = false;
+      Announce.say(`Recorded ${done.notes.length} note${done.notes.length > 1 ? "s" : ""}`);
+    }
+  }
+
+  recBtn.addEventListener("click", () => (take ? endTake() : startTake()));
+
+  undoBtn.addEventListener("click", () => {
+    if (!lastTake) return;
+    endTake();
+    const t = Song.track(song, lastTake.trackId);
+    Song.removeNotes(t, lastTake.slot, lastTake.notes);
+    Announce.say(`Take undone: ${lastTake.notes.length} note${lastTake.notes.length > 1 ? "s" : ""} removed from ${t.name} ${lastTake.slot}`);
+    lastTake = null;
+    undoBtn.disabled = true;
+    renderPattern();
+    save();
+  });
+
+  // The scheduled step closest to now, or the one about to be scheduled.
+  function nearestStep() {
+    const now = Engine.ctx.currentTime;
+    const ahead = transport.peek();
+    let best = ahead && { step: ahead.step % Song.STEPS, time: ahead.time, upcoming: true };
+    for (const b of booked) {
+      if (!best || Math.abs(b.time - now) < Math.abs(best.time - now)) best = { ...b, upcoming: false };
+    }
+    return best;
+  }
+
+  function recordNote(m) {
+    if (!take || !transport || !transport.playing) return;
+    const t = Song.track(song, take.trackId);
+    const at = nearestStep();
+    if (!at || !Song.addNote(t, at.step, m, take.slot)) return;
+    take.notes.push({ step: at.step, midi: m });
+    // You already heard it as you played it; don't play it again a moment later.
+    if (at.upcoming) skipOnce.add(at.step + ":" + m);
+    if (t.id === song.selected && t.slot === take.slot) grid.mark(at.step, m, true);
+    showSlots();
+    showOffGrid();
+    save();
+  }
 
   // --- live notes from the keyboards, played on the selected track. The
   // same note can be held by a finger and a computer key at once; it sounds
@@ -139,8 +230,12 @@
       lastSpoken = performance.now();
       Announce.say(Notes.spokenName(m));
     }
-    if (transport && Engine.running()) audio[trackId].synth.noteOn(m);
-    else ready().then(() => { if (holds.get(m)) audio[trackId].synth.noteOn(m); });
+    if (transport && Engine.running()) {
+      audio[trackId].synth.noteOn(m);
+      recordNote(m);
+    } else {
+      ready().then(() => { if (holds.get(m)) audio[trackId].synth.noteOn(m); });
+    }
   }
 
   function noteOff(m) {
@@ -197,8 +292,8 @@
   announceBox.checked = !!ui.announceNotes;
   announceBox.addEventListener("change", () => { ui.announceNotes = announceBox.checked; save(); });
 
-  // --- computer keys: A W S E D ... play, Z / X change octave, Space plays
-  // the loop, Esc stops every note ---
+  // --- computer keys: A W S E D ... play, Z / X change octave, Space plays,
+  // Esc stops every note ---
   const compHeld = new Map(); // key code -> midi, so an octave change mid-note lets go of the right one
 
   function typingInto(t) {
@@ -255,12 +350,13 @@
     master(db) { song.master = db; applyMix(); save(); },
   });
 
-  // --- pattern grid ---
+  // --- pattern grid (Make tab) ---
   const grid = StepGrid.create($("grid"), {
     onToggle(step, midi) {
       const t = sel();
       const on = Song.toggleNote(t, step, midi);
       if (on) preview(t, midi);
+      showSlots();
       showOffGrid();
       save();
       return on;
@@ -284,8 +380,9 @@
   // Notes that are in the pattern but above or below the rows on screen.
   function showOffGrid() {
     const t = sel();
-    const above = t.notes.filter((n) => n.midi > t.gridBase + 12).length;
-    const below = t.notes.filter((n) => n.midi < t.gridBase).length;
+    const notes = Song.notesOf(t);
+    const above = notes.filter((n) => n.midi > t.gridBase + 12).length;
+    const below = notes.filter((n) => n.midi < t.gridBase).length;
     const parts = [];
     if (above) parts.push(`${above} note${above > 1 ? "s" : ""} higher up`);
     if (below) parts.push(`${below} lower down`);
@@ -297,16 +394,19 @@
   clearBtn.addEventListener("click", () => {
     const t = sel();
     if (undoClear) {
-      t.notes = undoClear.notes;
+      Song.track(song, undoClear.id).patterns[undoClear.slot] = undoClear.notes;
       undoClear = null;
       clearBtn.textContent = "Clear";
       Announce.say("Pattern restored");
     } else {
-      if (!t.notes.length) return;
-      undoClear = { id: t.id, notes: t.notes };
-      t.notes = [];
+      if (!Song.notesOf(t).length) return;
+      endTake();
+      undoClear = { id: t.id, slot: t.slot, notes: Song.notesOf(t) };
+      t.patterns[t.slot] = [];
+      lastTake = null;
+      undoBtn.disabled = true;
       clearBtn.textContent = "Undo clear";
-      Announce.say(`${t.name} pattern cleared. Press Undo clear to bring it back.`);
+      Announce.say(`${t.name} pattern ${t.slot} cleared. Press Undo clear to bring it back.`);
     }
     renderPattern();
     save();
@@ -316,18 +416,113 @@
     clearBtn.textContent = "Clear";
   }
 
+  // --- pattern slots A-D ---
+  const slotPicker = $("slot-picker");
+  const slotInputs = {};
+  for (const slot of Song.SLOTS) {
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "slot";
+    input.id = "slot-" + slot;
+    input.value = slot;
+    input.addEventListener("change", () => { if (input.checked) setSlot(slot); });
+    const label = document.createElement("label");
+    label.htmlFor = input.id;
+    label.innerHTML = `${slot}<span class="slot-dot" aria-hidden="true"></span><span class="sr-only"></span>`;
+    slotPicker.append(input, label);
+    slotInputs[slot] = { input, label };
+  }
+
+  function setSlot(slot) {
+    const t = sel();
+    if (t.slot === slot) return;
+    endTake();
+    resetUndo();
+    t.slot = slot;
+    renderPattern();
+    Announce.say(`Pattern ${slot}${Song.notesOf(t).length ? "" : ", empty"}`);
+    save();
+  }
+
+  // Marks which slots have notes, and says what Play will do with this pattern.
+  function showSlots() {
+    const t = sel();
+    for (const slot of Song.SLOTS) {
+      const { input, label } = slotInputs[slot];
+      input.checked = slot === t.slot;
+      const used = t.patterns[slot].length > 0;
+      label.classList.toggle("used", used);
+      label.querySelector(".sr-only").textContent = used ? "" : " (empty)";
+    }
+    showLoopStatus();
+  }
+
+  // Bar numbers as short ranges: [0,1,2,5] -> "1–3, 6".
+  function barList(bars) {
+    const out = [];
+    for (let i = 0; i < bars.length; i++) {
+      let j = i;
+      while (j + 1 < bars.length && bars[j + 1] === bars[j] + 1) j++;
+      out.push(i === j ? `${bars[i] + 1}` : `${bars[i] + 1}–${bars[j] + 1}`);
+      i = j;
+    }
+    return out.join(", ");
+  }
+
+  function showLoopStatus() {
+    const t = sel();
+    if (song.mode === "loop") {
+      $("loop-status").textContent = `Pattern ${t.slot} · 1 bar · repeats while playing`;
+    } else {
+      const bars = t.arrange.map((s, i) => (s === t.slot ? i : -1)).filter((i) => i >= 0);
+      $("loop-status").textContent = bars.length
+        ? `Song mode: pattern ${t.slot} plays in bar${bars.length > 1 ? "s" : ""} ${barList(bars)}`
+        : `Song mode: pattern ${t.slot} isn't placed in the arrangement yet`;
+    }
+    const n = Song.songBars(song);
+    $("song-status").textContent = n
+      ? `The song is ${n} bar${n > 1 ? "s" : ""} long. ${song.mode === "song" ? "Play runs it from bar 1, then starts again." : "Choose Play song to hear it."}`
+      : "The arrangement is empty. Tap squares to place patterns in bars.";
+  }
+
   function renderPattern() {
     const t = sel();
     grid.render(t, song.steps);
-    $("pattern-h").textContent = "Pattern: " + t.name;
+    $("pattern-h").textContent = t.name;
     $("rows-label").textContent = `${Notes.noteName(t.gridBase)} to ${Notes.noteName(t.gridBase + 12)}`;
     $("rows-down").disabled = t.gridBase <= Song.LOWEST;
     $("rows-up").disabled = t.gridBase + 12 >= Song.HIGHEST;
     lengthSel.value = t.length;
+    showSlots();
     showOffGrid();
   }
 
-  // --- synth panel (for the selected track) ---
+  // --- arrangement (Arrange tab) ---
+  const arrangeGrid = ArrangeGrid.create($("arrange-grid"), {
+    onSet(t, bar, slot) {
+      t.arrange[bar] = slot;
+      showLoopStatus();
+      save();
+    },
+    onSelectTrack: (id) => selectTrack(id),
+  });
+
+  function setMode(mode) {
+    song.mode = mode;
+    $("mode-" + mode).checked = true;
+    showLoopStatus();
+    save();
+  }
+  for (const mode of Song.MODES) {
+    $("mode-" + mode).addEventListener("change", (e) => {
+      if (!e.target.checked) return;
+      setMode(mode);
+      Announce.say(mode === "song" ? "Play runs the whole song" : "Play repeats the patterns you're editing");
+    });
+  }
+  $("mode-" + song.mode).checked = true;
+
+  // --- synth panel (Sound tab, for the selected track) ---
   const controls = Controls.build($("synth-controls"), {
     get: () => sel().params,
     onChange(id, value) {
@@ -372,6 +567,7 @@
   function selectTrack(id, announce = true) {
     if (song.selected !== id) {
       panic();
+      endTake();
       resetUndo();
     }
     song.selected = id;
@@ -382,14 +578,15 @@
     morphPad.set(t.morph);
     controls.refresh(t.params);
     mixerView.refresh();
+    arrangeGrid.render(song);
     renderPattern();
     if (announce) Announce.say("Editing " + t.name);
     save();
   }
   selectTrack(song.selected, false);
 
-  // --- tabs: Pattern and Sound, plus Mixer on phones (on bigger screens
-  // the mixer is always on show beside them) ---
+  // --- tabs: Make, Arrange and Sound, plus Mixer on phones (on bigger
+  // screens the mixer is always on show beside them) ---
   const tabs = Tabs.create(document.querySelector(".tabs"), {
     onSelect(id) { ui.tab = id; save(); },
   });

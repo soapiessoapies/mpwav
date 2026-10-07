@@ -15,6 +15,11 @@
   --cell-beat: #3a4051;  /* empty squares on the beat (1, 5, 9, 13) */
   --cell-edge: #8a92a3;  /* outline of a pattern square */
   --playhead: #d8dce6;   /* the column that's playing */
+  --rec: #ff7a7a;        /* record button (text on it: --accent-ink) */
+  --slot-a: #ffb547;     /* arrangement colors per pattern slot (letters on them: --accent-ink) */
+  --slot-b: #7ee0b0;
+  --slot-c: #8fd0ff;
+  --slot-d: #e7a6ff;
   --focus: #8fd0ff;
   --white-key: #eceff4;
   --white-key-ink: #1b1e25;
@@ -99,6 +104,10 @@ kbd {
 }
 .play[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .play[aria-pressed="true"] .icon { width: 12px; height: 12px; border: 0; background: currentColor; }
+.record { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.rec-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--rec); }
+.record[aria-pressed="true"] { background: var(--rec); color: var(--accent-ink); border-color: var(--rec); }
+.record[aria-pressed="true"] .rec-dot { background: var(--accent-ink); border-color: var(--accent-ink); }
 .tempo { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .tempo input, .inline select {
   font: inherit; color: var(--text); background: var(--panel-2);
@@ -117,14 +126,13 @@ main > * { min-width: 0; }
 @media (min-width: 1100px) {
   main {
     grid-template-columns: max-content minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas: "mixer tabs" "mixer editor" "keys keys";
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "mixer tabs" "mixer editor";
     align-items: start;
   }
   .tabbar { grid-area: tabs; }
   .mixer-panel { grid-area: mixer; align-self: stretch; }
-  .pattern-panel, .synth-panel { grid-area: editor; }
-  .keys-panel { grid-area: keys; }
+  .make-panel, .arrange-panel, .synth-panel { grid-area: editor; }
 }
 [hidden] { display: none !important; }
 
@@ -317,7 +325,9 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   .keys-panel .panel-head { flex-wrap: nowrap; gap: 8px; }
   .keys-panel .panel-head button, .keys-tools button { min-height: 40px; padding: 0 10px; }
   .keys-tools { flex-wrap: nowrap; }
-  .tabbar { flex-wrap: nowrap; gap: 6px; }
+  .tabbar { gap: 6px; }
+  .tabs { flex: 1 1 100%; }
+  .tab { flex: 1; }
   .tab { padding: 0 10px; }
   .track-pick { margin-left: auto; gap: 4px; }
   .track-pick select { padding: 0 6px; }
@@ -333,6 +343,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   .transport { flex-wrap: nowrap; gap: 8px; width: 100%; }
   .play { min-width: 0; }
   .tempo { margin-left: auto; gap: 4px; }
+  .tempo > span { display: none; } /* "BPM": the field is already labelled Tempo */
   .tempo input { width: 3.2em; text-align: center; -moz-appearance: textfield; }
   .tempo input::-webkit-inner-spin-button, .tempo input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   .sound .state { display: none; } /* the dot shows on/off */
@@ -409,3 +420,40 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   .cell { width: 34px; height: 30px; }
   .fader-row { height: 120px; }
 }
+
+/* ---------- make tab ---------- */
+.make-panel { display: grid; gap: var(--gap); min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.make-panel > * { min-width: 0; }
+.make-panel[hidden] { display: none; }
+.pattern-panel .panel-head h2 { margin-right: 0; }
+.slots { margin-right: auto; }
+.slots .seg label { position: relative; min-width: 44px; justify-content: center; font-weight: 700; }
+.slot-dot {
+  position: absolute; top: 4px; right: 6px; width: 6px; height: 6px; border-radius: 50%;
+  background: transparent;
+}
+.slots .seg label.used .slot-dot { background: var(--accent); }
+.slots .seg input:checked + label.used .slot-dot { background: var(--accent-ink); }
+.loop-status {
+  margin: 0 0 10px; padding: 8px 12px; border-radius: 8px;
+  background: var(--panel-2); border-left: 4px solid var(--accent); font-weight: 600;
+}
+.pattern-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
+
+/* ---------- arrange tab ---------- */
+.mode .seg label { min-height: 44px; }
+.grid.arrange .bar {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 36px; min-height: 0; padding: 0;
+  border-radius: 6px; border: 1px solid var(--cell-edge); background: var(--cell);
+  font-weight: 700; color: var(--accent-ink);
+}
+.grid.arrange td.beat .bar { background: var(--cell-beat); }
+.grid.arrange td .bar[data-slot="A"] { background: var(--slot-a); border-color: var(--slot-a); }
+.grid.arrange td .bar[data-slot="B"] { background: var(--slot-b); border-color: var(--slot-b); }
+.grid.arrange td .bar[data-slot="C"] { background: var(--slot-c); border-color: var(--slot-c); }
+.grid.arrange td .bar[data-slot="D"] { background: var(--slot-d); border-color: var(--slot-d); }
+.grid.arrange td.now .bar { outline: 2px solid var(--playhead); outline-offset: 1px; }
+.grid.arrange .bar:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; position: relative; z-index: 2; }
+.row-name { min-height: 36px; padding: 0 10px; font-weight: 600; font-size: 0.85rem; }
+.row-name[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

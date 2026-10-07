@@ -26,6 +26,7 @@ const TEXT = [
   ["accent", "panel"], ["accent", "panel-2"], ["accent-ink", "accent"],
   ["white-key-ink", "white-key"], ["text", "black-key"],
   ["accent-ink", "solo"], ["muted", "cell"], ["text", "cell-beat"],
+  ["accent-ink", "rec"], ["accent-ink", "slot-a"], ["accent-ink", "slot-b"], ["accent-ink", "slot-c"], ["accent-ink", "slot-d"],
 ];
 const NON_TEXT = [
   ["line", "panel"], ["line", "panel-2"], ["line", "bg"],
@@ -34,6 +35,7 @@ const NON_TEXT = [
   ["meter-fill", "meter-bg"], ["meter-hot", "meter-bg"],
   ["cell-edge", "cell"], ["cell-edge", "cell-beat"], ["cell-edge", "panel"], ["accent", "cell"], ["accent", "cell-beat"], ["playhead", "cell"],
   ["solo", "panel-2"], ["focus", "cell"],
+  ["rec", "panel-2"], ["slot-a", "panel"], ["slot-b", "panel"], ["slot-c", "panel"], ["slot-d", "panel"],
 ];
 
 for (const [fg, bg] of TEXT) {

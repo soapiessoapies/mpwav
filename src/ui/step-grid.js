@@ -152,7 +152,14 @@
       for (const el of lit) el.classList.add("now");
     }
 
-    return { render, setPlayhead, ROWS };
+    // Shows a note as on or off without redrawing the grid (recording).
+    function mark(step, midi, on) {
+      const row = ROWS - 1 - (midi - track.gridBase);
+      if (row < 0 || row >= ROWS) return;
+      cellEl(row, step)?.setAttribute("aria-pressed", String(on));
+    }
+
+    return { render, setPlayhead, mark, ROWS };
   }
 
   root.StepGrid = { create, ROWS };

@@ -32,7 +32,11 @@
       // After a long stall (a background tab), skip ahead instead of
       // playing every missed step at once.
       if (next.time < ctx.currentTime - 0.25) next.time = ctx.currentTime + 0.02;
-      const r = plan(next, ctx.currentTime, AHEAD, dur, getSteps());
+      // The loop can get shorter while playing (switching to loop mode,
+      // emptying the last bars of the song): wrap back into it.
+      const steps = getSteps();
+      if (next.step >= steps) next.step %= steps;
+      const r = plan(next, ctx.currentTime, AHEAD, dur, steps);
       for (const d of r.due) onStep(d.step, d.time, dur);
       next = r.next;
     }
@@ -49,7 +53,10 @@
       timer = 0;
     }
 
-    return { start, stop, get playing() { return !!timer; } };
+    // The next step to be booked ({ step, time }), or null when stopped.
+    const peek = () => (timer && next ? { ...next } : null);
+
+    return { start, stop, peek, get playing() { return !!timer; } };
   }
 
   const api = { stepDuration, plan, AHEAD };
