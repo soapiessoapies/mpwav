@@ -118,6 +118,23 @@
 
   const running = () => !!ctx && ctx.state === "running";
 
+  // A metronome click at `time`: a short high blip, higher and louder on
+  // the first beat of a bar. It goes straight to the master, past the mixer.
+  function click(time, accent) {
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    osc.frequency.value = accent ? 1760 : 1175;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(accent ? 0.35 : 0.2, time + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
+    osc.connect(g);
+    g.connect(bus.master);
+    osc.start(time);
+    osc.stop(time + 0.06);
+    osc.onended = () => { osc.disconnect(); g.disconnect(); };
+  }
+
   function setMasterVolume(gain) {
     if (!bus) return;
     bus.master.gain.setTargetAtTime(gain, ctx.currentTime, 0.02);
@@ -149,6 +166,7 @@
     start,
     stop,
     running,
+    click,
     setMasterVolume,
     peak,
     onChange,

@@ -53,6 +53,7 @@ level of sound design.
 | Copy and paste | Ctrl + C / X / V / D: notes when the piano roll has focus, clips otherwise; Ctrl + Shift + D makes a linked copy |
 | Sections | Duplicate, insert a bar, or delete bars across every track, using the loop range |
 | Undo | Ctrl + Z / Ctrl + Y, or the Undo / Redo buttons: every edit, one step at a time |
+| Tempo | Type it, or Tap tempo; Metronome clicks on every beat; Count-in gives a bar of clicks before recording; Tempo change at cursor adds a jump or ramp, shown on the ruler |
 | Step input | With the piano roll focused (or Step input on), play a key to write it at the cursor; hold keys for a chord |
 | Settings | Layout (Auto / Desktop / Phone), background, fullscreen, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |

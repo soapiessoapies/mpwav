@@ -632,3 +632,23 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 [data-layout="compact"] .transport-bar { gap: 4px; padding: 8px 6px; }
 [data-layout="compact"] .transport-bar button { min-width: 38px; padding: 0 4px; }
 [data-layout="compact"] .tempo input { width: 2.9em; padding: 0 2px; }
+
+/* ---------- tempo ---------- */
+.tl-tempo {
+  position: absolute; top: 2px; z-index: 1; margin-left: 16px; padding: 0 4px; border-radius: 3px;
+  background: var(--focus); color: var(--accent-ink); font-size: 0.65rem; font-weight: 700; line-height: 14px;
+  pointer-events: none; white-space: nowrap;
+}
+.tempo-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.tempo-list li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 4px 8px; background: var(--panel-2); border-radius: 8px; color: var(--muted);
+}
+.tempo-list li > label:first-child { min-width: 4.5em; color: var(--text); font-weight: 600; }
+.tempo-list input[type="number"] {
+  width: 4.5em; min-height: 40px; padding: 0 6px; font: inherit; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+}
+.tempo-list .check { min-height: 40px; }
+.tempo-list button { min-height: 36px; }
+#metronome[aria-pressed="true"], #count-in[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

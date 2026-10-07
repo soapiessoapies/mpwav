@@ -290,3 +290,32 @@ test("deleting the loop's bars keeps a loop of the same length on what moved in"
   assert.deepEqual(s.loop, { on: true, start: 0, end: 8 });
   assert.equal(S.songBars(s), 8);
 });
+
+test("tempo changes: a jump at a bar, or a ramp arriving at it", () => {
+  const s = S.createSong();
+  s.bpm = 100;
+  S.setTempo(s, 4, 140);
+  assert.equal(S.bpmAt(s, 3 * 16 + 15), 100);
+  assert.equal(S.bpmAt(s, 4 * 16), 140, "a jump");
+  S.setTempo(s, 4, 140, true);
+  assert.equal(S.bpmAt(s, 2 * 16), 120, "halfway through the ramp from bar 1 to bar 5");
+  assert.equal(S.bpmAt(s, 4 * 16), 140);
+  assert.equal(S.stepSeconds(s, 9 * 16), 60 / 140 / 4);
+  S.setTempo(s, 0, 90);
+  assert.equal(s.bpm, 90, "bar 1 is the song's own tempo");
+  S.removeTempo(s, 4);
+  assert.deepEqual(s.tempos, []);
+});
+
+test("tempo changes follow inserted and deleted bars", () => {
+  const s = S.createSong();
+  S.setTempo(s, 4, 140);
+  S.setTempo(s, 8, 90);
+  S.insertBars(s, 2, 2);
+  assert.deepEqual(s.tempos.map((m) => m.bar), [6, 10]);
+  S.deleteBars(s, 5, 8);
+  assert.deepEqual(s.tempos.map((m) => m.bar), [7], "the change inside the deleted bars goes; the later one moves left");
+  const back = S.sanitize(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(back.tempos, s.tempos);
+  assert.deepEqual(S.sanitize({ tempos: [{ bar: 0, bpm: 99 }, { bar: 3, bpm: 999 }, { bar: 3, bpm: 50 }, "x"] }).tempos, [{ bar: 3, bpm: S.BPM.max, ramp: false }]);
+});

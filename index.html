@@ -98,6 +98,16 @@
       <button type="button" id="sec-insert">Insert bar at cursor</button>
       <button type="button" id="sec-delete">Delete section</button>
     </div>
+    <div class="toolbar" role="group" aria-label="Tempo">
+      <span class="toolbar-label" aria-hidden="true">Tempo</span>
+      <button type="button" id="tap" aria-describedby="tap-help">Tap tempo</button>
+      <button type="button" id="metronome" aria-pressed="false">Metronome</button>
+      <button type="button" id="count-in" aria-pressed="true" aria-describedby="count-in-help">Count-in</button>
+      <button type="button" id="tempo-add">Tempo change at cursor</button>
+    </div>
+    <p id="tap-help" class="sr-only">Tap in time with the beat, four times or more; the tempo follows your taps.</p>
+    <p id="count-in-help" class="sr-only">When on, recording starts with one bar of clicks so you can come in on time.</p>
+    <ul id="tempo-list" class="tempo-list" aria-label="Tempo changes"></ul>
     <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
     <p id="song-status" class="song-status"></p>
   </section>

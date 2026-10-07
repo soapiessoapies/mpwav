@@ -10,6 +10,11 @@
 //                    pitch, how many steps it lasts and how loud (0..1). Clips that share a
 //                    content are linked: edit one, they all change. A clip
 //                    longer than its content repeats it.
+//   song.bpm         the tempo the song starts at; song.tempos[] are changes
+//                    along the way: { bar, bpm, ramp }, where `ramp` glides
+//                    from the tempo before up to this one, arriving at `bar`.
+//                    Notes sit in bars and beats, so a tempo change speeds
+//                    the music up or slows it down without moving anything.
 //   song.loop        { on, start, end } in bars: the stretch Play repeats.
 //                    With the loop off, Play runs from the cursor to the
 //                    end of the song and stops.
@@ -65,6 +70,7 @@
       version: VERSION,
       title: "Untitled song",
       bpm: BPM.def,
+      tempos: [], // { bar, bpm, ramp } tempo changes after bar 1, sorted by bar
       master: -4, // master fader, dB
       tracks: DEFAULT_TRACKS.map(createTrack),
       contents: {},
@@ -193,6 +199,7 @@
       for (const c of t.clips.filter((x) => x.start >= start && x.start < end)) removeClip(song, t, c);
       for (const c of t.clips) if (c.start >= end) c.start -= n;
     }
+    song.tempos = song.tempos.filter((m) => m.bar < start || m.bar >= end);
     const wasLoop = song.loop.start === start && song.loop.end === end;
     shiftMarks(song, end, -n, start);
     // Deleting the loop's own bars: keep a loop of the same length where the music now is.
@@ -231,6 +238,9 @@
     const start = move(song.loop.start);
     song.loop.end = Math.max(start + 1, n > 0 ? moveEnd(song.loop.end) : move(song.loop.end));
     song.loop.start = start;
+    for (const m of song.tempos) m.bar = move(m.bar);
+    // Changes that land on bar 1 or on top of another are dropped (the first one stays).
+    song.tempos = song.tempos.filter((m, i, all) => m.bar > 0 && all.findIndex((x) => x.bar === m.bar) === i);
   }
 
   // Moves a clip as far toward `start` as it can go without overlapping.
@@ -348,6 +358,43 @@
     for (const n of c.notes) n.len = Math.min(n.len, loopSteps(c) - n.step);
   }
 
+  // --- tempo ---
+  const clampBpm = (v) => Math.round(clamp(num(v, BPM.def), BPM.min, BPM.max));
+
+  // Sets (or replaces) the tempo change at a bar. Bar 1 (0) is the song's own tempo.
+  function setTempo(song, bar, bpm, ramp = false) {
+    if (bar <= 0) { song.bpm = clampBpm(bpm); return null; }
+    const existing = song.tempos.find((m) => m.bar === bar);
+    if (existing) { existing.bpm = clampBpm(bpm); existing.ramp = !!ramp; return existing; }
+    const m = { bar, bpm: clampBpm(bpm), ramp: !!ramp };
+    song.tempos.push(m);
+    song.tempos.sort((a, b) => a.bar - b.bar);
+    return m;
+  }
+
+  function removeTempo(song, bar) {
+    song.tempos = song.tempos.filter((m) => m.bar !== bar);
+  }
+
+  // The tempo at an absolute step: the last change before it, or a glide
+  // toward the next change if that one ramps.
+  function bpmAt(song, pos) {
+    let prev = { bar: 0, bpm: song.bpm };
+    let next = null;
+    for (const m of song.tempos) {
+      if (m.bar * STEPS <= pos) prev = m;
+      else { next = m; break; }
+    }
+    if (next && next.ramp) {
+      const t = (pos - prev.bar * STEPS) / ((next.bar - prev.bar) * STEPS);
+      return prev.bpm + (next.bpm - prev.bpm) * t;
+    }
+    return prev.bpm;
+  }
+
+  // How long a step lasts, in seconds, at an absolute step.
+  const stepSeconds = (song, pos) => 60 / bpmAt(song, Math.max(0, pos)) / 4;
+
   // --- playing ---
   // Where in a clip's content an absolute step (from the song's start) falls.
   function localStep(song, clip, pos) {
@@ -453,7 +500,15 @@
     if (!input || typeof input !== "object") return out;
     if (typeof input.title === "string" && input.title.trim()) out.title = input.title.trim().slice(0, 80);
     out.master = clamp(Math.round(num(input.master, out.master) / FADER.step) * FADER.step, FADER.min, FADER.max);
-    out.bpm = Math.round(clamp(num(input.bpm, BPM.def), BPM.min, BPM.max));
+    out.bpm = clampBpm(input.bpm);
+    if (Array.isArray(input.tempos)) {
+      for (const m of input.tempos) {
+        if (m && Number.isInteger(m.bar) && m.bar > 0 && !out.tempos.some((x) => x.bar === m.bar)) {
+          out.tempos.push({ bar: m.bar, bpm: clampBpm(m.bpm), ramp: m.ramp === true });
+        }
+      }
+      out.tempos.sort((a, b) => a.bar - b.bar);
+    }
     out.nextId = Math.max(1, int(input.nextId, 1));
     const saved = Array.isArray(input.tracks) ? input.tracks : [];
     const v3 = input.version === VERSION && input.contents && typeof input.contents === "object";
@@ -527,7 +582,7 @@
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,
     freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, insertBars, deleteBars, duplicateBars,
-    copyNotes, pasteNotes, duplicateNotes,
+    copyNotes, pasteNotes, duplicateNotes, setTempo, removeTempo, bpmAt, stepSeconds,
     noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,
     localStep, notesAtPos, songBars, viewBars, playRange, audible,
   };

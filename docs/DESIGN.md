@@ -100,7 +100,7 @@ Everything can be selected and copied: notes inside a clip, whole clips, or a ti
 Notes are placed in bars and beats, not seconds, so changing the tempo speeds the song up or slows it down without moving anything, like replaying video frames at a different frame rate.
 
 - **Any tempo, any time.** Type a BPM or drag the number (20–300). It can change while playing; the song keeps its place.
-- **Tap tempo.** Tap a button (or press T) in time with the beat you hear in your head; after four taps it sets the BPM.
+- **Tap tempo.** Tap the Tap tempo button in time with the beat you hear in your head; the BPM follows your last few taps. (No T shortcut: T already plays F# on the computer keyboard.)
 - **Tempo changes along the song.** Tempo markers on the ruler: a marker at bar 9 can switch from 110 to 140, either as a jump or as a gradual ramp up to it. The ruler shows the BPM at each marker.
 - **Set the tempo after recording (stretch goal).** Record freely without a click, then Sound Studio suggests a tempo from the notes' spacing and snaps them to the grid. Snapping already works; guessing the tempo is the hard part, so this comes last.
 - **Metronome.** An optional click while playing or recording, with a one-bar count-in before recording starts.
@@ -160,6 +160,6 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 2. Done: clip editor as a piano roll with colored note blocks, scroll through pitches, stretchable lengths, the Note page.
 3. Done: copy, cut, paste and duplicate for notes and clips, linked copies, section tools (duplicate, insert bar, delete) on the loop range, and one undo history (Ctrl + Z / Ctrl + Y) for every edit.
 4. Done: step input from the keyboard (chords too), and recording into clips with held lengths.
-5. Tempo tools: tap tempo, metronome and count-in, tempo markers.
+5. Done: tap tempo, metronome, one-bar count-in before recording, tempo changes along the song (jumps or ramps), shown on the ruler.
 6. Track panel and song customization: colors, add/rename tracks, scale helper, snap grid.
 7. Save several songs, WAV export, then the tempo-from-recording stretch goal.

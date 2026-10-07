@@ -94,9 +94,18 @@
         brace.style.width = (song.loop.end - song.loop.start) * barW() + "px";
         ruler.append(brace);
       }
+      for (const m of song.tempos) {
+        const mark = el("span", "tl-tempo" + (m.ramp ? " ramp" : ""), { "aria-hidden": "true" });
+        mark.textContent = (m.ramp ? "↗ " : "") + m.bpm;
+        mark.style.left = m.bar * barW() + "px";
+        ruler.append(mark);
+      }
+      const tempoAt = (b) => song.tempos.find((m) => m.bar === b);
       for (let b = 0; b < bars; b++) {
+        const tm = tempoAt(b);
         const btn = el("button", "tl-bar" + (b % 4 === 0 ? " four" : ""), {
-          type: "button", "aria-label": `Bar ${b + 1}` + (b === song.cursor ? ", cursor" : ""),
+          type: "button", "aria-label": `Bar ${b + 1}` + (b === song.cursor ? ", cursor" : "") +
+            (tm ? `, tempo ${tm.ramp ? "ramps to" : "changes to"} ${tm.bpm}` : ""),
           "data-bar": b, "data-focus-key": "bar" + b,
         });
         btn.textContent = b + 1;

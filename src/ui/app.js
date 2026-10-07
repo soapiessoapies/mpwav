@@ -38,6 +38,7 @@
       localStorage.setItem(SONG_KEY, json);
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
+        metronome: ui.metronome, countIn: ui.countIn,
         open: open, picked: picked,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -45,7 +46,7 @@
 
   const savedSong = load(SONG_KEY);
   const song = savedSong ? Song.sanitize(savedSong) : Song.demoSong();
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", ...(load(UI_KEY) || {}) };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, ...(load(UI_KEY) || {}) };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -79,7 +80,8 @@
       Meter.add(mixerView.meter("master"), Engine.peak, true);
       applyMix();
       transport = Transport.create(ctx, {
-        getBpm: () => song.bpm,
+        // A count-in (steps below zero) runs at the tempo where play starts.
+        stepLength: (count) => Song.stepSeconds(song, Song.playRange(song).start * Song.STEPS + Math.max(0, count)),
         getSteps: () => { const r = Song.playRange(song); return (r.end - r.start) * Song.STEPS; },
         onStep,
       });
@@ -106,10 +108,23 @@
   const skipOnce = new Set(); // "pos:midi" just recorded live, so it isn't played twice
   let endAt = null;          // when a non-looping play reaches the end of the song
 
+  let echoBpm = null; // the tempo the echoes were last set to
   function onStep(count, time, dur) {
     const r = Song.playRange(song);
     if (endAt !== null) return; // reached the end; waiting to stop
+    if (count < 0) {
+      // The count-in: a click on every beat of the bar before.
+      if ((count + 16) % 4 === 0) Engine.click(time, count === -16);
+      return;
+    }
     const pos = r.start * Song.STEPS + count;
+    if (ui.metronome && pos % 4 === 0) Engine.click(time, pos % Song.STEPS === 0);
+    // Echoes stay in time through tempo changes.
+    const bpm = Math.round(Song.bpmAt(song, pos));
+    if (bpm !== echoBpm) {
+      echoBpm = bpm;
+      for (const id in audio) audio[id].synth.setTempo(bpm);
+    }
     for (const t of Song.audible(song)) {
       const { synth } = audio[t.id];
       for (const n of Song.notesAtPos(song, t, pos)) {
@@ -156,17 +171,19 @@
     Announce.say("Stopped");
   }
 
-  async function togglePlay() {
+  async function togglePlay(countIn = false) {
     if (transport && transport.playing) { stopLoop(); return; }
     await ready();
     endAt = null;
-    transport.start();
+    echoBpm = null;
+    transport.start(countIn ? -Song.STEPS : 0);
     requestAnimationFrame(drawPlayhead);
     $("play").setAttribute("aria-pressed", "true");
     const r = Song.playRange(song);
-    Announce.say(r.repeat ? `Playing, looping bars ${r.start + 1} to ${r.end}` : `Playing from bar ${r.start + 1}`);
+    Announce.say((countIn ? "Count-in, then " : "") +
+      (r.repeat ? `playing, looping bars ${r.start + 1} to ${r.end}` : `playing from bar ${r.start + 1}`));
   }
-  $("play").addEventListener("click", togglePlay);
+  $("play").addEventListener("click", () => togglePlay());
 
   const tempo = $("tempo");
   tempo.min = Song.BPM.min; tempo.max = Song.BPM.max;
@@ -176,6 +193,8 @@
     song.bpm = Number.isFinite(v) ? Math.min(Song.BPM.max, Math.max(Song.BPM.min, v)) : song.bpm;
     tempo.value = song.bpm;
     for (const id in audio) audio[id].synth.setTempo(song.bpm);
+    renderTempoList();
+    timeline.render();
     save();
   });
 
@@ -246,8 +265,9 @@
     setLoop(clip.start, Song.clipEnd(clip), false);
     take = { contentId: c.id, trackId: t.id, notes: [], held: new Map() };
     recBtn.setAttribute("aria-pressed", "true");
-    if (!transport || !transport.playing) await togglePlay();
-    Announce.say(`Recording into ${c.name}, looping bars ${clip.start + 1} to ${Song.clipEnd(clip)}`);
+    const counting = (!transport || !transport.playing) && ui.countIn;
+    if (!transport || !transport.playing) await togglePlay(counting);
+    Announce.say(`${counting ? "Count-in, then recording" : "Recording"} into ${c.name}, looping bars ${clip.start + 1} to ${Song.clipEnd(clip)}`);
   }
 
   function endTake() {
@@ -281,7 +301,7 @@
   function nearestStep() {
     const now = Engine.ctx.currentTime;
     const ahead = transport.peek();
-    let best = ahead && { pos: Song.playRange(song).start * Song.STEPS + ahead.step, time: ahead.time, upcoming: true };
+    let best = ahead && ahead.step >= 0 && { pos: Song.playRange(song).start * Song.STEPS + ahead.step, time: ahead.time, upcoming: true };
     for (const b of booked) {
       if (!best || Math.abs(b.time - now) < Math.abs(best.time - now)) best = { ...b, upcoming: false };
     }
@@ -299,7 +319,7 @@
     const n = Song.addNote(song.contents[take.contentId], local, m, 1);
     if (!n) return;
     take.notes.push(n);
-    take.held.set(m, { n, from: Engine.ctx.currentTime });
+    take.held.set(m, { n, from: Engine.ctx.currentTime, pos: at.pos });
     // You already heard it as you played it; don't play it again a moment later.
     if (at.upcoming) skipOnce.add(at.pos + ":" + m);
     renderEditor();
@@ -312,7 +332,7 @@
     const h = take && take.held.get(m);
     if (!h) return;
     take.held.delete(m);
-    const steps = (Engine.ctx.currentTime - h.from) / (60 / song.bpm / 4);
+    const steps = (Engine.ctx.currentTime - h.from) / Song.stepSeconds(song, h.pos);
     Song.resizeNote(song.contents[take.contentId], h.n, Math.max(1, Math.round(steps)));
     renderEditor();
     timeline.render();
@@ -496,6 +516,7 @@
     renderEditor();
     showSongStatus();
     showActions();
+    renderTempoList();
     if (text) Announce.say(text);
     writeNow();
   }
@@ -740,6 +761,7 @@
     applyMix();
     selectTrack(song.selected, false);
     showLoop();
+    renderTempoList();
     history.sync(historyJson());
     writeNowQuiet();
   }
@@ -958,6 +980,83 @@
     afterChange(done.names.length ? `${done.names.join(", ")} at ${at}` : `Nothing added at ${at}: a note already starts there`);
   }
 
+  // --- tempo tools: tap, metronome, count-in, tempo changes ---
+  const taps = [];
+  $("tap").addEventListener("click", () => {
+    const now = performance.now();
+    if (taps.length && now - taps.at(-1) > 2000) taps.length = 0; // a pause starts over
+    taps.push(now);
+    if (taps.length > 5) taps.shift();
+    if (taps.length < 2) { Announce.say("Keep tapping"); return; }
+    const gaps = taps.slice(1).map((t, i) => t - taps[i]);
+    const bpm = Math.round(60000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length));
+    Song.setTempo(song, 0, bpm);
+    tempo.value = song.bpm;
+    for (const id in audio) audio[id].synth.setTempo(song.bpm);
+    timeline.render();
+    renderTempoList();
+    Announce.say(`${song.bpm} BPM`);
+    save();
+  });
+
+  const metroBtn = $("metronome"), countBtn = $("count-in");
+  function showTempoTools() {
+    metroBtn.setAttribute("aria-pressed", String(!!ui.metronome));
+    countBtn.setAttribute("aria-pressed", String(!!ui.countIn));
+  }
+  metroBtn.addEventListener("click", () => {
+    ui.metronome = !ui.metronome;
+    showTempoTools();
+    Announce.say(ui.metronome ? "Metronome on" : "Metronome off");
+    save();
+  });
+  countBtn.addEventListener("click", () => {
+    ui.countIn = !ui.countIn;
+    showTempoTools();
+    Announce.say(ui.countIn ? "Count-in on: recording starts after one bar of clicks" : "Count-in off");
+    save();
+  });
+
+  $("tempo-add").addEventListener("click", () => {
+    const bar = song.cursor;
+    if (bar === 0) { tempo.focus(); Announce.say("Bar 1 uses the main tempo, in the transport"); return; }
+    Song.setTempo(song, bar, Math.round(Song.bpmAt(song, bar * Song.STEPS)));
+    afterChange(`Tempo change at bar ${bar + 1}`);
+    $("tempo-list").querySelector(`[data-bar="${bar}"] input[type=number]`)?.focus();
+  });
+
+  // The tempo changes as a list: bar, BPM, ramp, remove.
+  function renderTempoList() {
+    const list = $("tempo-list");
+    list.textContent = "";
+    for (const m of song.tempos) {
+      const li = document.createElement("li");
+      li.dataset.bar = m.bar;
+      const id = "tempo-bar-" + m.bar;
+      li.innerHTML =
+        `<label for="${id}">Bar ${m.bar + 1}</label>` +
+        `<input id="${id}" type="number" inputmode="numeric" min="${Song.BPM.min}" max="${Song.BPM.max}" step="1" value="${m.bpm}" aria-label="Tempo at bar ${m.bar + 1}">` +
+        `<span aria-hidden="true">BPM</span>` +
+        `<label class="check"><input type="checkbox" ${m.ramp ? "checked" : ""}> Ramp into it</label>` +
+        `<button type="button" class="quiet" aria-label="Remove the tempo change at bar ${m.bar + 1}">Remove</button>`;
+      li.querySelector("input[type=number]").addEventListener("change", (e) => {
+        Song.setTempo(song, m.bar, Number(e.target.value), m.ramp);
+        afterChange(`Bar ${m.bar + 1}: ${m.bpm} BPM`);
+      });
+      li.querySelector("input[type=checkbox]").addEventListener("change", (e) => {
+        Song.setTempo(song, m.bar, m.bpm, e.target.checked);
+        afterChange(e.target.checked ? `Tempo ramps up to bar ${m.bar + 1}` : `Tempo jumps at bar ${m.bar + 1}`);
+      });
+      li.querySelector("button").addEventListener("click", () => {
+        Song.removeTempo(song, m.bar);
+        afterChange(`Removed the tempo change at bar ${m.bar + 1}`);
+        $("tempo-add").focus();
+      });
+      list.append(li);
+    }
+    list.hidden = !song.tempos.length;
+  }
+
   // --- title ---
   const titleField = $("song-title");
   titleField.value = song.title;
@@ -1158,4 +1257,6 @@
   showZoom({ canIn: true, canOut: true });
   showActions();
   showUndo();
+  showTempoTools();
+  renderTempoList();
 })();
