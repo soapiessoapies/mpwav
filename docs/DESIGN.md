@@ -3,7 +3,7 @@
 Shared, commentable version (the one to edit and hand in):
 https://claude.ai/code/artifact/4335e52a-e095-44b2-b6ed-ce0a0e6edf48 — this file is the repo copy, kept in step with it.
 
-As of 2026-10-07. Status: agreed direction, not built yet. The layout sketch is still to come.
+As of 2026-10-07. Status: agreed direction, not built yet.
 
 ## Overview
 
@@ -12,6 +12,17 @@ Sound Studio will open on an Ableton-style timeline where every track's music si
 **The class brief requires:** it works on a phone, meets WCAG AA contrast, is fully keyboard-navigable and works with screen readers, ships as a live URL, and is tested by 5 people outside the class.
 
 **What exists today** ([live site](https://soapiessoapies.github.io/sound-studio/)): four synth tracks (Lead, Bass, Pad, Hat), a mixing desk, a 16-step pattern grid with slots A–D, recording from the keyboard, a 16-bar arrangement grid, the Sound tab (synth, morph pad, Warp effects) and tabs for small screens. This design replaces the pattern grid and arrangement grid with one timeline; the sound and mixer parts stay.
+
+## Layout sketch
+
+The screen splits into three areas: the timeline on the left, a paged editing panel on the right under the title, and an inputs strip across the bottom.
+
+![Layout sketch: playing box, Note Edit mode panel, editor/inputs strip](../styles/scassin_ss_styleprevis.png)
+
+- **Playing box** (left, most of the screen): the timeline. Track rows, bar lines, blocks of different widths, and "…" where it keeps growing.
+- **Title** (top right): the song's title and "by Phie & Claude".
+- **Note Edit mode** (right): rows of sliders, a page at a time, with arrows to the next page. Settings come in short pages instead of one long column.
+- **Editor / inputs** (bottom strip, full width): the keyboard and other input controls.
 
 ## The timeline (main view)
 
@@ -112,15 +123,15 @@ Selecting a track (its row name on the timeline) switches every side panel to th
 
 ## Phone, Windows and accessibility
 
-One app serves both: Windows shows the timeline, clip editor and track panel side by side; a phone shows one at a time and swipes between them.
+One app serves both, following the layout sketch: Windows shows the playing box, the Note Edit panel and the inputs strip together; a phone shows one area at a time.
 
 | Area | Windows (wide screen) | Phone |
 | --- | --- | --- |
-| Timeline | Top half, all tracks | Full screen, all tracks |
-| Clip editor | Docked under the timeline | Opens full screen from a clip; back button returns |
-| Track panel | Right side | Slides up from the bottom |
-| Keyboard | Under the clip editor, can be hidden | Pinned at the bottom of the clip editor, can be hidden |
-| Transport | Top bar: Play, Record, tempo, tap, metronome | Top bar, the same buttons, smaller |
+| Playing box (timeline) | Left, most of the screen | Full screen, all tracks |
+| Title | Top right, above the Note Edit panel | Top bar, shortened |
+| Note Edit panel | Right side, paged sliders with ◀ ▶ arrows | Slides up from the bottom, one page at a time |
+| Editor / inputs | Strip across the bottom: keyboard and input controls | Pinned at the bottom, can be hidden |
+| Transport (Play, Record, tempo) | In the inputs strip or above the playing box (to confirm) | Top bar |
 
 **Accessibility (WCAG AA):**
 
@@ -131,11 +142,13 @@ One app serves both: Windows shows the timeline, clip editor and track panel sid
 
 ## Open questions and build order
 
-The layout sketch is still to come and goes here when it arrives; it may change the Windows and phone layouts above.
+The layout sketch is in the Layout sketch section; these questions come from reading it.
 
 **Open questions**
 
-- [ ] Does the clips-plus-clip-editor approach match the drawing, or should notes sit straight on the timeline?
+- [ ] Note Edit mode: do its sliders edit the selected notes (length, loudness, pitch), the selected track's sound (today's Sound tab, paged), or both on different pages?
+- [ ] Where do notes get placed: straight into the playing box (the small blocks in the sketch), or in a clip editor that opens from a block?
+- [ ] Where do Play, Record and tempo sit: the inputs strip, or a bar above the playing box?
 - [ ] Should linked copies be the default when dragging a clip, or normal copies?
 - [ ] Which track colors and how many tracks should a new song start with?
 - [ ] Is the Week 9 phone test about writing a beat from scratch, or remixing the demo? It decides what the MVP must have.
