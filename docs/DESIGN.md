@@ -158,8 +158,8 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 
 1. Done: timeline with tracks, clips, playhead, ruler and zoom; today's patterns became the first clips. Settings added: layout, background (high contrast by default), fullscreen, credits.
 2. Done: clip editor as a piano roll with colored note blocks, scroll through pitches, stretchable lengths, the Note page.
-3. Selection, copy, paste, duplicate, linked copies, and one undo history.
-4. Step input from the keyboard, and recording into clips.
+3. Done: copy, cut, paste and duplicate for notes and clips, linked copies, section tools (duplicate, insert bar, delete) on the loop range, and one undo history (Ctrl + Z / Ctrl + Y) for every edit.
+4. Done: step input from the keyboard (chords too), and recording into clips with held lengths.
 5. Tempo tools: tap tempo, metronome and count-in, tempo markers.
 6. Track panel and song customization: colors, add/rename tracks, scale helper, snap grid.
 7. Save several songs, WAV export, then the tempo-from-recording stretch goal.

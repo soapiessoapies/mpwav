@@ -191,3 +191,102 @@ test("sanitize repairs a damaged save", () => {
   assert.deepEqual(s.loop, { on: true, start: 0, end: 4 }, "a backwards loop falls back to the default");
   assert.deepEqual(S.sanitize("nonsense"), S.createSong());
 });
+
+test("duplicating a clip: a copy right after it, with its own notes unless linked", () => {
+  const s = S.createSong();
+  const a = S.addClip(s, lead(s), 0, 2);
+  S.toggleNote(S.content(s, a), 0, 60);
+  const copy = S.duplicateClip(s, lead(s), a, false);
+  assert.deepEqual([copy.start, copy.length], [2, 2]);
+  assert.notEqual(copy.contentId, a.contentId);
+  assert.equal(S.content(s, copy).name, "Lead 1 copy");
+  S.toggleNote(S.content(s, copy), 4, 62);
+  assert.equal(S.content(s, a).notes.length, 1, "the original doesn't change");
+  const linked = S.duplicateClip(s, lead(s), a, true);
+  assert.equal(linked.start, 4, "the next free space after the first copy");
+  assert.equal(linked.contentId, a.contentId);
+});
+
+test("copy and paste a clip onto another track, at the first free bar from the cursor", () => {
+  const s = S.createSong();
+  const a = S.addClip(s, lead(s), 0, 2);
+  S.toggleNote(S.content(s, a), 0, 60);
+  const data = S.copyClip(s, a);
+  const bass = S.track(s, "bass");
+  S.addClip(s, bass, 3, 1);
+  const pasted = S.pasteClip(s, bass, data, 2);
+  assert.equal(pasted.start, 4, "bars 3-4 aren't free (a clip at bar 4), so it goes after");
+  assert.equal(S.content(s, pasted).trackId, "bass");
+  assert.deepEqual(S.content(s, pasted).notes, S.content(s, a).notes);
+  assert.notEqual(pasted.contentId, a.contentId, "a pasted clip is independent");
+});
+
+test("splitting a clip keeps the music where it was", () => {
+  const s = S.createSong();
+  const a = S.addClip(s, lead(s), 0, 4, S.makeContent(s, "lead", "Two-bar", 2, [{ step: 20, midi: 64, len: 1, vel: 1 }]).id);
+  const right = S.splitClip(s, lead(s), a, 1);
+  assert.deepEqual([a.length, right.start, right.length, right.offset], [1, 1, 3, 1]);
+  assert.deepEqual(S.notesAtPos(s, lead(s), 16 + 4).map((n) => n.midi), [64], "bar 2 still plays the content's second bar");
+  assert.deepEqual(S.notesAtPos(s, lead(s), 48 + 4).map((n) => n.midi), [64], "and bar 4 too");
+});
+
+test("insert bars: everything from there on moves right; a clip across it is split", () => {
+  const s = S.createSong();
+  S.addClip(s, lead(s), 0, 4);
+  S.addClip(s, S.track(s, "bass"), 5, 1);
+  s.cursor = 5;
+  S.insertBars(s, 2, 3);
+  assert.deepEqual(lead(s).clips.map((c) => [c.start, c.length]), [[0, 2], [5, 2]]);
+  assert.equal(S.track(s, "bass").clips[0].start, 8);
+  assert.equal(s.cursor, 8);
+  assert.deepEqual(s.loop, { on: true, start: 0, end: 7 }, "a loop around the insert grows");
+});
+
+test("delete bars: the range goes, what follows moves left", () => {
+  const s = S.createSong();
+  S.addClip(s, lead(s), 0, 6);
+  S.addClip(s, S.track(s, "bass"), 3, 1);
+  S.addClip(s, S.track(s, "bass"), 7, 1);
+  S.deleteBars(s, 2, 5);
+  assert.deepEqual(lead(s).clips.map((c) => [c.start, c.length, c.offset]), [[0, 2, 0], [2, 1, 1]], "the 4-bar loop carries on from its 2nd bar (offset 1)");
+  assert.deepEqual(S.track(s, "bass").clips.map((c) => c.start), [4], "the clip inside the range is gone");
+});
+
+test("duplicate bars: the range is repeated right after itself with its own copies", () => {
+  const s = S.demoSong();
+  S.duplicateBars(s, 4, 8);
+  const hat = S.track(s, "hat");
+  assert.equal(S.songBars(s), 12);
+  assert.deepEqual(hat.clips.map((c) => [c.start, c.length]), [[0, 4], [4, 4], [8, 4]]);
+  assert.equal(S.content(s, hat.clips[2]).name, "Hats busy copy");
+  assert.notEqual(hat.clips[2].contentId, hat.clips[1].contentId);
+  assert.deepEqual(S.notesAtPos(s, hat, 8 * 16 + 1).map((n) => n.midi), [72], "the copy plays the busy hats");
+});
+
+test("notes: copy from the earliest, paste at a step, duplicate after the selection", () => {
+  const s = S.createSong();
+  const c = S.content(s, S.addClip(s, lead(s), 0, 2));
+  const a = S.addNote(c, 4, 60, 2), b = S.addNote(c, 6, 64, 2);
+  const data = S.copyNotes([a, b]);
+  assert.deepEqual(data.notes.map((n) => n.step), [0, 2]);
+  const pasted = S.pasteNotes(c, data, 12);
+  assert.deepEqual(pasted.map((n) => [n.step, n.midi]), [[12, 60], [14, 64]]);
+  assert.deepEqual(S.pasteNotes(c, data, 31).map((n) => n.step), [31], "the second would land past the loop");
+  const dup = S.duplicateNotes(c, [a, b]);
+  assert.deepEqual(dup.map((n) => n.step), [8, 10], "right after the last note ends");
+});
+
+test("duplicating the loop's bars leaves the loop on the original bars", () => {
+  const s = S.demoSong(); // loop 1-8
+  S.duplicateBars(s, 0, 8);
+  assert.deepEqual(s.loop, { on: true, start: 0, end: 8 });
+  assert.equal(S.songBars(s), 16);
+});
+
+test("deleting the loop's bars keeps a loop of the same length on what moved in", () => {
+  const s = S.demoSong();
+  S.duplicateBars(s, 0, 8);
+  S.deleteBars(s, 0, 8);
+  assert.deepEqual(s.loop, { on: true, start: 0, end: 8 });
+  assert.equal(S.songBars(s), 8);
+});

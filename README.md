@@ -50,6 +50,10 @@ level of sound design.
 | Note page | Length, loudness and pitch of the selected notes |
 | Record | Plays and adds what you play to the open clip, as long as you held each key; Undo take removes the last recording |
 | Mix | Note Edit › Mix: faders, pan, M (mute) and S (solo) per track |
+| Copy and paste | Ctrl + C / X / V / D: notes when the piano roll has focus, clips otherwise; Ctrl + Shift + D makes a linked copy |
+| Sections | Duplicate, insert a bar, or delete bars across every track, using the loop range |
+| Undo | Ctrl + Z / Ctrl + Y, or the Undo / Redo buttons: every edit, one step at a time |
+| Step input | With the piano roll focused (or Step input on), play a key to write it at the cursor; hold keys for a chord |
 | Settings | Layout (Auto / Desktop / Phone), background, fullscreen, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |

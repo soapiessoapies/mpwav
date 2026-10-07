@@ -42,6 +42,12 @@
     <button id="loop" class="loop" type="button" aria-pressed="true" aria-label="Loop">
       <span class="loop-icon" aria-hidden="true"></span><span class="btn-word">Loop</span>
     </button>
+    <button id="undo" class="undo" type="button" aria-label="Undo" aria-keyshortcuts="Control+Z" disabled>
+      <span class="undo-icon" aria-hidden="true">↶</span><span class="btn-word">Undo</span>
+    </button>
+    <button id="redo" class="undo" type="button" aria-label="Redo" aria-keyshortcuts="Control+Y" disabled>
+      <span class="undo-icon" aria-hidden="true">↷</span><span class="btn-word">Redo</span>
+    </button>
     <label class="tempo"><span class="tempo-word">Tempo</span> <input id="tempo" type="number" inputmode="numeric" step="1"> <span aria-hidden="true">BPM</span></label>
     <button id="settings-btn" class="settings-btn" type="button" aria-haspopup="dialog" aria-label="Settings">
       <span class="gear" aria-hidden="true"></span><span class="settings-word">Settings</span>
@@ -77,6 +83,21 @@
       drag along it to set the loop. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
       <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
     </p>
+    <div class="toolbar" role="group" aria-label="Clip">
+      <span class="toolbar-label" aria-hidden="true">Clip</span>
+      <button type="button" id="clip-copy" aria-keyshortcuts="Control+C">Copy</button>
+      <button type="button" id="clip-cut" aria-keyshortcuts="Control+X">Cut</button>
+      <button type="button" id="clip-paste" aria-keyshortcuts="Control+V">Paste</button>
+      <button type="button" id="clip-dup" aria-keyshortcuts="Control+D">Duplicate</button>
+      <button type="button" id="clip-link" aria-keyshortcuts="Control+Shift+D">Linked copy</button>
+      <button type="button" id="clip-delete" aria-keyshortcuts="Delete">Delete</button>
+    </div>
+    <div class="toolbar" role="group" aria-label="Section (the loop range, every track)">
+      <span class="toolbar-label" aria-hidden="true">Section</span>
+      <button type="button" id="sec-dup">Duplicate section</button>
+      <button type="button" id="sec-insert">Insert bar at cursor</button>
+      <button type="button" id="sec-delete">Delete section</button>
+    </div>
     <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
     <p id="song-status" class="song-status"></p>
   </section>
@@ -95,8 +116,17 @@
     </p>
     <div id="clip-body">
       <p id="clip-status" class="loop-status"></p>
+      <div class="toolbar" role="group" aria-label="Notes">
+        <span class="toolbar-label" aria-hidden="true">Notes</span>
+        <button type="button" id="notes-all" aria-keyshortcuts="Control+A">Select all</button>
+        <button type="button" id="notes-copy" aria-keyshortcuts="Control+C">Copy</button>
+        <button type="button" id="notes-cut" aria-keyshortcuts="Control+X">Cut</button>
+        <button type="button" id="notes-paste" aria-keyshortcuts="Control+V">Paste</button>
+        <button type="button" id="notes-dup" aria-keyshortcuts="Control+D">Duplicate</button>
+      </div>
       <div class="pattern-tools">
         <label class="inline">New notes <select id="note-length"></select></label>
+        <button type="button" id="step-input" class="step-input" aria-pressed="false" aria-describedby="step-help">Step input</button>
         <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
         <button id="clear" type="button" class="quiet">Clear</button>
       </div>
@@ -106,6 +136,10 @@
         With a keyboard: arrows move the cursor (<kbd>Ctrl</kbd> a beat, <kbd>Page Up</kbd>/<kbd>Page Down</kbd> an octave),
         <kbd>Enter</kbd> adds or removes a note, <kbd>Shift</kbd> + arrows stretch it, <kbd>Alt</kbd> + arrows move it,
         <kbd>Delete</kbd> removes the selected notes. <kbd>Space</kbd> plays and stops from anywhere.
+      </p>
+      <p id="step-help" class="help">
+        Step input: play a key (on screen or on your computer keyboard) and that note goes in at the cursor,
+        then the cursor moves on by the new-note length. Hold several keys for a chord. It's always on while the piano roll has focus.
       </p>
       <p id="record-help" class="help">
         Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
@@ -256,6 +290,7 @@
 <script src="src/audio/morph.js"></script>
 <script src="src/state/presets.js"></script>
 <script src="src/state/song.js"></script>
+<script src="src/state/history.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>
 <script src="src/ui/keyboard.js"></script>

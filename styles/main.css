@@ -617,3 +617,18 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   display: inline-block; width: 14px; height: 14px; margin-right: 6px; border-radius: 3px;
   border: 1px solid var(--cell-edge); vertical-align: -2px;
 }
+
+/* ---------- toolbars (clip, section, notes), undo, step input ---------- */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.toolbar button { min-height: 36px; padding: 0 10px; font-size: 0.85rem; }
+.toolbar-label {
+  min-width: 4.5em; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+}
+.undo { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.undo-icon { font-size: 1.1rem; line-height: 1; }
+.step-input[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+[data-layout="compact"] .toolbar-label { min-width: 0; width: 100%; }
+/* Phones: eight transport controls in one row (each still at least 38px square). */
+[data-layout="compact"] .transport-bar { gap: 4px; padding: 8px 6px; }
+[data-layout="compact"] .transport-bar button { min-width: 38px; padding: 0 4px; }
+[data-layout="compact"] .tempo input { width: 2.9em; padding: 0 2px; }

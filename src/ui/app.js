@@ -17,18 +17,30 @@
   function load(key) {
     try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
   }
+  // Saving is debounced, and every saved version of the song that differs
+  // from the last is a step the undo history can go back to.
   let saveTimer = 0;
+  const history = History.create(100);
+  // What undo tracks: the song without where you're looking (the selected
+  // track and the cursor), so clicking around isn't an undo step.
+  const historyJson = () => JSON.stringify({ ...song, selected: undefined, cursor: undefined });
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try {
-        localStorage.setItem(SONG_KEY, JSON.stringify(song));
-        localStorage.setItem(UI_KEY, JSON.stringify({
-          announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
-          open: open, picked: picked,
-        }));
-      } catch (e) { /* private window or storage blocked */ }
-    }, 200);
+    saveTimer = setTimeout(writeNow, 200);
+  }
+  function writeNow() {
+    clearTimeout(saveTimer);
+    saveTimer = 0;
+    const json = JSON.stringify(song);
+    history.commit(historyJson());
+    showUndo();
+    try {
+      localStorage.setItem(SONG_KEY, json);
+      localStorage.setItem(UI_KEY, JSON.stringify({
+        announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
+        open: open, picked: picked,
+      }));
+    } catch (e) { /* private window or storage blocked */ }
   }
 
   const savedSong = load(SONG_KEY);
@@ -329,6 +341,7 @@
     } else {
       ready().then(() => { if (holds.get(m)) audio[trackId].synth.noteOn(m); });
     }
+    stepNoteOn(m);
   }
 
   function noteOff(m) {
@@ -338,6 +351,7 @@
     holds.delete(m);
     kb.setLit(m, false);
     recordRelease(m);
+    stepNoteOff(m);
     if (audio[h.trackId]) audio[h.trackId].synth.noteOff(m);
   }
 
@@ -401,7 +415,9 @@
   const inDialog = (t) => !!(t && t.closest && t.closest("dialog"));
 
   document.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey || inDialog(e.target)) return;
+    if (inDialog(e.target)) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !typingInto(e.target) && shortcut(e)) { e.preventDefault(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === "Space") {
       if (spaceIsTheirs(e.target)) return;
       e.preventDefault(); // also stops a focused button from being pressed
@@ -444,6 +460,7 @@
     onSelectTrack: (id, announce) => selectTrack(id, announce !== false),
     onSelectClip(t, clip, announce) {
       picked = { trackId: t.id, clipId: clip.id };
+      showActions();
       if (song.selected !== t.id) selectTrack(t.id, false);
       else timeline.render();
       if (announce) Announce.say("Selected " + Song.content(song, clip).name);
@@ -458,14 +475,7 @@
       Announce.say(`New clip ${Song.content(song, clip).name} at bar ${bar + 1}`);
     },
     onDeleteClip(t, clip) {
-      const name = Song.content(song, clip).name;
-      const i = t.clips.indexOf(clip);
-      if (open && open.clipId === clip.id) closeClip();
-      Song.removeClip(song, t, clip);
-      picked = null;
-      afterChange(`Deleted ${name}`);
-      const next = t.clips[i] || t.clips[i - 1];
-      if (next) timeline.focusClip(next);
+      deleteClip(t, clip, `Deleted ${Song.content(song, clip).name}`);
     },
     onCursor(bar) {
       song.cursor = bar;
@@ -479,12 +489,15 @@
     onZoom: showZoom,
   });
 
+  // After a finished edit (a button, a shortcut, the end of a drag): redraw,
+  // and save right away so it's its own undo step.
   function afterChange(text) {
     timeline.render();
     renderEditor();
     showSongStatus();
+    showActions();
     if (text) Announce.say(text);
-    save();
+    writeNow();
   }
 
   function showZoom(z) {
@@ -529,7 +542,7 @@
       const o = find(open);
       return o ? Song.resizeNote(o.c, n, len) : n.len;
     },
-    onSelect: () => renderNotePage(),
+    onSelect: () => { renderNotePage(); showActions(); },
     onChanged: (text) => afterChange(text),
     onPreview: (midi) => preview(sel(), midi),
     say: (text) => Announce.say(text),
@@ -699,6 +712,251 @@
     selNotes.clear();
     afterChange(`Deleted ${n} note${n > 1 ? "s" : ""}`);
   });
+
+  // --- undo / redo ---
+  function showUndo() {
+    $("undo").disabled = !history.canUndo;
+    $("redo").disabled = !history.canRedo;
+  }
+
+  // Puts a saved version of the song back and redraws everything from it.
+  function restore(json) {
+    const next = Song.sanitize({ ...JSON.parse(json), selected: song.selected, cursor: song.cursor });
+    endTake();
+    panic();
+    for (const k of Object.keys(song)) delete song[k];
+    Object.assign(song, next);
+    selNotes.clear();
+    if (!find(open)) open = null;
+    if (!find(picked)) picked = null;
+    tempo.value = song.bpm;
+    titleField.value = song.title;
+    showTitle();
+    for (const t of song.tracks) {
+      if (!audio[t.id]) continue;
+      audio[t.id].synth.load(live(t));
+      audio[t.id].synth.setTempo(song.bpm);
+    }
+    applyMix();
+    selectTrack(song.selected, false);
+    showLoop();
+    history.sync(historyJson());
+    writeNowQuiet();
+  }
+  // Saves without adding a history step (after undo / redo).
+  function writeNowQuiet() {
+    try { localStorage.setItem(SONG_KEY, JSON.stringify(song)); } catch (e) { /* storage blocked */ }
+    showUndo();
+  }
+
+  function undo() {
+    if (saveTimer) writeNow(); // a change still waiting to be saved counts first
+    const json = history.undo();
+    if (json === null) { Announce.say("Nothing to undo"); return; }
+    restore(json);
+    Announce.say("Undone");
+  }
+  function redo() {
+    if (saveTimer) writeNow();
+    const json = history.redo();
+    if (json === null) { Announce.say("Nothing to redo"); return; }
+    restore(json);
+    Announce.say("Redone");
+  }
+  $("undo").addEventListener("click", undo);
+  $("redo").addEventListener("click", redo);
+
+  // --- copy, paste and friends ---
+  let clipboard = null; // { kind: "clip" | "notes", ... }
+  const rollEl = $("roll");
+  const inRoll = () => document.activeElement === rollEl;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+  // Notes in the open clip
+  function notesSelectAll() {
+    const o = find(open);
+    if (!o) return;
+    selNotes.clear();
+    for (const n of o.c.notes) selNotes.add(n);
+    renderEditor();
+    Announce.say(`Selected all ${plural(selNotes.size, "note")}`);
+  }
+  function notesCopy(cut) {
+    const o = find(open);
+    if (!o || !selNotes.size) { Announce.say("Select notes to copy first"); return; }
+    clipboard = Song.copyNotes([...selNotes]);
+    const n = selNotes.size;
+    if (cut) {
+      Song.removeNotes(o.c, [...selNotes]);
+      selNotes.clear();
+      afterChange(`Cut ${plural(n, "note")}`);
+    } else {
+      Announce.say(`Copied ${plural(n, "note")}`);
+    }
+    showActions();
+  }
+  function notesPaste() {
+    const o = find(open);
+    if (!o || !clipboard || clipboard.kind !== "notes") return false;
+    const at = roll.cursor.step;
+    const added = Song.pasteNotes(o.c, clipboard, at);
+    selNotes.clear();
+    for (const n of added) selNotes.add(n);
+    afterChange(added.length ? `Pasted ${plural(added.length, "note")} at ${roll.where(at)}` : "No room to paste there");
+    return true;
+  }
+  function notesDuplicate() {
+    const o = find(open);
+    if (!o || !selNotes.size) { Announce.say("Select notes to duplicate first"); return; }
+    const added = Song.duplicateNotes(o.c, [...selNotes]);
+    selNotes.clear();
+    for (const n of added) selNotes.add(n);
+    afterChange(added.length ? `Duplicated ${plural(added.length, "note")}` : "No room after them in the loop");
+  }
+  $("notes-all").addEventListener("click", notesSelectAll);
+  $("notes-copy").addEventListener("click", () => notesCopy(false));
+  $("notes-cut").addEventListener("click", () => notesCopy(true));
+  $("notes-paste").addEventListener("click", () => { if (!notesPaste()) Announce.say("Copy some notes first"); });
+  $("notes-dup").addEventListener("click", notesDuplicate);
+
+  // Clips on the timeline
+  const pickedClip = () => find(picked);
+  function clipCopy(cut) {
+    const p = pickedClip();
+    if (!p) { Announce.say("Select a clip first"); return; }
+    clipboard = Song.copyClip(song, p.clip);
+    if (cut) deleteClip(p.t, p.clip, `Cut ${p.c.name}`);
+    else Announce.say(`Copied ${p.c.name}`);
+    showActions();
+  }
+  function clipPaste() {
+    if (!clipboard || clipboard.kind !== "clip") return false;
+    const t = sel();
+    const clip = Song.pasteClip(song, t, clipboard, song.cursor);
+    picked = { trackId: t.id, clipId: clip.id };
+    afterChange(`Pasted ${Song.content(song, clip).name} on ${t.name} at bar ${clip.start + 1}`);
+    timeline.focusClip(clip);
+    return true;
+  }
+  function clipDuplicate(linked) {
+    const p = pickedClip();
+    if (!p) { Announce.say("Select a clip first"); return; }
+    const copy = Song.duplicateClip(song, p.t, p.clip, linked);
+    picked = { trackId: p.t.id, clipId: copy.id };
+    afterChange(`${linked ? "Linked copy" : "Copy"} of ${p.c.name} at bar ${copy.start + 1}`);
+    timeline.focusClip(copy);
+  }
+  function deleteClip(t, clip, text) {
+    const i = t.clips.indexOf(clip);
+    if (open && open.clipId === clip.id) closeClip();
+    Song.removeClip(song, t, clip);
+    picked = null;
+    afterChange(text);
+    const next = t.clips[i] || t.clips[i - 1];
+    if (next) timeline.focusClip(next);
+  }
+  $("clip-copy").addEventListener("click", () => clipCopy(false));
+  $("clip-cut").addEventListener("click", () => clipCopy(true));
+  $("clip-paste").addEventListener("click", () => { if (!clipPaste()) Announce.say("Copy a clip first"); });
+  $("clip-dup").addEventListener("click", () => clipDuplicate(false));
+  $("clip-link").addEventListener("click", () => clipDuplicate(true));
+  $("clip-delete").addEventListener("click", () => {
+    const p = pickedClip();
+    if (p) deleteClip(p.t, p.clip, `Deleted ${p.c.name}`);
+    else Announce.say("Select a clip first");
+  });
+
+  // Sections: the loop range, across every track
+  const range = () => `bars ${song.loop.start + 1} to ${song.loop.end}`;
+  function afterSection(text) {
+    if (open && !find(open)) closeClip();
+    if (picked && !find(picked)) picked = null;
+    showLoop();
+    afterChange(text);
+  }
+  $("sec-dup").addEventListener("click", () => {
+    const words = range();
+    Song.duplicateBars(song, song.loop.start, song.loop.end);
+    afterSection(`Duplicated ${words}`);
+  });
+  $("sec-insert").addEventListener("click", () => {
+    const bar = song.cursor;
+    Song.insertBars(song, bar, 1);
+    afterSection(`Inserted an empty bar at bar ${bar + 1}`);
+  });
+  $("sec-delete").addEventListener("click", () => {
+    const words = range();
+    Song.deleteBars(song, song.loop.start, song.loop.end);
+    afterSection(`Deleted ${words}`);
+  });
+
+  // Which buttons can do something right now
+  function showActions() {
+    const p = pickedClip();
+    for (const id of ["clip-copy", "clip-cut", "clip-dup", "clip-link", "clip-delete"]) $(id).disabled = !p;
+    $("clip-paste").disabled = !(clipboard && clipboard.kind === "clip");
+    const o = find(open);
+    $("notes-all").disabled = !o || !o.c.notes.length;
+    for (const id of ["notes-copy", "notes-cut", "notes-dup"]) $(id).disabled = !o || !selNotes.size;
+    $("notes-paste").disabled = !o || !(clipboard && clipboard.kind === "notes");
+  }
+
+  // Keyboard shortcuts with Ctrl (or Cmd). Notes when the piano roll has
+  // focus, clips otherwise. Returns whether it handled the keys.
+  function shortcut(e) {
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { undo(); return true; }
+    if (k === "y" || (k === "z" && e.shiftKey)) { redo(); return true; }
+    if (inRoll()) {
+      if (k === "a") { notesSelectAll(); return true; }
+      if (k === "c") { notesCopy(false); return true; }
+      if (k === "x") { notesCopy(true); return true; }
+      if (k === "v") { if (!notesPaste()) clipPaste(); return true; }
+      if (k === "d") { notesDuplicate(); return true; }
+      return false;
+    }
+    if (k === "c" && pickedClip()) { clipCopy(false); return true; }
+    if (k === "x" && pickedClip()) { clipCopy(true); return true; }
+    if (k === "v") { if (!clipPaste()) notesPaste(); return true; }
+    if (k === "d" && pickedClip()) { clipDuplicate(e.shiftKey); return true; }
+    return false;
+  }
+
+  // --- step input: play a key and it goes in at the piano roll's cursor ---
+  const stepBtn = $("step-input");
+  stepBtn.addEventListener("click", () => {
+    const on = stepBtn.getAttribute("aria-pressed") !== "true";
+    stepBtn.setAttribute("aria-pressed", String(on));
+    Announce.say(on ? "Step input on: play keys to write notes at the cursor" : "Step input off");
+  });
+  let chord = null; // { step, held, names } while keys are down
+  const stepMode = () => !!find(open) && !take && (stepBtn.getAttribute("aria-pressed") === "true" || inRoll());
+
+  function stepNoteOn(m) {
+    if (!stepMode()) return;
+    const o = find(open);
+    if (!chord) {
+      chord = { step: roll.cursor.step, held: 0, names: [], added: [] };
+      selNotes.clear();
+    }
+    chord.held++;
+    const n = Song.addNote(o.c, chord.step, m, o.t.length);
+    if (n) { chord.added.push(n); chord.names.push(Notes.spokenName(m)); selNotes.add(n); }
+    renderEditor();
+    timeline.render();
+  }
+
+  function stepNoteOff() {
+    if (!chord) return;
+    if (--chord.held > 0) return;
+    const done = chord;
+    chord = null;
+    const o = find(open);
+    if (!o) return;
+    const at = roll.where(done.step);
+    roll.setCursor(done.step + o.t.length, done.added.length ? done.added.at(-1).midi : undefined);
+    afterChange(done.names.length ? `${done.names.join(", ")} at ${at}` : `Nothing added at ${at}: a note already starts there`);
+  }
 
   // --- title ---
   const titleField = $("song-title");
@@ -893,8 +1151,11 @@
 
   // --- first paint ---
   if (!find(picked)) picked = null;
+  history.commit(historyJson());
   applyLayout();
   selectTrack(song.selected, false);
   showLoop();
   showZoom({ canIn: true, canOut: true });
+  showActions();
+  showUndo();
 })();

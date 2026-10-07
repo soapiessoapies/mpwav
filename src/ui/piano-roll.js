@@ -366,7 +366,23 @@
       resizeTimer = setTimeout(() => { if (view && fitStepW() !== sw) rebuild(); }, 120);
     });
 
-    return { render, setPlayhead, rebuild, focus: () => el.focus(), get cursor() { return { ...cursor }; } };
+    // Moves the cursor (step input moves it on after each note).
+    function setCursor(step, midi) {
+      if (!view) return;
+      cursor = {
+        step: ((step % view.steps) + view.steps) % view.steps,
+        midi: Math.max(BOTTOM, Math.min(TOP, midi ?? cursor.midi)),
+      };
+      placeCursor();
+      reveal();
+    }
+
+    return {
+      render, setPlayhead, rebuild, setCursor, element: el,
+      focus: () => el.focus(),
+      get cursor() { return { ...cursor }; },
+      where: (s) => where(s),
+    };
   }
 
   root.PianoRoll = { create, TOP, BOTTOM };

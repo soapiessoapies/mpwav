@@ -1,7 +1,9 @@
 // The song, laid out on a timeline like Ableton's arrangement view.
 //
 //   song.tracks[]    one synth sound each, with its mixer settings and its
-//                    clips: { id, contentId, start, length } in bars
+//                    clips: { id, contentId, start, length, offset } in bars;
+//                    `offset` is how far into its content a clip begins (a
+//                    clip split in two keeps playing where it was)
 //   song.contents{}  what clips play: { id, trackId, name, bars, notes[] },
 //                    a loop of `bars` bars; notes are { step, midi, len, vel }:
 //                    where it starts (16 steps, sixteenths, to a bar), its
@@ -40,7 +42,7 @@
     return {
       id, name, preset, color,
       params: Params.sanitize(Presets.find(preset).params),
-      clips: [], // { id, contentId, start, length } in bars, sorted by start, never overlapping
+      clips: [], // { id, contentId, start, length, offset } in bars, sorted by start, never overlapping
       gridBase,  // lowest row shown in the clip editor (a C)
       length,    // steps a new note lasts
       morph: { x: 0, y: 0 }, // the morph pad's point, -1..1 each way (0, 0 changes nothing)
@@ -113,10 +115,122 @@
     }
     length = length || c.bars;
     if (!fits(t, start, length)) return null;
-    const clip = { id: newId(song, "c"), contentId: c.id, start, length };
+    const clip = { id: newId(song, "c"), contentId: c.id, start, length, offset: 0 };
     t.clips.push(clip);
     sortClips(t);
     return clip;
+  }
+
+  // The first bar at or after `bar` where `length` bars are free on a track.
+  function freeBar(t, bar, length) {
+    while (!fits(t, bar, length)) bar++;
+    return bar;
+  }
+
+  // A content of its own with the same notes (for copies that aren't linked).
+  function cloneContent(song, c, name) {
+    return makeContent(song, c.trackId, name || nextName(song, Song_track(song, c.trackId)), c.bars,
+      c.notes.map((n) => ({ ...n })));
+  }
+
+  // A copy of a clip right after it (or the next free space): linked shares
+  // its notes with the original, otherwise it gets its own copy of them.
+  function duplicateClip(song, t, clip, linked) {
+    const c = content(song, clip);
+    const target = linked ? c : cloneContent(song, c, c.name + " copy");
+    const at = freeBar(t, clipEnd(clip), clip.length);
+    const copy = addClip(song, t, at, clip.length, target.id);
+    copy.offset = clip.offset;
+    return copy;
+  }
+
+  // What a copied clip carries: its notes, so it pastes as an independent clip.
+  function copyClip(song, clip) {
+    const c = content(song, clip);
+    return { kind: "clip", name: c.name, bars: c.bars, notes: c.notes.map((n) => ({ ...n })), length: clip.length, offset: clip.offset };
+  }
+
+  // Pastes a copied clip onto a track at the first free space from `bar`.
+  function pasteClip(song, t, data, bar) {
+    const c = makeContent(song, t.id, data.name + (Object.values(song.contents).some((x) => x.trackId === t.id && x.name === data.name) ? " copy" : ""),
+      data.bars, data.notes.map((n) => ({ ...n })));
+    const clip = addClip(song, t, freeBar(t, bar, data.length), data.length, c.id);
+    clip.offset = data.offset % data.bars;
+    return clip;
+  }
+
+  // Cuts a clip in two at `bar` (inside it). The right half plays on from
+  // the same point in the loop. Returns the right half.
+  function splitClip(song, t, clip, bar) {
+    if (bar <= clip.start || bar >= clipEnd(clip)) return null;
+    const right = { id: newId(song, "c"), contentId: clip.contentId, start: bar, length: clipEnd(clip) - bar,
+      offset: (clip.offset + bar - clip.start) % content(song, clip).bars };
+    clip.length = bar - clip.start;
+    t.clips.push(right);
+    sortClips(t);
+    return right;
+  }
+
+  // --- sections: bars across every track ---
+  // Inserts `n` empty bars at `bar`, splitting any clip that crosses it.
+  function insertBars(song, bar, n) {
+    for (const t of song.tracks) {
+      const crossing = clipAt(t, bar);
+      if (crossing && crossing.start < bar) splitClip(song, t, crossing, bar);
+      for (const c of t.clips) if (c.start >= bar) c.start += n;
+    }
+    shiftMarks(song, bar, n);
+  }
+
+  // Removes bars [start, end) from every track; what comes after moves left.
+  function deleteBars(song, start, end) {
+    const n = end - start;
+    for (const t of song.tracks) {
+      for (const at of [start, end]) {
+        const c = clipAt(t, at);
+        if (c && c.start < at) splitClip(song, t, c, at);
+      }
+      for (const c of t.clips.filter((x) => x.start >= start && x.start < end)) removeClip(song, t, c);
+      for (const c of t.clips) if (c.start >= end) c.start -= n;
+    }
+    const wasLoop = song.loop.start === start && song.loop.end === end;
+    shiftMarks(song, end, -n, start);
+    // Deleting the loop's own bars: keep a loop of the same length where the music now is.
+    if (wasLoop) song.loop.end = start + Math.max(1, Math.min(n, songBars(song) - start));
+  }
+
+  // Duplicates bars [start, end) right after themselves, on every track.
+  // The copies get their own notes (copies of the same content stay linked
+  // to each other, as they were in the original).
+  function duplicateBars(song, start, end) {
+    const n = end - start;
+    const pieces = [];
+    for (const t of song.tracks) {
+      for (const at of [start, end]) {
+        const c = clipAt(t, at);
+        if (c && c.start < at) splitClip(song, t, c, at);
+      }
+      for (const c of t.clips) if (c.start >= start && c.start < end) pieces.push({ t, c: { ...c } });
+    }
+    insertBars(song, end, n);
+    const made = {};
+    for (const { t, c } of pieces) {
+      if (!made[c.contentId]) made[c.contentId] = cloneContent(song, song.contents[c.contentId], song.contents[c.contentId].name + " copy");
+      const copy = addClip(song, t, c.start + n, c.length, made[c.contentId].id);
+      copy.offset = c.offset;
+    }
+  }
+
+  // Keeps the cursor and loop on the same music when bars are added (n > 0)
+  // or taken away (n < 0) at bar `at`. A loop that ends exactly where bars
+  // are added stays as it was (it doesn't swallow the new bars).
+  function shiftMarks(song, at, n, floor = 0) {
+    const move = (b) => (b >= at ? Math.max(floor, b + n) : b);
+    const moveEnd = (b) => (b > at ? Math.max(floor, b + n) : b);
+    song.cursor = move(song.cursor);
+    const start = move(song.loop.start);
+    song.loop.end = Math.max(start + 1, n > 0 ? moveEnd(song.loop.end) : move(song.loop.end));
+    song.loop.start = start;
   }
 
   // Moves a clip as far toward `start` as it can go without overlapping.
@@ -146,6 +260,8 @@
     const stillUsed = song.tracks.some((x) => x.clips.some((c) => c.contentId === clip.contentId));
     if (!stillUsed) delete song.contents[clip.contentId];
   }
+
+  const Song_track = (song, id) => song.tracks.find((t) => t.id === id);
 
   const linkCount = (song, contentId) =>
     song.tracks.reduce((n, t) => n + t.clips.filter((c) => c.contentId === contentId).length, 0);
@@ -200,6 +316,30 @@
     return n.len;
   }
 
+  // Copied notes, positioned from the earliest one (so they paste anywhere).
+  function copyNotes(notes) {
+    const first = Math.min(...notes.map((n) => n.step));
+    return { kind: "notes", notes: notes.map((n) => ({ ...n, step: n.step - first })) };
+  }
+
+  // Pastes copied notes starting at `step`. Notes that would land past the
+  // loop's end, or where a note already starts, are skipped. Returns the new notes.
+  function pasteNotes(c, data, step) {
+    const added = [];
+    for (const n of data.notes) {
+      const m = addNote(c, step + n.step, n.midi, n.len, n.vel);
+      if (m) added.push(m);
+    }
+    return added;
+  }
+
+  // Duplicates notes right after themselves (after the last one ends).
+  function duplicateNotes(c, notes) {
+    const first = Math.min(...notes.map((n) => n.step));
+    const end = Math.max(...notes.map((n) => n.step + n.len));
+    return pasteNotes(c, copyNotes(notes), end);
+  }
+
   // Changes how many bars a content loops; notes past the new end are
   // dropped and notes running over it are cut short.
   function setContentBars(c, bars) {
@@ -212,7 +352,7 @@
   // Where in a clip's content an absolute step (from the song's start) falls.
   function localStep(song, clip, pos) {
     const c = content(song, clip);
-    return (pos - clip.start * STEPS) % (c.bars * STEPS);
+    return (pos - clip.start * STEPS + (clip.offset || 0) * STEPS) % (c.bars * STEPS);
   }
 
   // The notes a track plays at an absolute step: its clip there, if any.
@@ -355,7 +495,11 @@
       if (v3) {
         const clips = (Array.isArray(s.clips) ? s.clips : [])
           .filter((c) => c && out.contents[c.contentId] && out.contents[c.contentId].trackId === t.id)
-          .map((c) => ({ id: typeof c.id === "string" ? c.id : newId(out, "c"), contentId: c.contentId, start: int(c.start, -1), length: int(c.length, 0) }))
+          .map((c) => ({
+            id: typeof c.id === "string" ? c.id : newId(out, "c"), contentId: c.contentId,
+            start: int(c.start, -1), length: int(c.length, 0),
+            offset: Math.max(0, int(c.offset, 0)) % out.contents[c.contentId].bars,
+          }))
           .filter((c) => c.start >= 0 && c.length >= 1)
           .sort((a, b) => a.start - b.start);
         for (const c of clips) if (fits(t, c.start, c.length)) t.clips.push(c); // overlaps dropped
@@ -382,6 +526,8 @@
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,
+    freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, insertBars, deleteBars, duplicateBars,
+    copyNotes, pasteNotes, duplicateNotes,
     noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,
     localStep, notesAtPos, songBars, viewBars, playRange, audible,
   };
