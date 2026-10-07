@@ -156,8 +156,8 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 
 **Build order** (each step usable on its own and pushed live)
 
-1. Timeline with tracks, clips, playhead, ruler and zoom; today's patterns become the first clips.
-2. Clip editor: piano roll with colored note blocks, scroll through pitches, stretchable lengths.
+1. Done: timeline with tracks, clips, playhead, ruler and zoom; today's patterns became the first clips. Settings added: layout, background (high contrast by default), fullscreen, credits.
+2. Done: clip editor as a piano roll with colored note blocks, scroll through pitches, stretchable lengths, the Note page.
 3. Selection, copy, paste, duplicate, linked copies, and one undo history.
 4. Step input from the keyboard, and recording into clips.
 5. Tempo tools: tap tempo, metronome and count-in, tempo markers.
