@@ -183,7 +183,7 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 **Next round (agreed 2026-10-08, after renaming the app mpwav)**
 
 11. Done: one screen on desktop. Every panel fits the window and scrolls inside itself (no more gap under Note Edit); a splitter between panels shares the room; Section and Tempo tools moved into menus; the keyboard's tools sit beside the keys; the how-to text moved to Settings › Tutorial › Show tips (screen readers still hear it).
-12. Clips that show more, and notes edited right on the timeline: bigger note blocks (pitch by height, loudness by brightness); click a note in a clip to select, drag or stretch it, snapped to the grid.
+12. Done: clips that show more, and notes edited right on the timeline. Taller rows (they stretch to fill the playing box on one screen), a dark note area in each clip with blocks shaded by key, brightness by loudness and note names when zoomed in. Press a note to select it (its clip opens in the piano roll and the Note page), drag to move it on the snap grid, drag its right end to stretch it, double-click to delete it, Shift to add to the selection. The piano roll stays the keyboard way.
 13. Per-note sound: a note can override its track's sound — pitch slide / bend, fine tune, its own filter brightness and pan, and SFX tools (pitch sweep, vibrato amount, retrigger / stutter, noise burst) — on the Note page.
 14. Audio upload (.wav / .mp3), both ways: as a sampler instrument for a track (plays at any pitch), and as audio clips on the timeline. Edit with trim, fades, reverse, gain and the Warp effects; clips snap to bars and beats, with an optional fit-to-tempo stretch. Sounds are kept in the browser and travel in song-file exports.
 

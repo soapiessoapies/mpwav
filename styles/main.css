@@ -207,7 +207,7 @@ kbd {
   position: absolute; bottom: 0; height: 6px; border-radius: 3px 3px 0 0;
   background: var(--accent); pointer-events: none;
 }
-.tl-row { height: 58px; border-bottom: 1px solid var(--bar-line); }
+.tl-row { height: var(--row-h, 84px); border-bottom: 1px solid var(--bar-line); }
 .tl-row:last-child { border-bottom: 0; }
 .tl-head { display: flex; align-items: center; padding: 0 6px; }
 .tl-name {
@@ -222,7 +222,7 @@ kbd {
 }
 .tl-row.selected .tl-lane { background-color: rgba(255, 255, 255, 0.03); }
 .clip {
-  position: absolute; top: 5px; bottom: 5px; min-height: 0; padding: 3px 14px 3px 6px;
+  position: absolute; top: 3px; bottom: 3px; min-height: 0; padding: 3px 14px 3px 6px;
   display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-align: left;
   background: var(--track); color: var(--accent-ink); border: 1px solid var(--accent-ink); border-radius: 6px;
   touch-action: none; cursor: grab;
@@ -231,8 +231,19 @@ kbd {
 .clip.selected { box-shadow: 0 0 0 2px var(--text); }
 .clip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; z-index: 2; }
 .clip-name { font-size: 0.75rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
-.clip-notes { flex: 1; width: 100%; min-height: 0; }
-.clip-grip {
+.clip-notes {
+  position: absolute; left: 0; right: 0; top: 17px; bottom: 0;
+  background: rgba(10, 12, 18, 0.6); border-radius: 0 0 5px 5px;
+}
+.tl-note {
+  position: absolute; min-width: 2px; padding-left: 2px; overflow: hidden; white-space: nowrap;
+  border-radius: 2px; box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  font-size: 0.62rem; font-weight: 800; line-height: 1; display: flex; align-items: center;
+  cursor: grab; touch-action: none;
+}
+.tl-note::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: min(10px, 33%); cursor: ew-resize; }
+.tl-note.selected { outline: 2px solid var(--text); outline-offset: 0; z-index: 1; opacity: 1 !important; }
+.clip-grip { z-index: 2;
   position: absolute; top: 0; right: 0; bottom: 0; width: 12px; cursor: ew-resize;
   background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28));
 }

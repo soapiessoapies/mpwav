@@ -556,6 +556,35 @@
     onChanged: (text) => afterChange(text),
     onView: () => { if (tlZoom) tlZoom.draw(); },
     isCollapsed: (id) => ui.collapsed.includes(id),
+    // Notes edited right on the timeline: they're the open clip's notes, so
+    // the piano roll and the Note page follow along.
+    selectedNotes(c) {
+      const o = find(open);
+      return o && o.c === c ? selNotes : null;
+    },
+    onPickNote(t, clip, n, add) {
+      const o = find(open);
+      if (!o || o.clip.id !== clip.id) openClip(t, clip, false);
+      if (add) selNotes.has(n) ? selNotes.delete(n) : selNotes.add(n);
+      else if (!selNotes.has(n)) { selNotes.clear(); selNotes.add(n); }
+      renderEditor();
+      roll.setCursor(n.step, n.midi);
+      showActions();
+      timeline.render();
+      preview(t, n.midi);
+      Announce.say(`${Notes.spokenName(n.midi)}, step ${n.step + 1}` + (selNotes.size > 1 ? `, ${selNotes.size} notes selected` : ""));
+    },
+    onNoteMove(c, n, step, midi) {
+      if (song.key.keep && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
+      return Song.moveNote(c, n, step, midi);
+    },
+    onNoteResize: (c, n, len) => Song.resizeNote(c, n, len),
+    onNoteDelete(c, n) {
+      selNotes.delete(n);
+      Song.removeNotes(c, [n]);
+      afterChange(`Deleted ${Notes.spokenName(n.midi)}`);
+    },
+    onPreview: (t, midi) => preview(t, midi),
     onToggleRow(id) {
       const t = Song.track(song, id);
       ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter((x) => x !== id) : [...ui.collapsed, id];

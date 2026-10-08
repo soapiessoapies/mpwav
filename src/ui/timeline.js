@@ -1,11 +1,16 @@
 // The playing box: the song as a timeline. A ruler of bars across the top,
-// a row per track, and clips as colored blocks along the rows, with tiny
-// blocks inside showing their notes (shaded by key).
+// a row per track, and clips as colored blocks along the rows, with their
+// notes inside (height = pitch, shade = key, brightness = loudness).
 //
 //   pointer: drag a clip to move it, drag its right edge to stretch it (its
 //            loop repeats); double-click / double-tap a clip to open it, or
 //            an empty spot to make a new clip there. Click the ruler to put
 //            the cursor there; drag along the ruler to set the loop.
+//            Notes inside a clip can be edited right here: press one to
+//            select it (the clip opens in the piano roll), drag it to move
+//            it (snapped to the Song page's snap), drag its right end to
+//            stretch it, double-click it to delete it. Shift adds to the
+//            selection. The piano roll is the keyboard way to do the same.
 //   keyboard: every clip is a button. Left/Right go to the next clip on the
 //            row, Up/Down to the row above or below; Alt + Left/Right moves
 //            the clip a bar, Shift + Left/Right stretches it; Enter opens
@@ -21,6 +26,9 @@
   // one-bar clip a big enough target (WCAG 2.5.8); the zoom bar scrolls the rest.
   const MIN_BW = 24, MAX_BW = 240;
   const DOUBLE_TAP_MS = 350;
+  // Track row heights: the usual height, and the range rows stretch over
+  // when the studio fits the window (they fill the playing box).
+  const ROW_H = 84, ROW_MIN = 80, ROW_MAX = 180, FOLDED_H = 28, RULER_H = 32;
 
   function create(scroller, h) {
     // h: { song(), selectedClip(), onSelectTrack(id), onSelectClip(t, clip), onOpenClip(t, clip),
@@ -50,46 +58,67 @@
         (links > 1 ? `, linked with ${links - 1} other clip${links > 2 ? "s" : ""}` : "");
     }
 
-    // The tiny note blocks inside a clip, its loop drawn once per repeat.
-    function notesSvg(song, t, clip) {
+    // A clip's notes, its loop drawn once per repeat. Height is pitch (the
+    // clip's own range, at least six rows), shade is the key, brightness is
+    // loudness; names show when a block has room. `range` pins the rows
+    // while a note is being dragged, so they don't jump under the pointer.
+    function notesBox(song, t, clip, range) {
       const c = Song.content(song, clip);
       const total = clip.length * Song.STEPS, loop = c.bars * Song.STEPS;
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("class", "clip-notes");
-      svg.setAttribute("aria-hidden", "true");
-      svg.setAttribute("viewBox", `0 0 ${total} 24`);
-      svg.setAttribute("preserveAspectRatio", "none");
-      if (!c.notes.length) return svg;
-      const lo = Math.min(...c.notes.map((n) => n.midi)), hi = Math.max(...c.notes.map((n) => n.midi));
-      const rows = Math.max(hi - lo + 1, 6), rowH = 24 / rows;
-      for (let off = 0; off < total; off += loop) {
-        for (const n of c.notes) {
+      const box = el("div", "clip-notes", { "aria-hidden": "true" });
+      if (!c.notes.length) return box;
+      const lo = range ? range.lo : Math.min(...c.notes.map((n) => n.midi));
+      const hi = range ? range.hi : Math.max(...c.notes.map((n) => n.midi));
+      const rows = Math.max(hi - lo + 1, 6), pad = (rows - (hi - lo + 1)) / 2;
+      box.dataset.lo = lo;
+      box.dataset.hi = hi;
+      const stepPx = barW() / Song.STEPS;
+      const rowPx = (rowH - 28) / rows;
+      const picked = h.selectedNotes ? h.selectedNotes(c) : null;
+      c.notes.forEach((n, i) => {
+        for (let off = 0; off < total; off += loop) {
           const x = off + n.step;
           if (x >= total) continue;
-          const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          r.setAttribute("x", x);
-          r.setAttribute("y", (hi - n.midi) * rowH + (rows - (hi - lo + 1)) * rowH / 2);
-          r.setAttribute("width", Math.max(0.8, Math.min(n.len, total - x) - 0.2));
-          r.setAttribute("height", Math.max(rowH - 0.4, 1.2));
-          r.setAttribute("fill", Colors.noteColor(t.color, n.midi));
-          r.setAttribute("stroke", "#1a1205");
-          r.setAttribute("stroke-width", "0.15");
-          svg.append(r);
+          const len = Math.min(n.len, total - x);
+          const d = el("span", "tl-note" + (picked && picked.has(n) ? " selected" : ""));
+          d.dataset.note = i;
+          d.style.left = (x / total) * 100 + "%";
+          d.style.width = (len / total) * 100 + "%";
+          d.style.top = ((hi - n.midi + pad) / rows) * 100 + "%";
+          d.style.height = 100 / rows + "%";
+          d.style.background = Colors.noteColor(t.color, n.midi);
+          d.style.color = Colors.noteInk(t.color, n.midi);
+          d.style.opacity = (0.55 + 0.45 * (n.vel || 0) / 100).toFixed(2);
+          if (len * stepPx >= 26 && rowPx >= 11) d.textContent = Notes.noteName(n.midi);
+          box.append(d);
         }
-      }
-      return svg;
+      });
+      return box;
+    }
+
+    // Rows stretch to fill the playing box when the studio fits the window.
+    let rowH = ROW_H;
+    function fitRows(song) {
+      if (document.documentElement.dataset.fit !== "on") return ROW_H;
+      const open = song.tracks.filter((t) => !h.isCollapsed(t.id)).length;
+      const folded = song.tracks.length - open;
+      if (!open) return ROW_H;
+      const room = scroller.clientHeight - RULER_H - 2 - folded * FOLDED_H;
+      return Math.max(ROW_MIN, Math.min(ROW_MAX, Math.floor(room / open) - 1));
     }
 
     function render() {
       const song = h.song();
       const bars = Song.viewBars(song);
       if (fitting) bw = clampBw(avail() / bars);
+      rowH = fitRows(song);
       const sel = h.selectedClip();
       const hadFocus = scroller.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
       scroller.textContent = "";
       const tl = el("div", "tl");
       tl.style.setProperty("--bar-w", barW() + "px");
       tl.style.setProperty("--head-w", HEAD + "px");
+      tl.style.setProperty("--row-h", rowH + "px");
       tl.style.width = HEAD + bars * barW() + "px";
 
       // --- ruler ---
@@ -162,7 +191,7 @@
           b.style.width = clip.length * barW() + "px";
           const label = el("span", "clip-name", { "aria-hidden": "true" });
           label.textContent = c.name;
-          b.append(label, notesSvg(song, t, clip));
+          b.append(label, notesBox(song, t, clip));
           if (Song.linkCount(song, c.id) > 1) b.append(el("span", "clip-link", { "aria-hidden": "true", title: "Linked" }));
           // Loop repeats marked with a notch where each repeat starts.
           for (let r = c.bars; r < clip.length; r += c.bars) {
@@ -199,10 +228,86 @@
     const barFromX = (laneOrRuler, x) =>
       Math.max(0, Math.floor((x - laneOrRuler.getBoundingClientRect().left) / barW()));
 
+    // --- pointer: notes inside clips ---
+    function noteFrom(target) {
+      const d = target.closest(".tl-note");
+      const hit = d && clipFrom(d);
+      if (!hit) return null;
+      const c = Song.content(songNow(), hit.clip);
+      const n = c.notes[Number(d.dataset.note)];
+      return n ? { ...hit, c, n, d } : null;
+    }
+    // Redraws one clip's notes (while dragging, with its rows pinned).
+    function redrawNotes(t, clip, range) {
+      const b = scroller.querySelector(`[data-clip="${clip.id}"]`);
+      const old = b && b.querySelector(".clip-notes");
+      if (old) old.replaceWith(notesBox(songNow(), t, clip, range));
+    }
+    function startNoteDrag(e, hit) {
+      e.preventDefault();
+      scroller.setPointerCapture(e.pointerId);
+      const box = hit.d.parentElement, r = hit.d.getBoundingClientRect();
+      const lo = Number(box.dataset.lo), hi = Number(box.dataset.hi);
+      const rows = Math.max(hi - lo + 1, 6);
+      // The right end of a block (its last third, at most 10px) stretches it.
+      const grip = Math.min(10, r.width / 3);
+      drag = {
+        mode: r.width >= 9 && e.clientX >= r.right - grip ? "note-len" : "note",
+        id: e.pointerId, x0: e.clientX, y0: e.clientY, t: hit.t, clip: hit.clip, c: hit.c, n: hit.n,
+        step0: hit.n.step, midi0: hit.n.midi, len0: hit.n.len,
+        stepPx: barW() / Song.STEPS, rowPx: box.clientHeight / rows,
+        range: { lo, hi }, changed: false,
+      };
+      h.onPickNote(hit.t, hit.clip, hit.n, e.shiftKey);
+    }
+    function moveNoteDrag(e) {
+      const d = drag, snap = Math.max(1, songNow().snap || 1);
+      const dx = e.clientX - d.x0, dy = e.clientY - d.y0;
+      if (d.mode === "note-len") {
+        const len = Math.max(snap, Math.round((d.len0 + dx / d.stepPx) / snap) * snap);
+        if (len !== d.n.len) {
+          h.onNoteResize(d.c, d.n, len);
+          d.changed = d.n.len !== d.len0;
+        }
+      } else {
+        // Small wobbles don't move it; past that it lands on the snap grid.
+        const step = Math.abs(dx) < 4 ? d.step0 : Math.round((d.step0 + dx / d.stepPx) / snap) * snap;
+        const midi = Math.abs(dy) < 4 ? d.midi0 : d.midi0 - Math.round(dy / d.rowPx);
+        if (step !== d.n.step || midi !== d.n.midi) {
+          const before = d.n.midi;
+          h.onNoteMove(d.c, d.n, step, midi);
+          if (d.n.midi !== before) h.onPreview(d.t, d.n.midi);
+          d.changed = d.n.step !== d.step0 || d.n.midi !== d.midi0;
+        }
+      }
+      d.range = { lo: Math.min(d.range.lo, d.n.midi), hi: Math.max(d.range.hi, d.n.midi) };
+      redrawNotes(d.t, d.clip, d.range);
+    }
+    function endNoteDrag(d) {
+      const name = Notes.spokenName(d.n.midi);
+      if (d.changed) {
+        h.onChanged(d.mode === "note-len"
+          ? `${name} is ${d.n.len} step${d.n.len > 1 ? "s" : ""} long`
+          : `Moved ${name} to step ${d.n.step + 1}`);
+        return;
+      }
+      // A second press on the same note soon after deletes it.
+      const key = "note-" + d.clip.id + "-" + d.c.notes.indexOf(d.n);
+      const now = performance.now();
+      if (lastTap.id === key && now - lastTap.at < DOUBLE_TAP_MS) {
+        lastTap = { id: null, at: 0 };
+        h.onNoteDelete(d.c, d.n);
+      } else {
+        lastTap = { id: key, at: now };
+      }
+    }
+
     // --- pointer: clips ---
     let drag = null;
     scroller.addEventListener("pointerdown", (e) => {
       if (e.button > 0) return;
+      const note = noteFrom(e.target);
+      if (note) { startNoteDrag(e, note); return; }
       const hit = clipFrom(e.target);
       if (hit) {
         e.preventDefault();
@@ -251,6 +356,7 @@
         }
         return;
       }
+      if (drag.mode === "note" || drag.mode === "note-len") { moveNoteDrag(e); return; }
       const dx = Math.round((e.clientX - drag.x0) / barW());
       if (drag.mode === "move") {
         const at = Song.moveClip(drag.t, drag.clip, drag.start0 + dx);
@@ -267,6 +373,7 @@
       if (!drag || e.pointerId !== drag.id) return;
       const d = drag;
       drag = null;
+      if (d.mode === "note" || d.mode === "note-len") { endNoteDrag(d); return; }
       if (d.mode === "ruler") {
         if (d.to === null) h.onCursor(d.from);
         else h.onLoop(Math.min(d.from, d.to), Math.max(d.from, d.to) + 1);
@@ -394,6 +501,13 @@
       zoomBy(e.deltaY < 0 ? 1.25 : 0.8);
     }, { passive: false });
     scroller.addEventListener("scroll", () => h.onView());
+    // The playing box changing height (a splitter, the window): rows refit.
+    let lastH = 0;
+    new ResizeObserver(() => {
+      if (scroller.clientHeight === lastH || drag) return;
+      lastH = scroller.clientHeight;
+      if (fitRows(h.song()) !== rowH) requestAnimationFrame(render);
+    }).observe(scroller);
     // The window changing width: keep fitting, if fitting.
     let resizeTimer = 0;
     window.addEventListener("resize", () => {

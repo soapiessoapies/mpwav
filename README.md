@@ -49,6 +49,7 @@ level of sound design.
 | Play / stop | `Space` (from anywhere), or the Play button; Loop repeats the loop range, off plays from the cursor to the end |
 | Pick a track | Click its name in the playing box (Lead, Bass, Pad, Hat) |
 | Clips | Double-click an empty spot for a new clip; drag to move, drag the right edge to stretch (the loop repeats); double-click or `Enter` to open; `Delete` removes |
+| Notes on the timeline | Clips show their notes (height = pitch, brightness = loudness, names when zoomed in). Drag a note to move it (snapped), drag its right end to stretch it, double-click it to delete it, Shift-click to add to the selection; the clip opens in the piano roll as you do |
 | Notes (piano roll) | Click to add (drag right to draw it longer), drag to move, drag the edge to stretch, double-click to delete; scroll for higher/lower notes |
 | Notes with a keyboard | Arrows move the cursor, `Enter` adds/removes, `Shift` + arrows stretch, `Alt` + arrows move, `Delete` removes the selection |
 | Note page | Length, loudness and pitch of the selected notes |
