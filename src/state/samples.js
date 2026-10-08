@@ -22,6 +22,7 @@
   const outlines = new Map();  // id -> Float32Array of min/max pairs
   const names = new Map();     // id -> name
   const pending = new Map();   // id -> Promise while decoding
+  const missing = new Set();   // ids looked for and not found (or not decodable)
 
   let dbp = null;
   function db() {
@@ -104,10 +105,11 @@
       if (decoded.has(id)) return Promise.resolve(true);
       if (!pending.has(id)) {
         pending.set(id, get(id).then(async (rec) => {
-          if (!rec) return false;
+          if (!rec) { missing.add(id); return false; }
           remember(id, rec, await decode(rec.bytes));
+          missing.delete(id);
           return true;
-        }).catch(() => false).finally(() => pending.delete(id)));
+        }).catch(() => { missing.add(id); return false; }).finally(() => pending.delete(id)));
       }
       return pending.get(id);
     }));
@@ -125,6 +127,8 @@
   }
 
   const peaks = (id) => outlines.get(id) || null;
+  // Is the sound known to be absent from this browser (rather than still loading)?
+  const isMissing = (id) => missing.has(id);
   const info = (id) => (decoded.has(id) ? { name: names.get(id), duration: decoded.get(id).duration } : null);
 
   // --- song files carry their sounds ---
@@ -157,5 +161,5 @@
     }
   }
 
-  root.Samples = { add, load, buffer, peaks, info, exportAll, importAll, PEAKS };
+  root.Samples = { add, load, buffer, peaks, info, isMissing, exportAll, importAll, PEAKS };
 })(window);

@@ -1,6 +1,6 @@
 {
   "name": "mpwav",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "A music studio in the browser: synths, a keyboard, an arrangement view and a mixer. No-build browser app; open index.html, or run \"npm run serve\".",
   "private": true,
   "scripts": {

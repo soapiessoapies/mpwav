@@ -67,7 +67,7 @@ level of sound design.
 | One screen | On desktop everything fits the window (Settings › Layout › Fit to the window); a panel with more than fits scrolls inside itself. Drag the bar between two panels (or focus it and use the arrows) to share the room differently |
 | Section and Tempo menus | The Section and Tempo buttons in the playing box open small menus (section tools; tap tempo, metronome, count-in, tempo changes) |
 | Tips | Settings › Tutorial › Show tips puts a short how-to under each part; screen readers always hear them |
-| Settings | Layout (Auto / Desktop / Phone, fit to the window), Arrange panels, tutorial tips, background, look (Smooth / Pixel details / All pixel), motion, install as an app, single-key shortcuts, credits |
+| Settings | Text and control size (Auto grows with the screen; Small to Extra large), layout (Auto / Desktop / Phone, fit to the window), Arrange panels, tutorial tips, background, look (Smooth / Pixel details / All pixel), motion, install as an app, single-key shortcuts, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |
 | Stop every note | `Esc`, or Stop all notes |

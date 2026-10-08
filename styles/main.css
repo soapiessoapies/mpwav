@@ -54,7 +54,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 0.9375rem/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
 }
 
@@ -100,7 +100,7 @@ kbd {
 .studio > * { min-width: 0; }
 /* layout: wide (Settings > Layout, or chosen from the window width) */
 [data-layout="wide"] .studio {
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 24vw, 560px);
     grid-template-areas:
       "transport title"
       "bar bar"
@@ -110,7 +110,7 @@ kbd {
   }
 /* Settings > Arrange panels: the side column can sit on the left. */
 [data-layout="wide"][data-side="left"] .studio {
-    grid-template-columns: 380px minmax(0, 1fr);
+    grid-template-columns: clamp(360px, 24vw, 560px) minmax(0, 1fr);
     grid-template-areas:
       "title transport"
       "bar bar"
@@ -192,12 +192,12 @@ kbd {
   position: sticky; left: 0; z-index: 3; flex: 0 0 var(--head-w); width: var(--head-w);
   background: var(--panel); border-right: 1px solid var(--line);
 }
-.tl-corner { display: flex; align-items: center; padding-left: 10px; font-size: 0.75rem; color: var(--muted); }
+.tl-corner { display: flex; align-items: center; padding-left: 10px; font-size: 0.85rem; color: var(--muted); }
 .tl-ruler { position: relative; display: flex; height: 32px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .tl-bar {
   flex: 0 0 var(--bar-w); width: var(--bar-w); min-height: 0; height: 32px;
   padding: 0 0 0 5px; border: 0; border-left: 1px solid var(--bar-line); border-radius: 0;
-  background: transparent; text-align: left; font-size: 0.75rem; color: var(--muted);
+  background: transparent; text-align: left; font-size: 0.85rem; color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 .tl-bar.four { color: var(--text); font-weight: 600; border-left-color: var(--line); }
@@ -230,7 +230,7 @@ kbd {
 .clip:active { cursor: grabbing; }
 .clip.selected { box-shadow: 0 0 0 2px var(--text); }
 .clip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; z-index: 2; }
-.clip-name { font-size: 0.75rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.clip-name { font-size: 0.85rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
 .clip-notes {
   position: absolute; left: 0; right: 0; top: 17px; bottom: 0;
   background: rgba(10, 12, 18, 0.6); border-radius: 0 0 5px 5px;
@@ -238,7 +238,7 @@ kbd {
 .tl-note {
   position: absolute; min-width: 2px; padding-left: 2px; overflow: hidden; white-space: nowrap;
   border-radius: 2px; box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.45);
-  font-size: 0.62rem; font-weight: 800; line-height: 1; display: flex; align-items: center;
+  font-size: 0.72rem; font-weight: 800; line-height: 1; display: flex; align-items: center;
   cursor: grab; touch-action: none;
 }
 .tl-note::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: min(10px, 33%); cursor: ew-resize; }
@@ -269,11 +269,11 @@ kbd {
 /* ---------- Note Edit (paged) ---------- */
 .track-chip {
   display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 14px;
-  background: var(--track, var(--accent)); color: var(--accent-ink); font-weight: 700; font-size: 0.85rem;
+  background: var(--track, var(--accent)); color: var(--accent-ink); font-weight: 700; font-size: 0.9rem;
 }
 .pager { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
 .pages { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
-.pages [role="tab"] { flex: 1 1 auto; min-height: 40px; padding: 0 6px; font-size: 0.82rem; font-weight: 600; }
+.pages [role="tab"] { flex: 1 1 auto; min-height: 40px; padding: 0 6px; font-size: 0.9rem; font-weight: 600; }
 .pages [role="tab"][aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .page-arrow { flex: 0 0 auto; width: 36px; padding: 0; }
 .page { display: grid; gap: 12px; }
@@ -308,7 +308,7 @@ kbd {
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .pad-lab {
-  position: absolute; z-index: 1; font-size: 0.75rem; font-weight: 600; color: var(--muted); pointer-events: none;
+  position: absolute; z-index: 1; font-size: 0.82rem; font-weight: 600; color: var(--muted); pointer-events: none;
   background: var(--bg); padding: 0 4px; border-radius: 3px;
 }
 .pad-lab.top { top: 6px; left: 50%; transform: translateX(-50%); }
@@ -415,7 +415,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .key {
   position: relative; min-height: 0; padding: 0 0 8px; border-radius: 0 0 6px 6px;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px;
-  font-size: 0.75rem; cursor: pointer;
+  font-size: 0.85rem; cursor: pointer;
 }
 .key.white {
   grid-row: 1 / 3; z-index: 1;
@@ -428,7 +428,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   border: 1px solid var(--black-key-edge);
 }
 .key .hint { font-weight: 700; }
-.key .name { font-size: 0.7rem; }
+.key .name { font-size: 0.8rem; }
 .key.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-ink); }
 .key:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; z-index: 3; }
 
@@ -495,7 +495,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .strip-name[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .strip-name.static { display: flex; align-items: center; justify-content: center; border: 0; }
 .strip-sound {
-  font-size: 0.72rem; color: var(--muted); text-align: center;
+  font-size: 0.8rem; color: var(--muted); text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .strip-ms { display: flex; gap: 4px; justify-content: center; }
@@ -503,7 +503,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .strip-toggle.mute[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .strip-toggle.solo[aria-pressed="true"] { background: var(--solo); color: var(--accent-ink); border-color: var(--solo); }
 .strip .pan { height: 24px; }
-.pan-out, .strip-db { font-size: 0.75rem; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.pan-out, .strip-db { font-size: 0.82rem; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
 .fader-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: auto; }
 .fader-row { display: flex; gap: 6px; height: 150px; }
 .fader {
@@ -598,7 +598,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 }
 .roll-key {
   height: var(--row-h); border-bottom: 1px solid #c4c9d4; cursor: pointer;
-  font-size: 0.65rem; font-weight: 700; color: var(--white-key-ink);
+  font-size: 0.75rem; font-weight: 700; color: var(--white-key-ink);
   display: flex; align-items: center; justify-content: flex-end; padding-right: 4px;
 }
 .roll-key.sharp { background: var(--black-key); border-bottom-color: var(--black-key); margin-right: 14px; }
@@ -606,7 +606,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .note {
   position: absolute; margin: 1px 0 0 1px; padding-left: 3px; overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.6); border-radius: 3px;
-  font-size: 0.65rem; font-weight: 700; line-height: calc(var(--row-h) - 4px); white-space: nowrap;
+  font-size: 0.75rem; font-weight: 700; line-height: calc(var(--row-h) - 4px); white-space: nowrap;
   touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
 }
 .note.selected { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
@@ -619,7 +619,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .roll.focused .roll-cursor { display: block; }
 .roll-playhead { position: absolute; top: 0; left: 0; bottom: 0; width: 2px; background: var(--playhead); pointer-events: none; z-index: 2; }
 .note-pitch { display: flex; flex-wrap: wrap; gap: 6px; }
-.note-pitch button { flex: 1 1 40%; padding: 0 8px; font-size: 0.85rem; }
+.note-pitch button { flex: 1 1 40%; padding: 0 8px; font-size: 0.9rem; }
 #note-controls { display: grid; gap: 10px; }
 .pages { flex-wrap: wrap; }
 [data-layout="compact"] .roll { height: 300px; }
@@ -651,7 +651,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 
 /* ---------- toolbars (clip, section, notes), undo, step input ---------- */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
-.toolbar button { min-height: 36px; padding: 0 10px; font-size: 0.85rem; }
+.toolbar button { min-height: 36px; padding: 0 10px; font-size: 0.9rem; }
 .toolbar-label {
   min-width: 4.5em; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
 }
@@ -667,7 +667,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 /* ---------- tempo ---------- */
 .tl-tempo {
   position: absolute; top: 2px; z-index: 1; margin-left: 16px; padding: 0 4px; border-radius: 3px;
-  background: var(--focus); color: var(--accent-ink); font-size: 0.65rem; font-weight: 700; line-height: 14px;
+  background: var(--focus); color: var(--accent-ink); font-size: 0.75rem; font-weight: 700; line-height: 14px;
   pointer-events: none; white-space: nowrap;
 }
 .tempo-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
@@ -716,7 +716,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .pat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pat-row button { min-height: 40px; }
 .stamp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
-.stamp-grid button { min-height: 40px; padding: 0 8px; font-size: 0.85rem; text-align: left; }
+.stamp-grid button { min-height: 40px; padding: 0 8px; font-size: 0.9rem; text-align: left; }
 .stamp-grid kbd { margin-right: 4px; }
 
 /* ---------- keys mode and the shortcut list ---------- */
@@ -898,7 +898,7 @@ dialog .check { white-space: normal; align-items: flex-start; }
 [data-fit="on"] .tool-row > .toolbar, [data-fit="on"] .tool-row > .pattern-tools { margin-bottom: 6px; }
 [data-fit="on"] .pattern-tools select, [data-fit="on"] .pattern-tools button { min-height: 32px; }
 [data-fit="on"] .loop-status { margin-bottom: 6px; padding: 4px 10px; }
-[data-fit="on"] .song-status { margin-top: 4px; font-size: 0.85rem; }
+[data-fit="on"] .song-status { margin-top: 4px; font-size: 0.9rem; }
 [data-fit="on"] .zoombar { margin-top: 4px; }
 [data-fit="on"] .zb-track { height: 26px; }
 
@@ -1012,9 +1012,38 @@ dialog .check { white-space: normal; align-items: flex-start; }
   background: var(--text); border: 2px solid var(--bg);
 }
 .wave-knob.right { margin: 0 -7px 0 0; }
-.wave-status { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.wave-status { margin: 0; color: var(--muted); font-size: 0.9rem; }
 [data-fit="on"] #clip-body > .wave-editor { flex: 1 1 0; min-height: 0; }
 [data-fit="on"] .wave-editor > .wave { flex: 1 1 0; height: auto; }
 .inst-now { margin: 0 0 8px; font-weight: 600; }
 .inst-sample { display: grid; gap: 8px; margin-top: 8px; }
 #wave-reverse[aria-pressed="true"], #wave-fit[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---------- size (Settings > Size) ----------
+   Text is sized from the root, so it all grows together. Auto grows with
+   the screen: about 15px on a small laptop up to 21px on a big monitor. */
+:root { font-size: clamp(15px, calc(0.5vw + 8.5px), 21px); }
+:root[data-size="s"] { font-size: 15px; }
+:root[data-size="m"] { font-size: 17px; }
+:root[data-size="l"] { font-size: 19px; }
+:root[data-size="xl"] { font-size: 22px; }
+/* Controls grow with their text. */
+button, select, .tempo input, .inline input, .inline select, .loop-range input, .text-field { min-height: max(44px, 2.6em); }
+[data-fit="on"] .toolbar button, [data-fit="on"] .pattern-tools button, [data-fit="on"] .pattern-tools select,
+[data-fit="on"] .panel-head button, [data-fit="on"] .panel-head select, [data-fit="on"] .panel-head input,
+[data-fit="on"] .loop-range input { min-height: max(32px, 2.2em); }
+
+/* ---------- anything you can press looks pressable: a soft border ---------- */
+:root { --soft-edge: color-mix(in srgb, var(--line) 75%, transparent); }
+.tl-name { border: 1px solid var(--soft-edge); background: var(--panel-2); border-radius: 8px; }
+.tl-name[aria-pressed="true"] { border-color: var(--track); }
+.disclosure { border: 1px solid var(--soft-edge); background: var(--panel-2); padding: 0 12px 0 10px; }
+.song-title { border: 1px solid var(--soft-edge); border-radius: 8px; padding: 2px 8px; background: color-mix(in srgb, var(--panel-2) 60%, transparent); }
+.song-title:hover { border-color: var(--line); }
+.song-title:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-color: var(--line); }
+.check {
+  padding: 0 12px 0 10px; border: 1px solid var(--soft-edge); border-radius: 8px; background: var(--panel-2);
+}
+.check:hover { border-color: var(--line); }
+dialog .check, .tempo-list .check { border: 0; background: transparent; padding: 0; }
+.quiet { border-color: var(--soft-edge); }

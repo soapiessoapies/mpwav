@@ -38,7 +38,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -57,7 +57,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", ...uiSaved };
   let arrange = null; // window edit mode (set up near the end)
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
@@ -1075,7 +1075,8 @@
     document.querySelector("#p-sound .morph-box:not(#instrument)").hidden = isAudio;
     if (isAudio) return;
     const s = t.sampler, info = s && Samples.info(s.sampleId);
-    $("inst-now").textContent = !s ? "The synth (pick a preset below)" : info ? `Sound file: ${info.name} (${info.duration.toFixed(2)} s)` : "Sound file (not in this browser: import the song file that has it)";
+    $("inst-now").textContent = !s ? "The synth (pick a preset below)" : info ? `Sound file: ${info.name} (${info.duration.toFixed(2)} s)`
+      : Samples.isMissing(s.sampleId) ? "Sound file (not in this browser: import the song file that has it)" : "Sound file (loading…)";
     $("inst-synth").hidden = !s;
     $("inst-sample").hidden = !s;
     if (!s) return;
@@ -1127,7 +1128,7 @@
     $("wave-fit").setAttribute("aria-pressed", String(a.fit));
     const loopSecs = o.c.bars * Song.STEPS * Song.stepSeconds(song, o.clip.start * Song.STEPS);
     const trimmed = Math.max(0, end - a.start);
-    $("wave-status").textContent = !info ? "This sound isn't in this browser. Import the song file that has it, or Replace sound."
+    $("wave-status").textContent = !info ? (Samples.isMissing(a.sampleId) ? "This sound isn't in this browser. Import the song file that has it, or Replace sound." : "Loading the sound…")
       : `${info.name}: ${dur.toFixed(2)} s, playing ${trimmed.toFixed(2)} s` +
         (a.fit ? `, fitted to the ${o.c.bars}-bar loop (${(trimmed / loopSecs).toFixed(2)}× speed)`
           : trimmed > loopSecs + 0.01 ? `; the ${o.c.bars}-bar loop (${loopSecs.toFixed(2)} s) cuts it short` : "");
@@ -2184,6 +2185,7 @@
     $("motion").checked = ui.motion;
     $("fit-screen").checked = ui.fit;
     $("show-tips").checked = ui.tips;
+    ($("size-" + ui.size) || $("size-auto")).checked = true;
     settings.showModal();
   });
   $("settings-close").addEventListener("click", () => settings.close());
@@ -2236,6 +2238,21 @@
     Announce.say(ui.motion ? "Motion on" : "Motion off");
     save();
   });
+
+  // Text and control size: Auto follows the screen; the others are fixed.
+  const SIZE_NAMES = { auto: "Automatic", s: "Small", m: "Medium", l: "Large", xl: "Extra large" };
+  for (const size of Object.keys(SIZE_NAMES)) {
+    $("size-" + size).addEventListener("change", (e) => {
+      if (!e.target.checked) return;
+      ui.size = size;
+      if (size === "auto") delete document.documentElement.dataset.size;
+      else document.documentElement.dataset.size = size;
+      timeline.render();
+      roll.rebuild();
+      Announce.say(`${SIZE_NAMES[size]} size`);
+      save();
+    });
+  }
 
   // Fit to the window (desktop): no page scrolling, panels scroll inside themselves.
   $("fit-screen").addEventListener("change", (e) => {

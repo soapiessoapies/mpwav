@@ -20,7 +20,7 @@
 <script>
   // Pick the layout before the first paint (Settings > Layout; app.js keeps it up to date).
   (function () {
-    var pick = "auto", theme = "contrast", look = "pixel", motion = true, fit = true, tips = false;
+    var pick = "auto", theme = "contrast", look = "pixel", motion = true, fit = true, tips = false, size = "auto";
     try {
       var saved = JSON.parse(localStorage.getItem("sound-studio.ui")) || {};
       pick = saved.layout || "auto";
@@ -29,6 +29,7 @@
       motion = saved.motion !== false;
       fit = saved.fit !== false;
       tips = saved.tips === true;
+      size = saved.size || "auto";
     } catch (e) {}
     if (theme !== "contrast") document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.look = look;
@@ -38,6 +39,7 @@
     document.documentElement.dataset.layout = layout;
     document.documentElement.dataset.fit = fit && layout === "wide" ? "on" : "off";
     if (tips) document.documentElement.dataset.tips = "on";
+    if (size !== "auto") document.documentElement.dataset.size = size;
   })();
 </script>
 </head>
@@ -508,6 +510,17 @@
       </div>
     </fieldset>
     <p class="help">Auto picks from the window's width. Desktop always uses the side-by-side layout; Phone always stacks everything with the keyboard pinned at the bottom.</p>
+    <fieldset class="choice">
+      <legend>Text and control size</legend>
+      <div class="seg">
+        <input type="radio" name="size" id="size-auto" value="auto"><label for="size-auto">Auto</label>
+        <input type="radio" name="size" id="size-s" value="s"><label for="size-s">Small</label>
+        <input type="radio" name="size" id="size-m" value="m"><label for="size-m">Medium</label>
+        <input type="radio" name="size" id="size-l" value="l"><label for="size-l">Large</label>
+        <input type="radio" name="size" id="size-xl" value="xl"><label for="size-xl">Extra large</label>
+      </div>
+    </fieldset>
+    <p class="help">Auto grows the text with your screen, so it stays readable on a big monitor.</p>
     <label class="check"><input type="checkbox" id="fit-screen"> Fit to the window: on desktop every panel stays on one screen and scrolls inside itself</label>
     <button type="button" id="arrange-btn" aria-keyshortcuts="Control+Shift+L">Arrange panels</button>
     <fieldset class="choice">
