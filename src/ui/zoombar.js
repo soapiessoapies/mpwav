@@ -9,18 +9,17 @@
 (function (root) {
   "use strict";
 
-  const MIN_THUMB = 64; // px: the middle never gets too small to grab
+  const MIN_THUMB = 100; // px: with both 24px ends on it, the middle still has a big grab area
 
   // h: { get() -> { start, end, total }, set(start, end), fit(), label, unit(n) -> words }
   function create(el, h) {
     el.className = "zoombar";
     el.innerHTML =
       '<div class="zb-track">' +
-      '<div class="zb-thumb" tabindex="0" role="slider">' +
       '<span class="zb-handle zb-start" tabindex="0" role="slider"></span>' +
-      '<span class="zb-grip" aria-hidden="true"></span>' +
+      '<div class="zb-thumb" tabindex="0" role="slider"><span class="zb-grip" aria-hidden="true"></span></div>' +
       '<span class="zb-handle zb-end" tabindex="0" role="slider"></span>' +
-      "</div></div>";
+      "</div>";
     const track = el.querySelector(".zb-track");
     const thumb = el.querySelector(".zb-thumb");
     const hStart = el.querySelector(".zb-start");
@@ -35,8 +34,12 @@
       if (!w || !total) return;
       let left = (start / total) * w, width = ((end - start) / total) * w;
       if (width < MIN_THUMB) { left = Math.max(0, Math.min(w - MIN_THUMB, left - (MIN_THUMB - width) / 2)); width = MIN_THUMB; }
+      width = Math.min(width, w - left);
       thumb.style.left = left + "px";
-      thumb.style.width = Math.min(width, w - left) + "px";
+      thumb.style.width = width + "px";
+      // The ends sit on the thumb's edges (siblings, so no control is nested in another).
+      hStart.style.left = left + "px";
+      hEnd.style.left = left + width - hEnd.offsetWidth + "px";
       const words = `${h.unit(Math.floor(start) + 1)} to ${h.unit(Math.ceil(end))} of ${total}`;
       for (const [elx, now] of [[thumb, start], [hStart, start], [hEnd, end]]) {
         elx.setAttribute("aria-valuemin", "0");

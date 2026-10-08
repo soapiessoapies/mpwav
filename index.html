@@ -25,9 +25,8 @@
 </head>
 <body>
 <a class="skip" href="#playbox">Skip to the playing box</a>
-<h1 class="sr-only">Sound Studio</h1>
-
 <main class="studio">
+<h1 class="sr-only">Sound Studio</h1>
   <!-- Transport: above the playing box -->
   <div class="transport-bar" role="group" aria-label="Transport">
     <button id="sound" class="sound" type="button" aria-pressed="false">
@@ -134,6 +133,8 @@
         <h2 id="clip-h">Clip</h2>
         <label class="inline clip-name-field">Name <input id="clip-name" type="text" maxlength="40" autocomplete="off"></label>
         <label class="inline">Loop <select id="clip-bars"></select></label>
+        <label class="inline">Plays for <input id="clip-len" type="number" inputmode="numeric" min="1" max="256" step="1" aria-describedby="clip-len-help"> bars</label>
+        <span id="clip-len-help" class="sr-only">How many bars this clip covers on the timeline; past its loop it repeats. It stops at the next clip.</span>
         <button id="close-clip" type="button" class="quiet">Close</button>
       </div>
       <p id="clip-empty" class="help">

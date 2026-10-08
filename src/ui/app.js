@@ -657,6 +657,17 @@
     afterChange(`${o.c.name} loops ${o.c.bars} bar${o.c.bars > 1 ? "s" : ""}`);
   });
 
+  // Clip length without dragging its edge (WCAG 2.5.7): stops at the next clip.
+  const lenField = $("clip-len");
+  lenField.addEventListener("change", () => {
+    const o = find(open);
+    if (!o) return;
+    const want = Math.max(1, Math.round(Number(lenField.value)) || 1);
+    const got = Song.resizeClip(o.t, o.clip, want);
+    lenField.value = got;
+    afterChange(`${o.c.name} plays for ${got} bar${got > 1 ? "s" : ""}` + (got < want ? ", up to the next clip" : ""));
+  });
+
   const nameField = $("clip-name");
   nameField.addEventListener("change", () => {
     const o = find(open);
@@ -726,7 +737,7 @@
     if (open && !o) open = null; // the clip was deleted
     $("clip-empty").hidden = !!o;
     $("clip-body").hidden = !o;
-    nameField.disabled = barsSel.disabled = $("close-clip").disabled = !o;
+    nameField.disabled = barsSel.disabled = lenField.disabled = $("close-clip").disabled = !o;
     if (!o) {
       $("clip-h").textContent = "Clip";
       nameField.value = "";
@@ -739,6 +750,7 @@
     $("clip-editor").style.setProperty("--track", `var(--c-${t.color})`);
     nameField.value = c.name;
     barsSel.value = c.bars;
+    if (document.activeElement !== lenField) lenField.value = clip.length;
     const links = Song.linkCount(song, c.id);
     const span = clip.length === 1 ? `bar ${clip.start + 1}` : `bars ${clip.start + 1}–${Song.clipEnd(clip)}`;
     $("clip-status").textContent = `${c.bars}-bar loop · this clip covers ${span}` +
@@ -1790,6 +1802,30 @@
     save();
   });
   showSide();
+
+  // --- focus never hides under sticky bars (WCAG 2.4.11) ---
+  // scroll-padding keeps focused things clear when the browser scrolls to
+  // them; this also catches focus that lands under a bar without a scroll.
+  function measureSticky() {
+    const root = document.documentElement.style;
+    const bar = document.querySelector(".transport-bar");
+    const keys = $("keys-section");
+    const pinned = (el) => el && getComputedStyle(el).position === "sticky";
+    root.setProperty("--sticky-top", (pinned(bar) ? bar.offsetHeight : 0) + "px");
+    root.setProperty("--sticky-bottom", (pinned(keys) && document.documentElement.dataset.layout === "compact" ? keys.offsetHeight : 0) + "px");
+  }
+  new ResizeObserver(measureSticky).observe(document.querySelector(".transport-bar"));
+  new ResizeObserver(measureSticky).observe($("keys-section"));
+  window.addEventListener("resize", measureSticky);
+  measureSticky();
+  document.addEventListener("focusin", (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLElement) || el.closest(".transport-bar, #keys-section, dialog")) return;
+    const r = el.getBoundingClientRect();
+    const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-top")) || 0;
+    const bottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-bottom")) || 0;
+    if (r.top < top + 4 || r.bottom > innerHeight - bottom - 4) el.scrollIntoView({ block: "nearest" });
+  });
 
   // --- first paint ---
   if (!find(picked)) picked = null;

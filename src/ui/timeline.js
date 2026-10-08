@@ -17,7 +17,9 @@
   "use strict";
 
   const HEAD = 116; // width of the track names column (fold arrow + name)
-  const MIN_BW = 10, MAX_BW = 240; // px per bar, zoomed all the way out / in
+  // px per bar, zoomed all the way out / in. 24 keeps every bar button and
+  // one-bar clip a big enough target (WCAG 2.5.8); the zoom bar scrolls the rest.
+  const MIN_BW = 24, MAX_BW = 240;
   const DOUBLE_TAP_MS = 350;
 
   function create(scroller, h) {
@@ -94,7 +96,7 @@
       const rulerRow = el("div", "tl-ruler-row");
       const corner = el("div", "tl-corner");
       corner.textContent = "Bar";
-      const ruler = el("div", "tl-ruler", { role: "group", "aria-label": "Ruler: choose where Play starts" });
+      const ruler = el("div", "tl-ruler", { role: "group", "aria-label": "Ruler: choose where Play starts. Left and right arrows move along it, Enter picks a bar" });
       if (song.loop.on) {
         const brace = el("div", "tl-loop", { "aria-hidden": "true" });
         brace.style.left = song.loop.start * barW() + "px";
@@ -109,13 +111,14 @@
       }
       const tempoAt = (b) => song.tempos.find((m) => m.bar === b);
       // Zoomed far out, bar numbers would overlap: only every 4th or 8th shows.
-      const labelEvery = bw >= 24 ? 1 : bw >= 12 ? 4 : 8;
+      const labelEvery = bw >= 30 ? 1 : 4;
+      const stopBar = Math.min(song.cursor, bars - 1);
       for (let b = 0; b < bars; b++) {
         const tm = tempoAt(b);
         const btn = el("button", "tl-bar" + (b % 4 === 0 ? " four" : ""), {
           type: "button", "aria-label": `Bar ${b + 1}` + (b === song.cursor ? ", cursor" : "") +
             (tm ? `, tempo ${tm.ramp ? "ramps to" : "changes to"} ${tm.bpm}` : ""),
-          "data-bar": b, "data-focus-key": "bar" + b,
+          "data-bar": b, "data-focus-key": "bar" + b, tabindex: b === stopBar ? "0" : "-1",
         });
         btn.textContent = b % labelEvery === 0 ? b + 1 : "";
         if (b === song.cursor) btn.setAttribute("aria-current", "true");
@@ -146,11 +149,12 @@
 
         const lane = el("div", "tl-lane", { role: "group", "aria-label": `${t.name} clips` });
         lane.dataset.track = t.id;
+        const stopClip = t.clips.find((x) => sel && x.id === sel.id) || t.clips[0];
         for (const clip of t.clips) {
           const c = Song.content(song, clip);
           const b = el("button", "clip" + (sel && sel.id === clip.id ? " selected" : ""), {
             type: "button", "aria-label": clipLabel(song, t, clip),
-            "data-clip": clip.id, "data-focus-key": "clip-" + clip.id,
+            "data-clip": clip.id, "data-focus-key": "clip-" + clip.id, tabindex: clip === stopClip ? "0" : "-1",
           });
           if (sel && sel.id === clip.id) b.setAttribute("aria-current", "true");
           b.style.setProperty("--track", `var(--c-${t.color})`);
@@ -294,6 +298,22 @@
       if (hit && e.detail === 0) h.onSelectClip(hit.t, hit.clip, true);
     });
 
+    // --- keyboard on the ruler: arrows move focus, Enter / Space pick the bar ---
+    scroller.addEventListener("keydown", (e) => {
+      const bar = e.target.closest && e.target.closest(".tl-bar");
+      if (!bar || e.altKey || e.ctrlKey || e.metaKey) return;
+      const all = [...scroller.querySelectorAll(".tl-bar")];
+      const i = all.indexOf(bar);
+      const j = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: all.length - 1 }[e.key];
+      if (j == null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const next = all[Math.max(0, Math.min(all.length - 1, j))];
+      for (const b of all) b.tabIndex = b === next ? 0 : -1;
+      next.focus();
+      next.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+
     // --- keyboard on clips ---
     scroller.addEventListener("keydown", (e) => {
       const hit = clipFrom(e.target);
@@ -334,7 +354,10 @@
     });
 
     function focusClip(clip) {
-      scroller.querySelector(`[data-clip="${clip.id}"]`)?.focus();
+      const b = scroller.querySelector(`[data-clip="${clip.id}"]`);
+      if (!b) return;
+      for (const o of b.closest(".tl-lane").querySelectorAll(".clip")) o.tabIndex = o === b ? 0 : -1;
+      b.focus();
     }
 
     // --- zoom and view ---

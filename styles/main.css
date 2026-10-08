@@ -42,7 +42,13 @@
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+/* Keyboard focus never hides under the sticky transport bar or the pinned
+   phone keyboard (WCAG 2.4.11): app.js measures them into these. */
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--sticky-top, 0px) + 12px);
+  scroll-padding-bottom: calc(var(--sticky-bottom, 0px) + 12px);
+}
 
 body {
   margin: 0;
@@ -175,7 +181,7 @@ kbd {
 
 /* ---------- playing box ---------- */
 .loop-range { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.loop-range input { width: 3.6em; padding: 0 6px; text-align: center; }
+.loop-range input, #clip-len { width: 3.6em; padding: 0 6px; text-align: center; }
 .tl-scroll {
   overflow-x: auto; overflow-y: hidden; position: relative;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
@@ -447,7 +453,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 [data-layout="compact"] .transport-bar button { padding: 0 10px; }
 [data-layout="compact"] .play { min-width: 0; }
 [data-layout="compact"] .tempo { gap: 4px; }
-[data-layout="compact"] .tempo > span { display: none; } /* "BPM": the field is already labelled Tempo */
+[data-layout="compact"] .tempo > span:not(.tempo-word) { display: none; } /* "BPM": the field is already labelled Tempo */
 [data-layout="compact"] .tempo input { width: 3.2em; text-align: center; -moz-appearance: textfield; }
 [data-layout="compact"] .tempo input::-webkit-inner-spin-button,
 [data-layout="compact"] .tempo input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -716,20 +722,18 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 /* ---------- zoom bars (Premiere-style) ---------- */
 .zoombar { margin-top: 6px; touch-action: none; user-select: none; -webkit-user-select: none; }
 .zb-track {
-  position: relative; height: 30px; border-radius: 15px;
+  position: relative; height: 32px; border-radius: 15px;
   background: var(--panel-2); border: 1px solid var(--line); cursor: pointer;
 }
 .zb-thumb {
-  position: absolute; top: 2px; bottom: 2px; min-width: 64px; border-radius: 13px;
+  position: absolute; top: 2px; bottom: 2px; min-width: 100px; border-radius: 13px;
   background: color-mix(in srgb, var(--accent) 30%, var(--panel-2)); border: 2px solid var(--accent); cursor: grab;
 }
 .zb-thumb.dragging { cursor: grabbing; }
 .zb-handle {
-  position: absolute; top: -2px; bottom: -2px; width: 24px; border-radius: 13px;
+  position: absolute; z-index: 1; top: 2px; bottom: 2px; width: 24px; border-radius: 13px;
   background: var(--accent); cursor: ew-resize;
 }
-.zb-start { left: -2px; }
-.zb-end { right: -2px; }
 .zb-handle::after {
   content: ""; position: absolute; left: 50%; top: 7px; bottom: 7px; width: 2px; margin-left: -1px; background: var(--accent-ink);
 }
@@ -816,3 +820,20 @@ body.arranging-drag, body.arranging-drag * { cursor: grabbing !important; user-s
 [data-layout="compact"][data-arrange="on"] .keys-panel { position: static; box-shadow: none; }
 [data-layout="compact"][data-arrange="on"] .keys-panel .panel-head { flex-wrap: wrap; }
 [data-layout="compact"][data-arrange="on"] .col { padding: 4px; }
+
+/* ---------- accessibility pass (2026-10-08) ---------- */
+/* Phone black keys at least 24px wide (WCAG 2.5.8 target size). */
+[data-layout="compact"] .key.black { margin: 0 1px; }
+/* 320px wide (WCAG 1.4.10 reflow, the same as 400% zoom): the transport
+   bar still fits on one line. */
+@media (max-width: 349px) {
+  [data-layout="compact"] .studio { padding-left: 8px; padding-right: 8px; }
+  [data-layout="compact"] .transport-bar { gap: 2px; padding: 8px 4px; }
+  [data-layout="compact"] .transport-bar button { min-width: 32px; padding: 0 2px; }
+  [data-layout="compact"] .tempo input { width: 2.8em; }
+  [data-layout="compact"] .keys-panel .panel-head { gap: 4px; }
+  [data-layout="compact"] .keys-panel .panel-head button { padding: 0 6px; }
+  [data-layout="compact"] .octave button:not(.fit-btn) { width: 34px; }
+}
+/* Long checkbox labels in dialogs wrap on phones instead of running off. */
+dialog .check { white-space: normal; align-items: flex-start; }
