@@ -3,12 +3,16 @@
 // shows up on the next load) and the copy in the cache is refreshed;
 // offline, the cached copy is used. SHELL is every file the app needs to
 // start; a test checks it lists everything index.html loads.
-const CACHE = "sound-studio-v1";
+const CACHE = "sound-studio-v2";
 const SHELL = [
   "./",
   "index.html",
   "manifest.webmanifest",
   "styles/main.css",
+  "styles/look.css",
+  "assets/fonts/nunito-latin.woff2",
+  "assets/fonts/pixelify-sans-latin.woff2",
+  "assets/fonts/caveat-brush-latin.woff2",
   "assets/icons/icon.svg",
   "assets/icons/favicon-32.png",
   "assets/icons/apple-touch-icon.png",
@@ -16,6 +20,7 @@ const SHELL = [
   "assets/icons/icon-512.png",
   "assets/icons/maskable-512.png",
   "src/version.js",
+  "src/ui/fill.js",
   "src/audio/notes.js",
   "src/audio/params.js",
   "src/audio/envelope.js",

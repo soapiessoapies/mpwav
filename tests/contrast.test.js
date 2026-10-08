@@ -27,7 +27,7 @@ function ratio(a, b, v = vars) {
 const TEXT = [
   ["text", "bg"], ["text", "panel"], ["text", "panel-2"],
   ["muted", "bg"], ["muted", "panel"], ["muted", "panel-2"],
-  ["accent", "panel"], ["accent", "panel-2"], ["accent-ink", "accent"],
+  ["accent", "bg"], ["accent", "panel"], ["accent", "panel-2"], ["accent-ink", "accent"],
   ["white-key-ink", "white-key"], ["text", "black-key"],
   ["accent-ink", "solo"], ["muted", "cell"], ["text", "cell-beat"],
   ["accent-ink", "rec"],
@@ -83,3 +83,31 @@ test("note names are at least 4.5:1 on every shade of every track color", () => 
     }
   }
 });
+
+// Note Edit's paper tabs (styles/look.css): each page is --paper-mix of a
+// track color mixed into the panel, in every background theme. Text, quiet
+// text, the accent and the outlines on them must all still read on each one.
+const look = fs.readFileSync(path.join(__dirname, "../styles/look.css"), "utf8");
+const PAPER_MIX = parseFloat(look.match(/--paper-mix:\s*([\d.]+)%/)[1]) / 100;
+const PAPERS = [...look.matchAll(/--paper-c:\s*var\(--(c-\w+)\)/g)].map((m) => m[1]);
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const toHex = (rgb) => "#" + rgb.map((c) => Math.round(c).toString(16).padStart(2, "0")).join("");
+
+test("the paper tabs cover all eight Note Edit pages", () => {
+  assert.equal(new Set(PAPERS).size, 8);
+});
+for (const [theme, v] of Object.entries(THEMES)) {
+  test(`${theme}: text, quiet text, accent and outlines read on every paper tab`, () => {
+    for (const c of PAPERS) {
+      const paper = toHex(hexRgb(v[c]).map((x, i) => x * PAPER_MIX + hexRgb(v.panel)[i] * (1 - PAPER_MIX)));
+      const w = { ...v, paper };
+      for (const fg of ["text", "muted", "accent"]) {
+        const r = ratio(fg, "paper", w);
+        assert.ok(r >= 4.5, `--${fg} on ${c} paper: ${r.toFixed(2)}:1`);
+      }
+      // Outlines on paper use --cell-edge (look.css swaps it in for --line there).
+      const edge = ratio("cell-edge", "paper", w);
+      assert.ok(edge >= 3, `--cell-edge on ${c} paper: ${edge.toFixed(2)}:1`);
+    }
+  });
+}

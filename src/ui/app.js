@@ -38,7 +38,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -57,7 +57,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, ...uiSaved };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -1586,14 +1586,22 @@
   const pageFor = { osc: "p-shape", env: "p-shape", filter: "p-filter", out: "p-filter", warp: "p-warp" };
   for (const [g, page] of Object.entries(pageFor)) $(page).append(document.querySelector(".group-" + g));
 
-  const pages = Tabs.create(document.querySelector(".pages"), {
-    onSelect(id) { ui.page = id; save(); },
+  // The tab row scrolls sideways when the tabs don't fit: keep the open one in view.
+  const tabRow = document.querySelector(".pages");
+  const showTab = (id) => {
+    const t = $(id).getBoundingClientRect(), r = tabRow.getBoundingClientRect();
+    tabRow.scrollLeft += t.left - r.left - (r.width - t.width) / 2;
+  };
+  const pages = Tabs.create(tabRow, {
+    onSelect(id) { ui.page = id; showTab(id); save(); },
   });
   pages.select($(ui.page) ? ui.page : "tab-p-note", false);
+  showTab(pages.current);
   const pageIds = [...document.querySelectorAll(".pages [role=tab]")].map((t) => t.id);
   const turnPage = (dir) => {
     const i = (pageIds.indexOf(pages.current) + dir + pageIds.length) % pageIds.length;
     pages.select(pageIds.at(i), false);
+    showTab(pageIds.at(i));
     Announce.say(`${$(pageIds.at(i)).textContent} page, ${i + 1} of ${pageIds.length}`);
   };
   $("page-prev").addEventListener("click", () => turnPage(-1));
@@ -1710,6 +1718,8 @@
   $("settings-btn").addEventListener("click", () => {
     $("layout-" + ui.layout).checked = true;
     ($("theme-" + ui.theme) || $("theme-contrast")).checked = true;
+    ($("look-" + ui.look) || $("look-pixel")).checked = true;
+    $("motion").checked = ui.motion;
     settings.showModal();
   });
   $("settings-close").addEventListener("click", () => settings.close());
@@ -1740,6 +1750,28 @@
       save();
     });
   }
+
+  // Look (how much is drawn in pixels) and Motion, modeled on Bezier's settings.
+  const LOOK_NAMES = { smooth: "Smooth", pixel: "Pixel details", allpixel: "All pixel" };
+  for (const look of Object.keys(LOOK_NAMES)) {
+    $("look-" + look).addEventListener("change", (e) => {
+      if (!e.target.checked) return;
+      ui.look = look;
+      document.documentElement.dataset.look = look;
+      // Outlines and paddings changed: the timeline and the roll refit.
+      timeline.render();
+      roll.rebuild();
+      Announce.say(`${LOOK_NAMES[look]} look`);
+      save();
+    });
+  }
+  $("motion").addEventListener("change", (e) => {
+    ui.motion = e.target.checked;
+    if (ui.motion) delete document.documentElement.dataset.motion;
+    else document.documentElement.dataset.motion = "off";
+    Announce.say(ui.motion ? "Motion on" : "Motion off");
+    save();
+  });
 
   const fsBtn = $("fullscreen");
   if (!document.fullscreenEnabled) {

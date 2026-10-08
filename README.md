@@ -62,7 +62,7 @@ level of sound design.
 | Tracks | Note Edit › Track: rename, color, move up/down, remove, add (up to 12) |
 | Song | Note Edit › Song: key and scale (dims notes outside it, optional keep-in-key), snap, swing |
 | Songs | The Songs button by the title: new, from the demo, duplicate, open, delete; Export WAV; export / import a song file |
-| Settings | Layout (Auto / Desktop / Phone), Arrange panels, background, install as an app, single-key shortcuts, credits |
+| Settings | Layout (Auto / Desktop / Phone), Arrange panels, background, look (Smooth / Pixel details / All pixel), motion, install as an app, single-key shortcuts, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |
 | Stop every note | `Esc`, or Stop all notes |

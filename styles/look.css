@@ -1,0 +1,209 @@
+/* The look, modeled on Bezier's (the class's drawing app): soft paper tabs
+   with cute pixel details, Nunito for words, Pixelify Sans for numbers, a
+   brush font for the song's title, and motion that only nods to confirm
+   what you picked. Sound Studio keeps its own colors: every background
+   (Settings > Background) works with every look, and high contrast stays
+   the default.
+
+   Settings > Look picks how much is drawn in pixels (html[data-look]):
+     smooth    soft rounded controls; Note Edit's pages are still paper tabs
+     pixel     (default) block sliders, circle toggles, notched paper tabs,
+               chunky outlines with a hard offset shadow
+     allpixel  all that, plus square buttons, fields, dialogs and clips
+   Settings > Motion turns the nods off (html[data-motion="off"]); the
+   system's reduce-motion setting does too (styles/main.css). */
+
+@font-face {
+  font-family: "Nunito";
+  src: url("../assets/fonts/nunito-latin.woff2") format("woff2");
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../assets/fonts/pixelify-sans-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Caveat Brush";
+  src: url("../assets/fonts/caveat-brush-latin.woff2") format("woff2");
+  font-display: swap;
+}
+
+:root {
+  --ui-font: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pixel-font: "Pixelify Sans", "Nunito", ui-monospace, monospace;
+  --brush-font: "Caveat Brush", "Segoe Print", cursive;
+  /* Outlines in the pixel looks: the control-edge color, so they pass 3:1. */
+  --ink: var(--line);
+  --ink-soft: color-mix(in srgb, var(--line) 40%, transparent);
+  --px-line: 3px 0 0 0 var(--ink), -3px 0 0 0 var(--ink), 0 3px 0 0 var(--ink), 0 -3px 0 0 var(--ink);
+  --px-line2: 2px 0 0 0 var(--ink), -2px 0 0 0 var(--ink), 0 2px 0 0 var(--ink), 0 -2px 0 0 var(--ink);
+  /* Paper: each Note Edit page is its own color, this much of a track color
+     mixed into the panel (tests/contrast.test.js checks text on every one). */
+  --paper-mix: 18%;
+  /* Paper grain: fine speckle plus long fibers (from Bezier's dark papers). */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .12 -.06'/%3E%3C/filter%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.03 .55' numOctaves='2' seed='9'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .08 -.03'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  --quick: 0.14s;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+body { font-family: var(--ui-font); }
+
+/* --- the title: brush lettering over a little sound wave --- */
+.song-title {
+  font: 400 2.1rem/1.1 var(--brush-font); letter-spacing: 0.01em; color: var(--accent);
+}
+[data-layout="compact"] .song-title { font-size: 1.6rem; }
+.title-wave {
+  display: block; width: 100%; max-width: 260px; height: 10px; margin: -2px 0 2px;
+  color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round;
+  overflow: visible;
+}
+[data-layout="wide"] .title-wave { margin-left: auto; }
+
+/* --- Note Edit: paper tabs ---
+   Each page has its own paper; the tab you're on stands up taller and runs
+   into its page. */
+/* On paper, outlines (tabs, controls, slider blocks) use the lighter edge
+   gray so they keep 3:1 on every tint (tests/contrast.test.js). */
+.pages [role="tab"], .note-edit .page { --line: var(--cell-edge); --ink: var(--cell-edge); }
+#tab-p-note, #p-note { --paper-c: var(--c-orange); }
+#tab-p-track, #p-track { --paper-c: var(--c-rose); }
+#tab-p-sound, #p-sound { --paper-c: var(--c-violet); }
+#tab-p-shape, #p-shape { --paper-c: var(--c-sky); }
+#tab-p-filter, #p-filter { --paper-c: var(--c-mint); }
+#tab-p-warp, #p-warp { --paper-c: var(--c-coral); }
+#tab-p-mix, #p-mix { --paper-c: var(--c-lime); }
+#tab-p-song, #p-song { --paper-c: var(--c-gold); }
+
+.note-edit .pager { align-items: flex-end; margin-bottom: 0; }
+.note-edit .page-arrow { align-self: center; margin-bottom: 4px; }
+/* One row of tabs, scrolling sideways when they don't fit (the arrows page). */
+.note-edit .pages {
+  flex-wrap: nowrap; align-items: flex-end; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; padding-top: 4px; margin-bottom: -1px;
+}
+.note-edit .pages::-webkit-scrollbar { display: none; }
+.note-edit .pages [role="tab"] { flex: 0 0 auto; }
+.pages [role="tab"],
+.pages [role="tab"][aria-selected="true"] {
+  --paper: color-mix(in srgb, var(--paper-c) var(--paper-mix), var(--panel));
+  position: relative; min-height: 36px; padding: 0 10px;
+  background: var(--grain), var(--paper); color: var(--muted);
+  border: 1px solid var(--line); border-bottom: 0; border-radius: 11px 11px 0 0;
+}
+.pages [role="tab"]:hover { color: var(--text); }
+.pages [role="tab"][aria-selected="true"] {
+  z-index: 2; min-height: 44px; margin-bottom: -1px; color: var(--text); font-size: 0.9rem; font-weight: 800;
+}
+.note-edit .page {
+  --paper: color-mix(in srgb, var(--paper-c) var(--paper-mix), var(--panel));
+  position: relative; padding: 14px 12px 16px;
+  background: var(--grain), var(--paper);
+  border: 1px solid var(--line); border-radius: 0 12px 12px 12px;
+}
+.note-edit .page select,
+.note-edit .page button:not([role="tab"]):not(.on):not([aria-pressed="true"]):not([aria-checked="true"]) { background-color: var(--panel); }
+
+/* --- motion: a nod, not a show --- */
+button, select, .seg label, .pages [role="tab"] {
+  transition: background-color var(--quick) var(--ease-out), color var(--quick) var(--ease-out),
+    border-color var(--quick) var(--ease-out), box-shadow var(--quick) var(--ease-out), transform 0.08s var(--ease-out);
+}
+/* A pressed button dips a hair, so the press feels received. */
+button:active:not(:disabled):not(.clip):not(.tl-bar):not(.key) { transform: translateY(1px) scale(0.97); }
+/* A new page, panel or dialog settles into place. */
+.note-edit .page:not([hidden]), .panel:not(.folded) > .panel-head + *, dialog[open] { animation: settle var(--quick) var(--ease-out); }
+.pages [role="tab"][aria-selected="true"] { animation: picked 0.22s var(--ease-out); }
+@keyframes settle { from { opacity: 0; transform: translateY(3px); } }
+@keyframes picked { 40% { transform: translateY(-2px); } }
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
+  animation: none !important; transition: none !important;
+}
+
+/* ======================= pixel details (the default) ======================= */
+
+/* Numbers in the pixel font. */
+/* Numbers stay in Nunito with even-width digits: in the pixel font a small
+   2, 3 or 5 reads as an 8, and a misread value is worse than a plain one. */
+:is(.ctl-head output, .tempo input, .loop-range input, #clip-len, .oct-label, .tempo-list input, .song-status, .tl-bar) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Paper tabs get pixel-notched corners and an ink outline. */
+:root:not([data-look="smooth"]) .pages [role="tab"] {
+  border: 0; border-radius: 0; font-family: var(--pixel-font); font-weight: 500; letter-spacing: 0.02em;
+  clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% 100%, 0 100%);
+  box-shadow: inset 3px 0 0 0 var(--ink), inset -3px 0 0 0 var(--ink), inset 0 3px 0 0 var(--ink), inset 0 -3px 0 0 var(--ink);
+}
+:root:not([data-look="smooth"]) .pages [role="tab"][aria-selected="true"] {
+  margin-bottom: -3px; padding-bottom: 3px; font-weight: 700;
+  box-shadow: inset 3px 0 0 0 var(--ink), inset -3px 0 0 0 var(--ink), inset 0 3px 0 0 var(--ink);
+}
+:root:not([data-look="smooth"]) .pages [role="tab"]:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--focus); }
+:root:not([data-look="smooth"]) .note-edit .page {
+  border: 0; border-radius: 0; margin: 0 3px 3px; box-shadow: var(--px-line), 6px 6px 0 0 var(--ink-soft);
+}
+
+/* Panels: a chunky outline and a hard offset shadow. */
+:root:not([data-look="smooth"]) .panel {
+  border: 0; border-radius: 0; box-shadow: var(--px-line), 7px 7px 0 0 var(--ink-soft);
+}
+/* The clip editor keeps its stripe in the open clip's track color. */
+:root:not([data-look="smooth"]) .clip-editor { border-top: 6px solid var(--track, var(--line)); }
+/* The transport is the tool strip: rounded, chunky, with an offset shadow. */
+:root:not([data-look="smooth"]) .transport-bar {
+  border: 3px solid var(--ink); border-radius: 14px; box-shadow: 5px 5px 0 0 var(--ink-soft);
+}
+
+/* Sliders: a row of pixel blocks that fill up, with a round handle sliding
+   along them (--p, the fill, is kept up to date by src/ui/fill.js). */
+:root:not([data-look="smooth"]) input[type="range"]:not(.fader)::-webkit-slider-runnable-track {
+  height: 14px; border-radius: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 8px, rgba(0, 0, 0, 0.4) 8px 10px),
+    linear-gradient(90deg, var(--accent) var(--p, 50%), var(--cell) var(--p, 50%));
+  box-shadow: var(--px-line2);
+}
+:root:not([data-look="smooth"]) input[type="range"]:not(.fader)::-webkit-slider-thumb {
+  width: 22px; height: 22px; margin-top: -4px; border-radius: 50%;
+  background: var(--white-key); border: 2px solid var(--accent-ink); box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.6);
+}
+:root:not([data-look="smooth"]) input[type="range"]:not(.fader):is(:active, :focus-visible)::-webkit-slider-thumb { background: var(--focus); }
+:root:not([data-look="smooth"]) input[type="range"]:not(.fader)::-moz-range-track { height: 14px; border-radius: 0; background: var(--cell); box-shadow: var(--px-line2); }
+:root:not([data-look="smooth"]) input[type="range"]:not(.fader)::-moz-range-progress { height: 14px; background: var(--accent); }
+:root:not([data-look="smooth"]) input[type="range"]:not(.fader)::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--white-key); border: 2px solid var(--accent-ink);
+}
+
+/* Toggles: circles, always outlined, filled in when on. */
+:root:not([data-look="smooth"]) input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none; width: 22px; height: 22px; margin: 0;
+  border-radius: 50%; border: 2px solid var(--muted); background: var(--panel-2); cursor: pointer; vertical-align: middle;
+}
+:root:not([data-look="smooth"]) input[type="checkbox"]:checked { background: var(--accent); box-shadow: inset 0 0 0 3px var(--panel-2); }
+
+/* The zoom bar in blocks. */
+:root:not([data-look="smooth"]) .zb-track { border: 0; border-radius: 0; box-shadow: var(--px-line2); }
+:root:not([data-look="smooth"]) .zb-thumb { border-radius: 0; border: 0; box-shadow: var(--px-line2); }
+:root:not([data-look="smooth"]) .zb-handle { border-radius: 0; }
+
+/* ======================= all pixel ======================= */
+
+:root[data-look="allpixel"] :is(button, select, input[type="text"], input[type="number"], input[type="search"]):not(.clip):not(.key):not(.tl-bar):not([role="tab"]):not(.tl-fold) {
+  border: 0; border-radius: 0; box-shadow: var(--px-line2);
+}
+/* Buttons that are on get a pressed-in shade along the bottom. */
+:root[data-look="allpixel"] button:is([aria-pressed="true"], .on) { box-shadow: var(--px-line2), inset 0 -4px 0 0 rgba(0, 0, 0, 0.3); }
+:root[data-look="allpixel"] .transport-bar { border-radius: 0; }
+:root[data-look="allpixel"] .seg label { border: 0; border-radius: 0; box-shadow: var(--px-line2); }
+:root[data-look="allpixel"] .seg input:checked + label { box-shadow: var(--px-line2), inset 0 -4px 0 0 rgba(0, 0, 0, 0.3); }
+:root[data-look="allpixel"] dialog { border: 0; border-radius: 0; box-shadow: var(--px-line), 8px 8px 0 0 var(--ink-soft); }
+:root[data-look="allpixel"] .clip { border-radius: 0; box-shadow: inset 0 -4px 0 0 rgba(0, 0, 0, 0.28), 0 0 0 2px var(--panel); }
+:root[data-look="allpixel"] .clip.selected { box-shadow: inset 0 -4px 0 0 rgba(0, 0, 0, 0.28), 0 0 0 3px var(--text); }
+:root[data-look="allpixel"] .track-chip { border-radius: 0; font-family: var(--pixel-font); font-weight: 500; }
+:root[data-look="allpixel"] .key.white { border-radius: 0; }
+:root[data-look="allpixel"] .key.black { border-radius: 0; }
+:root[data-look="allpixel"] .byline { font-family: var(--pixel-font); font-style: normal; }

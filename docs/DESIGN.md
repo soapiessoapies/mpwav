@@ -178,6 +178,7 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 7. Done: a Songs list (new, from the demo, duplicate, open, delete; saved in the browser), Export WAV (the whole song with its effects and mix), and export / import of a song file. Still to come: suggesting a tempo from a free recording, which needs recording without snapping first.
 8. Done: faster note editing (patterns, Play / Edit keys modes, shortcut list), Premiere-style zoom bars with zoom to fit, collapsible track rows, and Arrange panels (drag, move or collapse panels; side column left or right).
 9. Done: accessibility pass (axe plus manual WCAG 2.2 AA checks; fixes listed below) and install as an app with offline use.
+10. Done: the look, modeled on Bezier (Settings › Look and Motion).
 
 ## Accessibility audit (2026-10-08)
 
@@ -198,3 +199,16 @@ Still worth testing with people: NVDA on Windows and VoiceOver on iPhone, during
 ## Install and offline
 
 Sound Studio is a PWA: `manifest.webmanifest`, icons drawn by `tools/make-icons.js`, and a service worker (`sw.js`). Settings › App has an Install button where the browser supports one (Chrome, Edge) and the steps for Safari on iPhone / iPad. The service worker fetches fresh files when online (so pushes show up on the next load) and falls back to its cache offline or after 3 seconds on a slow connection.
+
+## The look (modeled on Bezier)
+
+The interface borrows Bezier's design language (the class's drawing app) while keeping Sound Studio's own colors, so high contrast stays the default and every background still works. Bezier's poster colors, logo and swoosh stay Bezier's.
+
+- **Type:** Nunito for words; the song title in Caveat Brush over a little sound wave (in place of Bezier's swoosh); Pixelify Sans on the Note Edit tabs. Numbers stay in Nunito with even-width digits, because in the pixel font a small 2, 3 or 5 reads as an 8.
+- **Paper tabs:** each Note Edit page is its own paper (a hint of a track color over the panel, with fine grain). The open tab stands taller and runs into its page; the row scrolls sideways when the tabs don't fit.
+- **Settings › Look** (like Bezier's):
+  - *Smooth:* soft, rounded controls (the paper tabs stay).
+  - *Pixel details* (default): pixel-block sliders with a round handle, circle toggles, notched tabs, chunky outlines with a hard offset shadow, and the transport as a rounded tool strip.
+  - *All pixel:* also squares off buttons, fields, dialogs and clips, with a pressed-in shade on whatever is on.
+- **Motion:** a nod, not a show. Buttons dip when pressed, a new page or dialog settles into place, and the picked tab hops once. Settings › Motion turns it off; so does the system's reduce-motion setting.
+- **Contrast:** outlines on paper use the lighter edge gray, and tests/contrast.test.js checks text, quiet text, the accent and outlines on every paper in every background.

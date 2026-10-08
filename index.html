@@ -14,17 +14,23 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sound Studio">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="preload" href="assets/fonts/nunito-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/look.css">
 <script>
   // Pick the layout before the first paint (Settings > Layout; app.js keeps it up to date).
   (function () {
-    var pick = "auto", theme = "contrast";
+    var pick = "auto", theme = "contrast", look = "pixel", motion = true;
     try {
       var saved = JSON.parse(localStorage.getItem("sound-studio.ui")) || {};
       pick = saved.layout || "auto";
       theme = saved.theme || "contrast";
+      look = saved.look || "pixel";
+      motion = saved.motion !== false;
     } catch (e) {}
     if (theme !== "contrast") document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.look = look;
+    if (!motion) document.documentElement.dataset.motion = "off";
     var w = window.innerWidth;
     document.documentElement.dataset.layout =
       pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
@@ -65,6 +71,7 @@
   <header class="title-block">
     <label for="song-title" class="sr-only">Song title</label>
     <input id="song-title" class="song-title" type="text" maxlength="80" autocomplete="off" spellcheck="false">
+    <svg class="title-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
     <div class="title-row">
       <p class="byline">by Phie &amp; Claude</p>
       <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Songs</button>
@@ -449,6 +456,16 @@
       </div>
     </fieldset>
     <p class="help">High contrast is the default. Every background keeps all text and controls at full readability (WCAG AA).</p>
+    <fieldset class="choice">
+      <legend>Look</legend>
+      <div class="seg">
+        <input type="radio" name="look" id="look-smooth" value="smooth"><label for="look-smooth">Smooth</label>
+        <input type="radio" name="look" id="look-pixel" value="pixel"><label for="look-pixel">Pixel details</label>
+        <input type="radio" name="look" id="look-allpixel" value="allpixel"><label for="look-allpixel">All pixel</label>
+      </div>
+    </fieldset>
+    <p class="help">Pixel details (the default) draws sliders as pixel blocks, toggles as circles and Note Edit's pages as paper tabs. All pixel also squares off buttons, fields and clips. Smooth keeps soft, rounded controls.</p>
+    <label class="check"><input type="checkbox" id="motion"> Motion: a small nod when you press or pick something</label>
   </section>
 
   <section aria-labelledby="set-app-h">
@@ -474,6 +491,8 @@
       <dt>Code</dt><dd>Phie &amp; Claude (Anthropic)</dd>
       <dt>Made for</dt><dd>Creative Coding &amp; Innovation</dd>
       <dt>Sound</dt><dd>Synthesized live in your browser with the Web Audio API</dd>
+      <dt>Look</dt><dd>Modeled on Bezier, the class's drawing app</dd>
+      <dt>Fonts</dt><dd>Nunito, Pixelify Sans and Caveat Brush (SIL Open Font License; in assets/fonts)</dd>
     </dl>
   </section>
 </dialog>
@@ -481,6 +500,7 @@
 <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
 <script src="src/version.js"></script>
+<script src="src/ui/fill.js"></script>
 <script src="src/audio/notes.js"></script>
 <script src="src/audio/params.js"></script>
 <script src="src/audio/envelope.js"></script>
