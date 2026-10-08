@@ -1,6 +1,6 @@
 {
-  "name": "Sound Studio",
-  "short_name": "Sound Studio",
+  "name": "mpwav",
+  "short_name": "mpwav",
   "description": "A music studio in the browser: a timeline of clips, synths, a mixing desk and a keyboard.",
   "id": "./",
   "start_url": "./",

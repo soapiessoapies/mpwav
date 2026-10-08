@@ -29,7 +29,7 @@
 
   // A file name from a song title: letters, numbers, spaces, dashes.
   const fileName = (title, ext) =>
-    ((title || "").replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 60) || "Sound Studio song") + ext;
+    ((title || "").replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 60) || "mpwav song") + ext;
 
   const api = { encode, fileName };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

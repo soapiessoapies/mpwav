@@ -8,20 +8,28 @@
 //     the same job from a keyboard or a screen reader
 // The layout is plain data, { main: [ids], side: [ids], bottom: [ids] },
 // saved with the other view settings.
+//
+// When the studio fits the window (Settings > Layout), panels sharing a
+// column split its height. A splitter between two of them (drag it, or
+// focus it and use the arrows) shares the room differently; the shares are
+// kept as { id: weight } in `sizes`.
 (function (root) {
   "use strict";
 
   const COLS = [["main", "Main column"], ["side", "Side column"], ["bottom", "Bottom"]];
 
   // panels: [{ id, name }]; layout: saved { main, side, bottom } or null;
-  // folded: ids of collapsed panels; h: { onChange(layout, folded, text) }
-  function create(panels, layout, folded, h) {
+  // folded: ids of collapsed panels; sizes: { id: weight } or null;
+  // h: { onChange(layout, folded, text), onSizes(sizes) }
+  function create(panels, layout, folded, sizes, h) {
     const DEFAULT = { main: ["playbox", "clip-editor"], side: ["note-edit"], bottom: ["keys-section"] };
     const cols = Object.fromEntries(COLS.map(([k]) => [k, document.getElementById("col-" + k)]));
     const nameOf = (id) => panels.find((p) => p.id === id).name;
     let state = valid(layout) ? clone(layout) : clone(DEFAULT);
     let foldedSet = new Set(folded || []);
     let arranging = false;
+    let weights = sizes && typeof sizes === "object" ? { ...sizes } : {};
+    const weight = (id) => (Number.isFinite(weights[id]) && weights[id] > 0 ? weights[id] : 1);
 
     function clone(l) { return { main: [...l.main], side: [...l.side], bottom: [...l.bottom] }; }
     // A saved layout must place each panel exactly once.
@@ -78,6 +86,89 @@
         if (fold) fold.setAttribute("aria-expanded", String(!isFolded));
       }
       for (const [k] of COLS) cols[k].classList.toggle("empty", !state[k].length);
+      placeSplitters();
+    }
+
+    // --- splitters between panels that share a column ---
+    // Only panels that stretch (not folded, not the keyboard) take part.
+    const stretches = (id) => id !== "keys-section" && !foldedSet.has(id) &&
+      !(id === "clip-editor" && document.getElementById("clip-body").hidden);
+    function placeSplitters() {
+      for (const old of document.querySelectorAll(".splitter")) old.remove();
+      for (const [k] of COLS) {
+        const ids = state[k].filter(stretches);
+        for (const id of state[k]) document.getElementById(id).style.flexGrow = stretches(id) ? weight(id) : "";
+        for (let i = 1; i < ids.length; i++) {
+          const a = ids[i - 1], b = ids[i];
+          const bar = document.createElement("div");
+          bar.className = "splitter";
+          bar.tabIndex = 0;
+          bar.setAttribute("role", "separator");
+          bar.setAttribute("aria-orientation", "horizontal");
+          bar.setAttribute("aria-label", `Share the room between ${nameOf(a)} and ${nameOf(b)}`);
+          bar.setAttribute("aria-valuemin", "10");
+          bar.setAttribute("aria-valuemax", "90");
+          showShare(bar, a, b);
+          bar.addEventListener("pointerdown", (e) => startSplit(e, bar, a, b));
+          bar.addEventListener("keydown", (e) => {
+            const share = 100 * weight(a) / (weight(a) + weight(b));
+            const step = { ArrowUp: -5, ArrowDown: 5, PageUp: -20, PageDown: 20 }[e.key];
+            const to = e.key === "Home" ? 10 : e.key === "End" ? 90 : step != null ? share + step : null;
+            if (to == null) return;
+            e.preventDefault();
+            setShare(bar, a, b, to);
+            h.onSizes({ ...weights });
+          });
+          document.getElementById(b).before(bar);
+        }
+      }
+    }
+    function showShare(bar, a, b) {
+      const share = Math.round(100 * weight(a) / (weight(a) + weight(b)));
+      bar.setAttribute("aria-valuenow", String(share));
+      bar.setAttribute("aria-valuetext", `${nameOf(a)} ${share}%, ${nameOf(b)} ${100 - share}%`);
+    }
+    // Shares the room; a share that would squash a panel below its tools
+    // (so the column has to scroll) is walked back until everything fits.
+    function setShare(bar, a, b, pct) {
+      const total = weight(a) + weight(b), was = 100 * weight(a) / total;
+      const col = bar.parentElement;
+      const put = (q) => {
+        const p = Math.max(10, Math.min(90, q)) / 100;
+        weights[a] = total * p;
+        weights[b] = total * (1 - p);
+        document.getElementById(a).style.flexGrow = weights[a];
+        document.getElementById(b).style.flexGrow = weights[b];
+      };
+      put(pct);
+      const fits = () => col.scrollHeight <= col.clientHeight + 1;
+      if (!fits() && pct !== was) {
+        // Halve the way back towards the old share until it fits again.
+        let lo = was, hi = pct;
+        for (let i = 0; i < 8; i++) {
+          const mid = (lo + hi) / 2;
+          put(mid);
+          if (fits()) lo = mid; else hi = mid;
+        }
+        put(lo);
+      }
+      showShare(bar, a, b);
+    }
+    function startSplit(e, bar, a, b) {
+      if (e.button > 0) return;
+      e.preventDefault();
+      const ha = document.getElementById(a).getBoundingClientRect().height;
+      const hb = document.getElementById(b).getBoundingClientRect().height;
+      const y0 = e.clientY;
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add("dragging");
+      const move = (ev) => setShare(bar, a, b, 100 * (ha + ev.clientY - y0) / (ha + hb));
+      bar.addEventListener("pointermove", move);
+      bar.addEventListener("pointerup", () => {
+        bar.removeEventListener("pointermove", move);
+        bar.classList.remove("dragging");
+        h.onSizes({ ...weights });
+      }, { once: true });
     }
 
     function changed(text) {
@@ -164,11 +255,13 @@
     function reset() {
       state = clone(DEFAULT);
       foldedSet = new Set();
+      weights = {};
+      h.onSizes({});
       changed("Panels back to the standard layout");
     }
 
     apply();
-    return { setArranging, reset, get arranging() { return arranging; } };
+    return { setArranging, reset, refresh: placeSplitters, get arranging() { return arranging; } };
   }
 
   root.Arrange = { create };

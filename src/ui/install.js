@@ -1,4 +1,4 @@
-// Installing Sound Studio as an app (Settings > App), and the service worker
+// Installing mpwav as an app (Settings > App), and the service worker
 // that makes it open offline.
 //
 // Chrome and Edge (Windows, Android) offer a real Install button through the
@@ -19,13 +19,13 @@
     function show() {
       els.button.hidden = !deferred;
       if (standalone()) {
-        els.help.textContent = "Sound Studio is installed and running as an app.";
+        els.help.textContent = "mpwav is installed and running as an app.";
       } else if (deferred) {
-        els.help.textContent = "Adds Sound Studio to your Start menu, desktop or home screen. It opens in its own window and works offline.";
+        els.help.textContent = "Adds mpwav to your Start menu, desktop or home screen. It opens in its own window and works offline.";
       } else if (ios) {
         els.help.textContent = "On iPhone or iPad: tap Share in Safari, then Add to Home Screen. It opens full screen and works offline.";
       } else {
-        els.help.textContent = "Your browser can install Sound Studio from its menu (Install app, or Add to Home screen). Chrome and Edge also show an Install button here.";
+        els.help.textContent = "Your browser can install mpwav from its menu (Install app, or Add to Home screen). Chrome and Edge also show an Install button here.";
       }
     }
 
@@ -37,7 +37,7 @@
     root.addEventListener("appinstalled", () => {
       deferred = null;
       show();
-      say("Sound Studio installed");
+      say("mpwav installed");
     });
     els.button.addEventListener("click", async () => {
       if (!deferred) return;

@@ -1,5 +1,5 @@
 @echo off
-rem Double-click launcher for Sound Studio.
+rem Double-click launcher for mpwav.
 rem Opens the app in Google Chrome as a standalone app window (no tabs, no
 rem address bar); falls back to the default browser if Chrome isn't found.
 setlocal

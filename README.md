@@ -1,4 +1,4 @@
-# Sound Studio (working title)
+# mpwav (working title)
 
 An Ableton-inspired music studio in the browser: arrangement view, synths, and a mixer.
 One web app serves both screen sizes. Desktop gets the full arrangement view; phones get
@@ -30,11 +30,11 @@ level of sound design.
 
 ## Running it
 
-- **Live:** https://soapiessoapies.github.io/sound-studio/ (GitHub Pages, redeploys on every push to `main`)
+- **Live:** https://soapiessoapies.github.io/mpwav/ (GitHub Pages, redeploys on every push to `main`)
 
-- **Install it:** Settings › App › Install Sound Studio (Chrome or Edge on Windows and Android), or on an
+- **Install it:** Settings › App › Install mpwav (Chrome or Edge on Windows and Android), or on an
   iPhone / iPad: Safari › Share › Add to Home Screen. Once loaded it works offline (`sw.js`).
-- **Double-click `Sound Studio.cmd`** to open it in Chrome as an app window.
+- **Double-click `mpwav.cmd`** to open it in Chrome as an app window.
 - **To test on a phone:** run `npm run serve` and open the "on your network" address it prints
   from a phone on the same Wi-Fi.
 - **Tests:** `npm test` covers the song model, song library, WAV encoding, undo history, note math, envelopes, voices, presets, the WCAG AA
@@ -62,7 +62,10 @@ level of sound design.
 | Tracks | Note Edit › Track: rename, color, move up/down, remove, add (up to 12) |
 | Song | Note Edit › Song: key and scale (dims notes outside it, optional keep-in-key), snap, swing |
 | Songs | The Songs button by the title: new, from the demo, duplicate, open, delete; Export WAV; export / import a song file |
-| Settings | Layout (Auto / Desktop / Phone), Arrange panels, background, look (Smooth / Pixel details / All pixel), motion, install as an app, single-key shortcuts, credits |
+| One screen | On desktop everything fits the window (Settings › Layout › Fit to the window); a panel with more than fits scrolls inside itself. Drag the bar between two panels (or focus it and use the arrows) to share the room differently |
+| Section and Tempo menus | The Section and Tempo buttons in the playing box open small menus (section tools; tap tempo, metronome, count-in, tempo changes) |
+| Tips | Settings › Tutorial › Show tips puts a short how-to under each part; screen readers always hear them |
+| Settings | Layout (Auto / Desktop / Phone, fit to the window), Arrange panels, tutorial tips, background, look (Smooth / Pixel details / All pixel), motion, install as an app, single-key shortcuts, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |
 | Stop every note | `Esc`, or Stop all notes |

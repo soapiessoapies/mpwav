@@ -29,5 +29,5 @@ test("samples are interleaved left/right and clipped to full scale", () => {
 
 test("file names come from the song title, minus characters files can't have", () => {
   assert.equal(W.fileName("My song: take 2/3?", ".wav"), "My song take 23.wav");
-  assert.equal(W.fileName("   ", ".wav"), "Sound Studio song.wav");
+  assert.equal(W.fileName("   ", ".wav"), "mpwav song.wav");
 });

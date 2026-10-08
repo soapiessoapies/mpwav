@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#121419">
 <meta name="description" content="A music studio in the browser: a timeline of clips, synths, a mixing desk and a keyboard.">
-<title>Sound Studio</title>
+<title>mpwav</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Sound Studio">
+<meta name="apple-mobile-web-app-title" content="mpwav">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="preload" href="assets/fonts/nunito-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles/main.css">
@@ -20,27 +20,31 @@
 <script>
   // Pick the layout before the first paint (Settings > Layout; app.js keeps it up to date).
   (function () {
-    var pick = "auto", theme = "contrast", look = "pixel", motion = true;
+    var pick = "auto", theme = "contrast", look = "pixel", motion = true, fit = true, tips = false;
     try {
       var saved = JSON.parse(localStorage.getItem("sound-studio.ui")) || {};
       pick = saved.layout || "auto";
       theme = saved.theme || "contrast";
       look = saved.look || "pixel";
       motion = saved.motion !== false;
+      fit = saved.fit !== false;
+      tips = saved.tips === true;
     } catch (e) {}
     if (theme !== "contrast") document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.look = look;
     if (!motion) document.documentElement.dataset.motion = "off";
     var w = window.innerWidth;
-    document.documentElement.dataset.layout =
-      pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
+    var layout = pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
+    document.documentElement.dataset.layout = layout;
+    document.documentElement.dataset.fit = fit && layout === "wide" ? "on" : "off";
+    if (tips) document.documentElement.dataset.tips = "on";
   })();
 </script>
 </head>
 <body>
 <a class="skip" href="#playbox">Skip to the playing box</a>
 <main class="studio">
-<h1 class="sr-only">Sound Studio</h1>
+<h1 class="sr-only">mpwav</h1>
   <!-- Transport: above the playing box -->
   <div class="transport-bar" role="group" aria-label="Transport">
     <button id="sound" class="sound" type="button" aria-pressed="false">
@@ -106,12 +110,13 @@
           <button id="rows-fold" type="button" class="fit-btn" aria-pressed="false">Collapse rows</button>
         </div>
       </div>
-      <p id="playbox-help" class="help">
+      <p id="playbox-help" class="help tip">
         Drag a clip to move it and its right edge to stretch it (the loop repeats). Double-click or double-tap
         a clip to edit its notes, or an empty spot to make a new clip. Click the ruler to choose where Play starts;
         drag along it to set the loop. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
         <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
       </p>
+      <div class="tool-row">
       <div class="toolbar" role="group" aria-label="Clip">
         <span class="toolbar-label" aria-hidden="true">Clip</span>
         <button type="button" id="clip-copy" aria-keyshortcuts="Control+C">Copy</button>
@@ -121,22 +126,25 @@
         <button type="button" id="clip-link" aria-keyshortcuts="Control+Shift+D">Linked copy</button>
         <button type="button" id="clip-delete" aria-keyshortcuts="Delete">Delete</button>
       </div>
-      <div class="toolbar" role="group" aria-label="Section (the loop range, every track)">
-        <span class="toolbar-label" aria-hidden="true">Section</span>
+      <div class="toolbar">
+        <button type="button" class="menu-btn" popovertarget="sec-menu">Section</button>
+        <button type="button" class="menu-btn" popovertarget="tempo-menu">Tempo</button>
+      </div>
+      </div>
+      <div id="sec-menu" class="menu" popover role="group" aria-label="Section (the loop range, every track)">
         <button type="button" id="sec-dup">Duplicate section</button>
         <button type="button" id="sec-insert">Insert bar at cursor</button>
         <button type="button" id="sec-delete">Delete section</button>
       </div>
-      <div class="toolbar" role="group" aria-label="Tempo">
-        <span class="toolbar-label" aria-hidden="true">Tempo</span>
+      <div id="tempo-menu" class="menu" popover role="group" aria-label="Tempo">
         <button type="button" id="tap" aria-describedby="tap-help">Tap tempo</button>
         <button type="button" id="metronome" aria-pressed="false">Metronome</button>
         <button type="button" id="count-in" aria-pressed="true" aria-describedby="count-in-help">Count-in</button>
         <button type="button" id="tempo-add">Tempo change at cursor</button>
+        <ul id="tempo-list" class="tempo-list" aria-label="Tempo changes"></ul>
       </div>
       <p id="tap-help" class="sr-only">Tap in time with the beat, four times or more; the tempo follows your taps.</p>
       <p id="count-in-help" class="sr-only">When on, recording starts with one bar of clicks so you can come in on time.</p>
-      <ul id="tempo-list" class="tempo-list" aria-label="Tempo changes"></ul>
       <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
       <div id="tl-zoombar"></div>
       <p id="song-status" class="song-status"></p>
@@ -153,11 +161,11 @@
         <button id="close-clip" type="button" class="quiet">Close</button>
       </div>
       <p id="clip-empty" class="help">
-        No clip open. Double-click a clip in the playing box (or select it and press <kbd>Enter</kbd>) to edit its notes.
-        To start from nothing, press New clip.
+        No clip open. Double-click a clip (or select it and press <kbd>Enter</kbd>) to edit its notes, or press New clip.
       </p>
       <div id="clip-body">
         <p id="clip-status" class="loop-status"></p>
+        <div class="tool-row">
         <div class="toolbar" role="group" aria-label="Notes">
           <span class="toolbar-label" aria-hidden="true">Notes</span>
           <button type="button" id="notes-all" aria-keyshortcuts="Control+A">Select all</button>
@@ -172,18 +180,19 @@
           <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
           <button id="clear" type="button" class="quiet">Clear</button>
         </div>
-        <p id="roll-help" class="help">
+        </div>
+        <p id="roll-help" class="help tip">
           Scroll up and down for higher and lower notes. Click an empty spot to add a note (drag right as you click to draw it longer);
           drag a note to move it and its right edge to stretch it; double-click a note to delete it. On a phone, tap to add.
           With a keyboard: arrows move the cursor (<kbd>Ctrl</kbd> a beat, <kbd>Page Up</kbd>/<kbd>Page Down</kbd> an octave),
           <kbd>Enter</kbd> adds or removes a note, <kbd>Shift</kbd> + arrows stretch it, <kbd>Alt</kbd> + arrows move it,
           <kbd>Delete</kbd> removes the selected notes. <kbd>Space</kbd> plays and stops from anywhere.
         </p>
-        <p id="step-help" class="help">
+        <p id="step-help" class="help tip">
           Step input: play a key (on screen or on your computer keyboard) and that note goes in at the cursor,
           then the cursor moves on by the new-note length. Hold several keys for a chord. It's always on while the piano roll has focus.
         </p>
-        <p id="record-help" class="help">
+        <p id="record-help" class="help tip">
           Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
           snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
         </p>
@@ -250,7 +259,7 @@
             </div>
             <div id="arps" class="stamp-grid"></div>
           </fieldset>
-          <p class="help">Number keys work too: 1–7 stamp a rhythm, 8 / 9 / 0 make an arpeggio up / down / up-and-down.</p>
+          <p class="help tip">Number keys work too: 1–7 stamp a rhythm, 8 / 9 / 0 make an arpeggio up / down / up-and-down.</p>
         </section>
       </div>
       <div id="p-track" class="page" role="tabpanel" aria-labelledby="tab-p-track" tabindex="0" hidden>
@@ -280,13 +289,13 @@
           </div>
         </fieldset>
         <label class="check"><input type="checkbox" id="key-keep"> Keep new notes in key</label>
-        <p class="help">With a scale chosen, piano roll rows outside it are dimmed. Keep in key moves notes you place or drag onto the nearest note that fits; what you play and record stays as played.</p>
+        <p class="help tip">With a scale chosen, piano roll rows outside it are dimmed. Keep in key moves notes you place or drag onto the nearest note that fits; what you play and record stays as played.</p>
         <label class="inline">Snap <select id="snap"></select></label>
         <div class="ctl">
           <div class="ctl-head"><label for="swing">Swing</label><output id="swing-out" for="swing" aria-hidden="true"></output></div>
           <input type="range" id="swing" min="0" max="50" step="5">
         </div>
-        <p class="help">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
+        <p class="help tip">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
       </div>
       <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
         <div class="preset">
@@ -330,7 +339,7 @@
         <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
       </div>
       <div id="keys-body">
-        <p id="keys-help" class="help">
+        <p id="keys-help" class="help tip">
           Plays the selected track. Tap or click the keys, or use your computer keys
           <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work even with the keyboard hidden).
           <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
@@ -444,6 +453,7 @@
       </div>
     </fieldset>
     <p class="help">Auto picks from the window's width. Desktop always uses the side-by-side layout; Phone always stacks everything with the keyboard pinned at the bottom.</p>
+    <label class="check"><input type="checkbox" id="fit-screen"> Fit to the window: on desktop every panel stays on one screen and scrolls inside itself</label>
     <button type="button" id="arrange-btn" aria-keyshortcuts="Control+Shift+L">Arrange panels</button>
     <fieldset class="choice">
       <legend>Background</legend>
@@ -468,9 +478,15 @@
     <label class="check"><input type="checkbox" id="motion"> Motion: a small nod when you press or pick something</label>
   </section>
 
+  <section aria-labelledby="set-tips-h">
+    <h3 id="set-tips-h">Tutorial</h3>
+    <label class="check"><input type="checkbox" id="show-tips"> Show tips: a short how-to under each part of the studio</label>
+    <p class="help">Tips are always read out by screen readers, even when they're hidden.</p>
+  </section>
+
   <section aria-labelledby="set-app-h">
     <h3 id="set-app-h">App</h3>
-    <button id="install-btn" type="button" hidden>Install Sound Studio</button>
+    <button id="install-btn" type="button" hidden>Install mpwav</button>
     <p id="install-help" class="help"></p>
     <p id="offline-status" class="help" role="status"></p>
   </section>
@@ -484,7 +500,7 @@
 
   <section aria-labelledby="set-credits-h">
     <h3 id="set-credits-h">Credits</h3>
-    <p class="credits-title"><strong>Sound Studio</strong> <span id="version"></span></p>
+    <p class="credits-title"><strong>mpwav</strong> <span id="version"></span></p>
     <dl class="credits">
       <dt>Made by</dt><dd>Phie &amp; Claude</dd>
       <dt>Design and direction</dt><dd>Phie</dd>

@@ -1,9 +1,9 @@
-// The service worker that lets Sound Studio install as an app and open
+// The service worker that lets mpwav install as an app and open
 // offline. Network first: online, every file comes fresh (so a new push
 // shows up on the next load) and the copy in the cache is refreshed;
 // offline, the cached copy is used. SHELL is every file the app needs to
 // start; a test checks it lists everything index.html loads.
-const CACHE = "sound-studio-v2";
+const CACHE = "mpwav-v1";
 const SHELL = [
   "./",
   "index.html",

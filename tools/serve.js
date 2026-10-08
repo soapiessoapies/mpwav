@@ -27,7 +27,7 @@ http.createServer((req, res) => {
     res.end(data);
   });
 }).listen(PORT, () => {
-  console.log(`Sound Studio: http://localhost:${PORT}`);
+  console.log(`mpwav: http://localhost:${PORT}`);
   for (const list of Object.values(os.networkInterfaces())) {
     for (const a of list) if (a.family === "IPv4" && !a.internal) console.log(`  on your network: http://${a.address}:${PORT}`);
   }

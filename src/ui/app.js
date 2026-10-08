@@ -38,7 +38,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -57,7 +57,8 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, ...uiSaved };
+  let arrange = null; // window edit mode (set up near the end)
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -737,6 +738,7 @@
     if (open && !o) open = null; // the clip was deleted
     $("clip-empty").hidden = !!o;
     $("clip-body").hidden = !o;
+    arrange?.refresh(); // an empty clip editor stops sharing the column
     nameField.disabled = barsSel.disabled = lenField.disabled = $("close-clip").disabled = !o;
     if (!o) {
       $("clip-h").textContent = "Clip";
@@ -1168,6 +1170,29 @@
   function showTempoTools() {
     metroBtn.setAttribute("aria-pressed", String(!!ui.metronome));
     countBtn.setAttribute("aria-pressed", String(!!ui.countIn));
+    // The Tempo menu's button shows a dot while the metronome is on.
+    document.querySelector('[popovertarget="tempo-menu"]').classList.toggle("lit", !!ui.metronome);
+  }
+
+  // --- Section and Tempo menus (popovers): they open under their button,
+  // and an action closes its menu (toggles like Metronome leave it open) ---
+  for (const menu of document.querySelectorAll(".menu[popover]")) {
+    const btn = document.querySelector(`[popovertarget="${menu.id}"]`);
+    menu.addEventListener("toggle", (e) => {
+      if (e.newState !== "open") return;
+      const r = btn.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
+      const below = r.bottom + 4;
+      menu.style.top = (below + menu.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - menu.offsetHeight - 4) : below) + "px";
+      menu.querySelector("button")?.focus();
+    });
+    menu.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b && !b.hasAttribute("aria-pressed") && b.parentElement === menu && b.id !== "tap" && b.id !== "tempo-add") {
+        menu.hidePopover();
+        btn.focus();
+      }
+    });
   }
   metroBtn.addEventListener("click", () => {
     ui.metronome = !ui.metronome;
@@ -1465,7 +1490,7 @@
   $("export-file").addEventListener("click", () => {
     if (saveTimer) writeNow();
     const name = Wav.fileName(song.title, ".soundstudio.json");
-    const data = { app: "Sound Studio", format: 1, song: JSON.parse(JSON.stringify(song)) };
+    const data = { app: "mpwav", format: 1, song: JSON.parse(JSON.stringify(song)) };
     download(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }), name);
     exportStatus.textContent = `Saved ${name}. Import it here, in any browser, to keep working on it.`;
   });
@@ -1479,7 +1504,7 @@
     try {
       const data = JSON.parse(await file.text());
       const songData = data && data.song ? data.song : data;
-      if (!songData || !Array.isArray(songData.tracks)) throw new Error("that file isn't a Sound Studio song");
+      if (!songData || !Array.isArray(songData.tracks)) throw new Error("that file isn't an mpwav song");
       addAndOpen(songData);
       exportStatus.textContent = `Imported ${song.title}.`;
     } catch (e) {
@@ -1562,7 +1587,7 @@
   // --- title ---
   const titleField = $("song-title");
   titleField.value = song.title;
-  const showTitle = () => { document.title = `${song.title} — Sound Studio`; };
+  const showTitle = () => { document.title = `${song.title} — mpwav`; };
   titleField.addEventListener("input", () => { song.title = titleField.value.slice(0, 80); showTitle(); save(); });
   titleField.addEventListener("change", () => {
     song.title = titleField.value.trim() || "Untitled song";
@@ -1704,8 +1729,10 @@
     const w = window.innerWidth;
     const want = ui.layout === "desktop" ? "wide" : ui.layout === "phone" ? "compact"
       : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
-    if (document.documentElement.dataset.layout !== want) {
+    const fit = ui.fit && want === "wide" ? "on" : "off";
+    if (document.documentElement.dataset.layout !== want || document.documentElement.dataset.fit !== fit) {
       document.documentElement.dataset.layout = want;
+      document.documentElement.dataset.fit = fit;
       setKeyboard(kb.base, false);
       roll.rebuild();
     }
@@ -1720,6 +1747,8 @@
     ($("theme-" + ui.theme) || $("theme-contrast")).checked = true;
     ($("look-" + ui.look) || $("look-pixel")).checked = true;
     $("motion").checked = ui.motion;
+    $("fit-screen").checked = ui.fit;
+    $("show-tips").checked = ui.tips;
     settings.showModal();
   });
   $("settings-close").addEventListener("click", () => settings.close());
@@ -1773,11 +1802,34 @@
     save();
   });
 
+  // Fit to the window (desktop): no page scrolling, panels scroll inside themselves.
+  $("fit-screen").addEventListener("change", (e) => {
+    ui.fit = e.target.checked;
+    applyLayout();
+    timeline.render();
+    Announce.say(ui.fit ? "Fit to the window on" : "Fit to the window off");
+    save();
+  });
+  // Tutorial: the how-to tips under each part show on screen, or stay for screen readers only.
+  const showTips = () => {
+    if (ui.tips) document.documentElement.dataset.tips = "on";
+    else delete document.documentElement.dataset.tips;
+  };
+  $("show-tips").addEventListener("change", (e) => {
+    ui.tips = e.target.checked;
+    showTips();
+    timeline.render();
+    roll.rebuild();
+    Announce.say(ui.tips ? "Tips shown" : "Tips hidden");
+    save();
+  });
+  showTips();
+
   const fsBtn = $("fullscreen");
   if (!document.fullscreenEnabled) {
     // iPhones only allow fullscreen for video; add to the home screen instead.
     fsBtn.disabled = true;
-    $("fullscreen-help").textContent = "This browser doesn't allow fullscreen pages. On a phone, add Sound Studio to your home screen instead.";
+    $("fullscreen-help").textContent = "This browser doesn't allow fullscreen pages. On a phone, add mpwav to your home screen instead.";
   }
   fsBtn.addEventListener("click", async () => {
     try {
@@ -1794,12 +1846,17 @@
   });
 
   // --- window edit mode: move panels between the columns ---
-  const arrange = Arrange.create([
+  arrange = Arrange.create([
     { id: "playbox", name: "Playing box" },
     { id: "clip-editor", name: "Clip editor" },
     { id: "note-edit", name: "Note Edit" },
     { id: "keys-section", name: "Keyboard" },
-  ], ui.panels, ui.folded, {
+  ], ui.panels, ui.folded, ui.sizes, {
+    onSizes(sizes) {
+      ui.sizes = sizes;
+      timeline.render();
+      save();
+    },
     onChange(layout, folded, text) {
       ui.panels = layout;
       ui.folded = folded;

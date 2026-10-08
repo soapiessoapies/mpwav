@@ -1,4 +1,4 @@
-/* Sound Studio. Dark, studio-style, with every text and control color
+/* mpwav. Dark, studio-style, with every text and control color
    checked against WCAG AA (tests/contrast.test.js). */
 
 :root {
@@ -837,3 +837,124 @@ body.arranging-drag, body.arranging-drag * { cursor: grabbing !important; user-s
 }
 /* Long checkbox labels in dialogs wrap on phones instead of running off. */
 dialog .check { white-space: normal; align-items: flex-start; }
+
+/* ---------- tutorial tips (Settings > Tutorial) ----------
+   The how-to paragraphs stay in the page for screen readers (controls point
+   at them with aria-describedby) but only show when tips are on. */
+:root:not([data-tips="on"]) .tip {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.tool-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+.tool-row > .toolbar, .tool-row > .pattern-tools { margin-bottom: 8px; }
+.tool-row .toolbar-label { min-width: 0; }
+
+/* ---------- fit to the window (desktop; Settings > Layout) ----------
+   The studio is exactly one screen tall: the top row, then the columns,
+   then the keyboard. Nothing scrolls the page; a panel with more than fits
+   scrolls inside itself (the timeline, the piano roll, a Note Edit page). */
+:root[data-fit="on"] { --gap: 10px; }
+[data-fit="on"] body { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+[data-fit="on"] .studio {
+  height: 100vh; height: 100dvh; max-width: none;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+/* No arranging bar: the empty row's gap folds away. */
+[data-fit="on"] .studio:has(> #arrange-bar[hidden]) > .col-main,
+[data-fit="on"] .studio:has(> #arrange-bar[hidden]) > .col-side { margin-top: calc(-1 * var(--gap)); }
+[data-fit="on"] .transport-bar { position: static; padding: 6px 10px; gap: 8px; }
+[data-fit="on"] .transport-bar button, [data-fit="on"] .tempo input { min-height: 40px; }
+[data-fit="on"] .title-block { align-self: center; }
+[data-fit="on"] .song-title { font-size: 1.3rem; padding: 0; }
+[data-fit="on"] .title-wave { margin: 0 0 1px; }
+[data-fit="on"] .title-row button { min-height: 30px; }
+
+[data-fit="on"] .col { display: flex; flex-direction: column; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+[data-fit="on"] .col-side { position: static; max-height: none; }
+[data-fit="on"] .col-bottom { max-height: 45vh; }
+[data-fit="on"] .col > .panel { flex: 1 1 0; display: flex; flex-direction: column; padding: 10px 12px; }
+[data-fit="on"] .col > .panel > * { flex: 0 0 auto; }
+/* Panels that don't need to grow keep their own height. */
+[data-fit="on"] .col > .panel.folded,
+[data-fit="on"] .col > .keys-panel,
+[data-fit="on"] .col > .clip-editor:has(#clip-body[hidden]) { flex: 0 0 auto; }
+[data-fit="on"] .col > .clip-editor { flex-grow: 1.2; }
+[data-fit="on"] .panel-head { margin-bottom: 8px; gap: 8px 12px; }
+[data-fit="on"] .panel-head button, [data-fit="on"] .panel-head select,
+[data-fit="on"] .panel-head input, [data-fit="on"] .loop-range input { min-height: 36px; }
+[data-fit="on"] .toolbar button { min-height: 32px; }
+[data-fit="on"] .tool-row > .toolbar, [data-fit="on"] .tool-row > .pattern-tools { margin-bottom: 6px; }
+[data-fit="on"] .pattern-tools select, [data-fit="on"] .pattern-tools button { min-height: 32px; }
+[data-fit="on"] .loop-status { margin-bottom: 6px; padding: 4px 10px; }
+[data-fit="on"] .song-status { margin-top: 4px; font-size: 0.85rem; }
+[data-fit="on"] .zoombar { margin-top: 4px; }
+[data-fit="on"] .zb-track { height: 26px; }
+
+/* The scrolling insides take whatever room is left. */
+[data-fit="on"] .playbox > .tl-scroll { flex: 1 1 0; min-height: 96px; overflow-y: auto; }
+[data-fit="on"] .tl-ruler-row { position: sticky; top: 0; z-index: 4; background: var(--panel-2); }
+[data-fit="on"] .clip-editor > #clip-body { flex: 1 1 0; display: flex; flex-direction: column; }
+[data-fit="on"] #clip-body > * { flex: 0 0 auto; }
+[data-fit="on"] #clip-body > .roll { flex: 1 1 0; min-height: 120px; height: auto; }
+[data-fit="on"] .note-edit .pager { margin-bottom: 8px; }
+[data-fit="on"] .note-edit > .page { flex: 1 1 0; min-height: 0; overflow-y: auto; align-content: start; padding: 2px 4px 2px 0; }
+[data-fit="on"] .keys-panel .panel-head { margin-bottom: 6px; }
+[data-fit="on"] .keys { height: clamp(84px, 13vh, 150px); }
+
+/* ---------- Section and Tempo menus (popovers under their buttons) ---------- */
+.menu-btn { display: inline-flex; align-items: center; gap: 8px; }
+.menu-btn::after {
+  content: ""; width: 7px; height: 7px; margin-top: -4px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg);
+}
+.menu-btn.lit::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.menu {
+  position: fixed; inset: auto; margin: 0; max-width: min(420px, calc(100vw - 16px));
+  display: none; flex-direction: column; align-items: stretch; gap: 6px; padding: 10px;
+  color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.menu:popover-open { display: flex; }
+.menu > button { min-height: 40px; text-align: left; }
+.menu .tempo-list { margin: 4px 0 0; }
+.menu .tempo-list:empty { display: none; }
+
+/* ---------- fit: tighter (keyboard tools beside the keys, status lines for screen readers only) ---------- */
+[data-fit="on"] .keys-panel:has(.disclosure[aria-expanded="true"]) {
+  display: grid; grid-template-columns: minmax(0, 350px) minmax(0, 1fr); gap: 0 12px; align-items: start;
+}
+[data-fit="on"] .keys-panel .panel-head { margin: 0; gap: 6px; }
+[data-fit="on"] .keys-panel .panel-head > * { min-height: 36px; }
+[data-fit="on"] .keys-panel .panel-head button, [data-fit="on"] .keys-panel .seg label { min-height: 36px; }
+[data-fit="on"] .keys-panel .panel-head h2 { margin-right: 0; }
+[data-fit="on"] .keys-panel .check { min-height: 36px; }
+[data-fit="on"] .keys { height: clamp(96px, 15vh, 160px); }
+[data-fit="on"] #song-status,
+[data-fit="on"] #clip-status {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+[data-fit="on"] .keys-panel .panel-head .octave { margin-right: auto; }
+[data-fit="on"] .keys-panel .panel-head .oct-label { min-width: 5.5em; }
+[data-fit="on"] .keys-panel .check { margin-right: 4px; }
+
+/* ---------- splitters between panels (fit to the window) ---------- */
+.splitter { display: none; }
+[data-fit="on"] .splitter {
+  display: block; flex: 0 0 auto; position: relative; height: 14px; margin: calc(-7px - var(--gap) / 2) 0; z-index: 2;
+  cursor: row-resize; touch-action: none;
+}
+[data-fit="on"] .splitter::after {
+  content: ""; position: absolute; left: 50%; top: 5px; width: 64px; height: 4px; margin-left: -32px;
+  border-radius: 2px; background: var(--line);
+}
+[data-fit="on"] .splitter:hover::after, [data-fit="on"] .splitter.dragging::after { background: var(--accent); }
+[data-fit="on"] .splitter:focus-visible { outline: none; }
+[data-fit="on"] .splitter:focus-visible::after { background: var(--focus); height: 6px; top: 4px; box-shadow: 0 0 0 2px var(--bg); }
+[data-fit="on"] .toolbar-label { display: none; } /* the group's aria-label still names it */
+[data-fit="on"] .clip-name-field input { width: 9em; }
+[data-fit="on"] .tool-row { gap: 0 12px; }
+[data-fit="on"] .toolbar { gap: 4px; }
+[data-fit="on"] .toolbar button, [data-fit="on"] .pattern-tools button { padding: 0 9px; }
+[data-fit="on"] .pattern-tools { gap: 6px 10px; }

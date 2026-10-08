@@ -1,4 +1,4 @@
-# Sound Studio — Design
+# mpwav — Design
 
 Shared, commentable version (the one to edit and hand in):
 https://claude.ai/code/artifact/4335e52a-e095-44b2-b6ed-ce0a0e6edf48 — this file is the repo copy, kept in step with it.
@@ -7,11 +7,11 @@ As of 2026-10-07. Status: agreed direction, not built yet.
 
 ## Overview
 
-Sound Studio will open on an Ableton-style timeline where every track's music sits in colored blocks that you place, stretch, copy and paste. It is a browser music studio for musically inclined beginners and intermediates, sighted or visually impaired, built for Creative Coding & Innovation.
+mpwav will open on an Ableton-style timeline where every track's music sits in colored blocks that you place, stretch, copy and paste. It is a browser music studio for musically inclined beginners and intermediates, sighted or visually impaired, built for Creative Coding & Innovation.
 
 **The class brief requires:** it works on a phone, meets WCAG AA contrast, is fully keyboard-navigable and works with screen readers, ships as a live URL, and is tested by 5 people outside the class.
 
-**What exists today** ([live site](https://soapiessoapies.github.io/sound-studio/)): four synth tracks (Lead, Bass, Pad, Hat), a mixing desk, a 16-step pattern grid with slots A–D, recording from the keyboard, a 16-bar arrangement grid, the Sound tab (synth, morph pad, Warp effects) and tabs for small screens. This design replaces the pattern grid and arrangement grid with one timeline; the sound and mixer parts stay.
+**What exists today** ([live site](https://soapiessoapies.github.io/mpwav/)): four synth tracks (Lead, Bass, Pad, Hat), a mixing desk, a 16-step pattern grid with slots A–D, recording from the keyboard, a 16-bar arrangement grid, the Sound tab (synth, morph pad, Warp effects) and tabs for small screens. This design replaces the pattern grid and arrangement grid with one timeline; the sound and mixer parts stay.
 
 ## Layout sketch
 
@@ -115,7 +115,7 @@ Notes are placed in bars and beats, not seconds, so changing the tempo speeds th
 - **Any tempo, any time.** Type a BPM or drag the number (20–300). It can change while playing; the song keeps its place.
 - **Tap tempo.** Tap the Tap tempo button in time with the beat you hear in your head; the BPM follows your last few taps. (No T shortcut: T already plays F# on the computer keyboard.)
 - **Tempo changes along the song.** Tempo markers on the ruler: a marker at bar 9 can switch from 110 to 140, either as a jump or as a gradual ramp up to it. The ruler shows the BPM at each marker.
-- **Set the tempo after recording (stretch goal).** Record freely without a click, then Sound Studio suggests a tempo from the notes' spacing and snaps them to the grid. Snapping already works; guessing the tempo is the hard part, so this comes last.
+- **Set the tempo after recording (stretch goal).** Record freely without a click, then mpwav suggests a tempo from the notes' spacing and snaps them to the grid. Snapping already works; guessing the tempo is the hard part, so this comes last.
 - **Metronome.** An optional click while playing or recording, with a one-bar count-in before recording starts.
 
 ## Tracks, panels and song settings
@@ -180,6 +180,13 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 9. Done: accessibility pass (axe plus manual WCAG 2.2 AA checks; fixes listed below) and install as an app with offline use.
 10. Done: the look, modeled on Bezier (Settings › Look and Motion).
 
+**Next round (agreed 2026-10-08, after renaming the app mpwav)**
+
+11. Done: one screen on desktop. Every panel fits the window and scrolls inside itself (no more gap under Note Edit); a splitter between panels shares the room; Section and Tempo tools moved into menus; the keyboard's tools sit beside the keys; the how-to text moved to Settings › Tutorial › Show tips (screen readers still hear it).
+12. Clips that show more, and notes edited right on the timeline: bigger note blocks (pitch by height, loudness by brightness); click a note in a clip to select, drag or stretch it, snapped to the grid.
+13. Per-note sound: a note can override its track's sound — pitch slide / bend, fine tune, its own filter brightness and pan, and SFX tools (pitch sweep, vibrato amount, retrigger / stutter, noise burst) — on the Note page.
+14. Audio upload (.wav / .mp3), both ways: as a sampler instrument for a track (plays at any pitch), and as audio clips on the timeline. Edit with trim, fades, reverse, gain and the Warp effects; clips snap to bars and beats, with an optional fit-to-tempo stretch. Sounds are kept in the browser and travel in song-file exports.
+
 ## Accessibility audit (2026-10-08)
 
 Checked with axe-core (WCAG 2.0 to 2.2 AA plus best practice) in every layout (320, 390, 800 and 1280 px wide), every Note Edit page, the clip editor, all dialogs and arrange mode, then by hand for what axe can't judge. Fixed:
@@ -198,11 +205,11 @@ Still worth testing with people: NVDA on Windows and VoiceOver on iPhone, during
 
 ## Install and offline
 
-Sound Studio is a PWA: `manifest.webmanifest`, icons drawn by `tools/make-icons.js`, and a service worker (`sw.js`). Settings › App has an Install button where the browser supports one (Chrome, Edge) and the steps for Safari on iPhone / iPad. The service worker fetches fresh files when online (so pushes show up on the next load) and falls back to its cache offline or after 3 seconds on a slow connection.
+mpwav is a PWA: `manifest.webmanifest`, icons drawn by `tools/make-icons.js`, and a service worker (`sw.js`). Settings › App has an Install button where the browser supports one (Chrome, Edge) and the steps for Safari on iPhone / iPad. The service worker fetches fresh files when online (so pushes show up on the next load) and falls back to its cache offline or after 3 seconds on a slow connection.
 
 ## The look (modeled on Bezier)
 
-The interface borrows Bezier's design language (the class's drawing app) while keeping Sound Studio's own colors, so high contrast stays the default and every background still works. Bezier's poster colors, logo and swoosh stay Bezier's.
+The interface borrows Bezier's design language (the class's drawing app) while keeping mpwav's own colors, so high contrast stays the default and every background still works. Bezier's poster colors, logo and swoosh stay Bezier's.
 
 - **Type:** Nunito for words; the song title in Caveat Brush over a little sound wave (in place of Bezier's swoosh); Pixelify Sans on the Note Edit tabs. Numbers stay in Nunito with even-width digits, because in the pixel font a small 2, 3 or 5 reads as an 8.
 - **Paper tabs:** each Note Edit page is its own paper (a hint of a track color over the panel, with fine grain). The open tab stands taller and runs into its page; the row scrolls sideways when the tabs don't fit.
