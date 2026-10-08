@@ -37,7 +37,7 @@
     try {
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
-        metronome: ui.metronome, countIn: ui.countIn,
+        metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -56,7 +56,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, ...uiSaved };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -475,7 +475,14 @@
     }
     if (typingInto(e.target)) return;
     if (e.key === "Escape") { panic(); return; }
-    if (!e.repeat && !e.shiftKey && patternKey(e.code)) { e.preventDefault(); return; }
+    if (e.key === "?") { e.preventDefault(); openShortcuts(); return; }
+    if (ui.singleKeys) {
+      if (!e.repeat && !e.shiftKey && patternKey(e.code)) { e.preventDefault(); return; }
+      if (ui.keysMode === "edit") {
+        if (!e.repeat && editKey(e)) e.preventDefault();
+        return; // in Edit mode, letters don't play notes
+      }
+    }
     const off = Notes.KEY_OFFSETS[e.code];
     if (off != null) {
       e.preventDefault();
@@ -976,7 +983,14 @@
     const k = e.key.toLowerCase();
     if (k === "z" && !e.shiftKey) { undo(); return true; }
     if (k === "y" || (k === "z" && e.shiftKey)) { redo(); return true; }
+    if (k === "e") { setKeysMode(ui.keysMode === "edit" ? "play" : "edit", true); return true; }
     if (k === "r" && find(open) && selNotes.size) { repeatSelected(); return true; }
+    return editAction(k, e.shiftKey);
+  }
+
+  // Copy / cut / paste / duplicate / select all: notes when the piano roll
+  // has focus, clips otherwise. Shared by the Ctrl shortcuts and Edit mode.
+  function editAction(k, shift) {
     if (inRoll()) {
       if (k === "a") { notesSelectAll(); return true; }
       if (k === "c") { notesCopy(false); return true; }
@@ -988,9 +1002,59 @@
     if (k === "c" && pickedClip()) { clipCopy(false); return true; }
     if (k === "x" && pickedClip()) { clipCopy(true); return true; }
     if (k === "v") { if (!clipPaste()) notesPaste(); return true; }
-    if (k === "d" && pickedClip()) { clipDuplicate(e.shiftKey); return true; }
+    if (k === "d" && pickedClip()) { clipDuplicate(shift); return true; }
     return false;
   }
+
+  // Edit mode: single letters edit. Returns whether the key did something.
+  function editKey(e) {
+    const k = e.key.toLowerCase();
+    if (k === "r" && e.shiftKey) { recBtn.click(); return true; }
+    if (k === "r") { repeatSelected(); return true; }
+    if ("cxvda".includes(k) && k.length === 1) { if (!editAction(k, e.shiftKey)) Announce.say("Select something first"); return true; }
+    if (k === "m") { $("metronome").click(); return true; }
+    if (k === "l") { $("loop").click(); return true; }
+    if (k === "n") { $("new-clip").click(); return true; }
+    if (k === "b") { $("step-input").click(); return true; }
+    if (k === "delete" || k === "backspace") {
+      // The piano roll and the playing box handle Delete themselves.
+      if (inRoll() || (e.target.closest && e.target.closest("#timeline"))) return false;
+      if (find(open) && selNotes.size) { $("note-delete").click(); return true; }
+      if (pickedClip()) { $("clip-delete").click(); return true; }
+    }
+    return false;
+  }
+
+  // --- Play / Edit keys, and the shortcut list ---
+  function setKeysMode(mode, announce) {
+    ui.keysMode = mode;
+    $("keys-" + mode).checked = true;
+    document.documentElement.dataset.keys = mode;
+    if (mode === "edit") panic();
+    if (announce) Announce.say(mode === "edit" ? "Keys edit: letters are shortcuts now" : "Keys play notes");
+    save();
+  }
+  for (const mode of ["play", "edit"]) {
+    $("keys-" + mode).addEventListener("change", (e) => { if (e.target.checked) setKeysMode(mode, true); });
+  }
+
+  const shortcutsDlg = $("shortcuts");
+  function openShortcuts() {
+    if ($("settings").open) $("settings").close();
+    shortcutsDlg.showModal();
+  }
+  $("shortcuts-btn").addEventListener("click", openShortcuts);
+  $("settings-shortcuts").addEventListener("click", openShortcuts);
+  $("shortcuts-close").addEventListener("click", () => shortcutsDlg.close());
+  shortcutsDlg.addEventListener("click", (e) => { if (e.target === shortcutsDlg) shortcutsDlg.close(); });
+
+  const singleKeys = $("single-keys");
+  singleKeys.addEventListener("change", () => {
+    ui.singleKeys = singleKeys.checked;
+    if (!ui.singleKeys) setKeysMode("play", false);
+    Announce.say(ui.singleKeys ? "Single-key shortcuts on" : "Single-key shortcuts off: only Ctrl shortcuts work");
+    save();
+  });
 
   // --- step input: play a key and it goes in at the piano roll's cursor ---
   const stepBtn = $("step-input");
@@ -1655,4 +1719,6 @@
   showTempoTools();
   renderTempoList();
   renderSongPage();
+  singleKeys.checked = ui.singleKeys;
+  setKeysMode(ui.singleKeys ? ui.keysMode : "play", false);
 })();

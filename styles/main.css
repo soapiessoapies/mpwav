@@ -687,3 +687,14 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .stamp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
 .stamp-grid button { min-height: 40px; padding: 0 8px; font-size: 0.85rem; text-align: left; }
 .stamp-grid kbd { margin-right: 4px; }
+
+/* ---------- keys mode and the shortcut list ---------- */
+.keys-mode .seg label { min-height: 40px; }
+[data-keys="edit"] .keys-panel { border-color: var(--focus); }
+[data-layout="compact"] .keys-mode,
+[data-layout="compact"] #shortcuts-btn { display: none; } /* no computer keyboard on a phone */
+.shortcuts h3 { margin: 16px 0 6px; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.keys-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.keys-table th, .keys-table td { text-align: left; vertical-align: top; padding: 5px 6px; border-bottom: 1px solid var(--bar-line); }
+.keys-table th { width: 40%; font-family: ui-monospace, Consolas, monospace; font-weight: 600; color: var(--text); }
+.keys-table td { color: var(--muted); }

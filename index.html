@@ -285,6 +285,14 @@
         <button id="oct-up" type="button" aria-label="Octave up">+</button>
       </div>
       <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
+      <fieldset class="keys-mode">
+        <legend class="sr-only">Computer keys</legend>
+        <div class="seg">
+          <input type="radio" name="keys-mode" id="keys-play" value="play"><label for="keys-play">Keys play</label>
+          <input type="radio" name="keys-mode" id="keys-edit" value="edit"><label for="keys-edit">Keys edit</label>
+        </div>
+      </fieldset>
+      <button id="shortcuts-btn" type="button" class="quiet" aria-haspopup="dialog" aria-keyshortcuts="Shift+Slash">Shortcuts</button>
       <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
     </div>
     <div id="keys-body">
@@ -326,6 +334,60 @@
   </section>
 </dialog>
 
+<dialog id="shortcuts" class="settings shortcuts" aria-labelledby="shortcuts-h">
+  <div class="settings-head">
+    <h2 id="shortcuts-h">Shortcuts</h2>
+    <button id="shortcuts-close" type="button" class="quiet">Close</button>
+  </div>
+  <p class="help">The computer keys either <strong>play</strong> notes or <strong>edit</strong>: switch with Ctrl + E or the switch by the keyboard. Single-key shortcuts can be turned off in Settings.</p>
+    <h3>Anywhere</h3>
+    <table class="keys-table">
+      <tr><th scope="row">Space</th><td>Play / stop</td></tr>
+      <tr><th scope="row">Ctrl + Z / Ctrl + Y</th><td>Undo / redo</td></tr>
+      <tr><th scope="row">Ctrl + E</th><td>Switch the computer keys between Play and Edit</td></tr>
+      <tr><th scope="row">1 to 7</th><td>Stamp a rhythm on the piano roll's cursor row (beats, eighths, sixteenths, offbeats, backbeat, tresillo, clave)</td></tr>
+      <tr><th scope="row">8 / 9 / 0</th><td>Arpeggio from the selected chord: up / down / up-and-down</td></tr>
+      <tr><th scope="row">Esc</th><td>Stop every note</td></tr>
+      <tr><th scope="row">?</th><td>This list</td></tr>
+    </table>
+    <h3>Copy and paste (Ctrl works in both modes; the letter alone in Edit mode)</h3>
+    <table class="keys-table">
+      <tr><th scope="row">Ctrl + C / X / V</th><td>Copy / cut / paste: notes when the piano roll has focus, clips otherwise</td></tr>
+      <tr><th scope="row">Ctrl + D</th><td>Duplicate (Ctrl + Shift + D: a linked copy of a clip)</td></tr>
+      <tr><th scope="row">Ctrl + A</th><td>Select every note in the clip</td></tr>
+      <tr><th scope="row">Ctrl + R</th><td>Repeat the selected notes</td></tr>
+    </table>
+    <h3>Edit mode (letters edit instead of playing notes)</h3>
+    <table class="keys-table">
+      <tr><th scope="row">C / X / V / D / A / R</th><td>Copy / cut / paste / duplicate / select all / repeat</td></tr>
+      <tr><th scope="row">Delete</th><td>Delete the selected notes or clip</td></tr>
+      <tr><th scope="row">Shift + R</th><td>Record on / off</td></tr>
+      <tr><th scope="row">M</th><td>Metronome on / off</td></tr>
+      <tr><th scope="row">L</th><td>Loop on / off</td></tr>
+      <tr><th scope="row">N</th><td>New clip at the cursor</td></tr>
+      <tr><th scope="row">B</th><td>Step input on / off</td></tr>
+    </table>
+    <h3>Play mode</h3>
+    <table class="keys-table">
+      <tr><th scope="row">A W S E D F T G Y H U J K O L P ;</th><td>Play notes on the selected track</td></tr>
+      <tr><th scope="row">Z / X</th><td>Keyboard octave down / up</td></tr>
+    </table>
+    <h3>Piano roll (when it has focus)</h3>
+    <table class="keys-table">
+      <tr><th scope="row">Arrows</th><td>Move the cursor (Ctrl: four times as far; Page Up / Down: an octave)</td></tr>
+      <tr><th scope="row">Enter</th><td>Add or remove a note at the cursor</td></tr>
+      <tr><th scope="row">Shift + Left / Right</th><td>Shorten / lengthen the note</td></tr>
+      <tr><th scope="row">Alt + arrows</th><td>Move the note</td></tr>
+    </table>
+    <h3>Playing box (on a clip)</h3>
+    <table class="keys-table">
+      <tr><th scope="row">Arrows</th><td>Next clip, or the row above / below</td></tr>
+      <tr><th scope="row">Alt + Left / Right</th><td>Move the clip a bar</td></tr>
+      <tr><th scope="row">Shift + Left / Right</th><td>Shorten / lengthen the clip</td></tr>
+      <tr><th scope="row">Enter</th><td>Open the clip</td></tr>
+    </table>
+</dialog>
+
 <dialog id="settings" class="settings" aria-labelledby="settings-h">
   <div class="settings-head">
     <h2 id="settings-h">Settings</h2>
@@ -356,6 +418,13 @@
       </div>
     </fieldset>
     <p class="help">High contrast is the default. Every background keeps all text and controls at full readability (WCAG AA).</p>
+  </section>
+
+  <section aria-labelledby="set-keys-h">
+    <h3 id="set-keys-h">Keyboard</h3>
+    <label class="check"><input type="checkbox" id="single-keys"> Single-key shortcuts (number keys and Edit-mode letters)</label>
+    <p class="help">Turn these off if you use speech input or tend to bump keys: then only Ctrl shortcuts work, and letters always play notes.</p>
+    <button id="settings-shortcuts" type="button">Show all shortcuts</button>
   </section>
 
   <section aria-labelledby="set-credits-h">
