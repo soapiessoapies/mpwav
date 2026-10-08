@@ -64,252 +64,267 @@
     </div>
   </header>
 
-  <!-- Playing box: the timeline -->
-  <section id="playbox" class="panel playbox" aria-labelledby="playbox-h" tabindex="-1">
-    <div class="panel-head">
-      <h2 id="playbox-h">Playing box</h2>
-      <button id="new-clip" type="button" class="quiet">New clip</button>
-      <div class="loop-range" role="group" aria-label="Loop">
-        <label for="loop-start">Loop bars</label>
-        <input id="loop-start" type="number" inputmode="numeric" min="1" step="1">
-        <label for="loop-end"><span aria-hidden="true">to</span><span class="sr-only">Loop to bar</span></label>
-        <input id="loop-end" type="number" inputmode="numeric" min="1" step="1">
-      </div>
-      <div class="octave" role="group" aria-label="Zoom">
-        <button id="zoom-out" type="button" aria-label="Zoom out" aria-keyshortcuts="Minus">−</button>
-        <button id="zoom-in" type="button" aria-label="Zoom in" aria-keyshortcuts="Equal">+</button>
-        <button id="zoom-fit" type="button" class="fit-btn" aria-keyshortcuts="Backslash">Fit</button>
-        <button id="rows-fold" type="button" class="fit-btn" aria-pressed="false">Collapse rows</button>
-      </div>
-    </div>
-    <p id="playbox-help" class="help">
-      Drag a clip to move it and its right edge to stretch it (the loop repeats). Double-click or double-tap
-      a clip to edit its notes, or an empty spot to make a new clip. Click the ruler to choose where Play starts;
-      drag along it to set the loop. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
-      <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
-    </p>
-    <div class="toolbar" role="group" aria-label="Clip">
-      <span class="toolbar-label" aria-hidden="true">Clip</span>
-      <button type="button" id="clip-copy" aria-keyshortcuts="Control+C">Copy</button>
-      <button type="button" id="clip-cut" aria-keyshortcuts="Control+X">Cut</button>
-      <button type="button" id="clip-paste" aria-keyshortcuts="Control+V">Paste</button>
-      <button type="button" id="clip-dup" aria-keyshortcuts="Control+D">Duplicate</button>
-      <button type="button" id="clip-link" aria-keyshortcuts="Control+Shift+D">Linked copy</button>
-      <button type="button" id="clip-delete" aria-keyshortcuts="Delete">Delete</button>
-    </div>
-    <div class="toolbar" role="group" aria-label="Section (the loop range, every track)">
-      <span class="toolbar-label" aria-hidden="true">Section</span>
-      <button type="button" id="sec-dup">Duplicate section</button>
-      <button type="button" id="sec-insert">Insert bar at cursor</button>
-      <button type="button" id="sec-delete">Delete section</button>
-    </div>
-    <div class="toolbar" role="group" aria-label="Tempo">
-      <span class="toolbar-label" aria-hidden="true">Tempo</span>
-      <button type="button" id="tap" aria-describedby="tap-help">Tap tempo</button>
-      <button type="button" id="metronome" aria-pressed="false">Metronome</button>
-      <button type="button" id="count-in" aria-pressed="true" aria-describedby="count-in-help">Count-in</button>
-      <button type="button" id="tempo-add">Tempo change at cursor</button>
-    </div>
-    <p id="tap-help" class="sr-only">Tap in time with the beat, four times or more; the tempo follows your taps.</p>
-    <p id="count-in-help" class="sr-only">When on, recording starts with one bar of clicks so you can come in on time.</p>
-    <ul id="tempo-list" class="tempo-list" aria-label="Tempo changes"></ul>
-    <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
-    <div id="tl-zoombar"></div>
-    <p id="song-status" class="song-status"></p>
-  </section>
+  <!-- Window edit mode: a bar shown while arranging panels -->
+  <div id="arrange-bar" class="arrange-bar" role="region" aria-label="Arranging panels" hidden>
+    <p>Arranging panels: drag a panel by its handle, or use its Move and Place controls.</p>
+    <label class="check"><input type="checkbox" id="side-left"> Side column on the left</label>
+    <button type="button" id="arrange-reset" class="quiet">Reset layout</button>
+    <button type="button" id="arrange-done">Done</button>
+  </div>
 
-  <!-- Clip editor: the open clip's notes -->
-  <section id="clip-editor" class="panel clip-editor" aria-labelledby="clip-h" tabindex="-1">
-    <div class="panel-head">
-      <h2 id="clip-h">Clip</h2>
-      <label class="inline clip-name-field">Name <input id="clip-name" type="text" maxlength="40" autocomplete="off"></label>
-      <label class="inline">Loop <select id="clip-bars"></select></label>
-      <button id="close-clip" type="button" class="quiet">Close</button>
-    </div>
-    <p id="clip-empty" class="help">
-      No clip open. Double-click a clip in the playing box (or select it and press <kbd>Enter</kbd>) to edit its notes.
-      To start from nothing, press New clip.
-    </p>
-    <div id="clip-body">
-      <p id="clip-status" class="loop-status"></p>
-      <div class="toolbar" role="group" aria-label="Notes">
-        <span class="toolbar-label" aria-hidden="true">Notes</span>
-        <button type="button" id="notes-all" aria-keyshortcuts="Control+A">Select all</button>
-        <button type="button" id="notes-copy" aria-keyshortcuts="Control+C">Copy</button>
-        <button type="button" id="notes-cut" aria-keyshortcuts="Control+X">Cut</button>
-        <button type="button" id="notes-paste" aria-keyshortcuts="Control+V">Paste</button>
-        <button type="button" id="notes-dup" aria-keyshortcuts="Control+D">Duplicate</button>
+  <!-- Panels live in three columns; Arrange panels moves them between them -->
+  <div id="col-main" class="col col-main" data-col="main">
+    <!-- Playing box: the timeline -->
+    <section id="playbox" class="panel playbox" aria-labelledby="playbox-h" tabindex="-1">
+      <div class="panel-head">
+        <h2 id="playbox-h">Playing box</h2>
+        <button id="new-clip" type="button" class="quiet">New clip</button>
+        <div class="loop-range" role="group" aria-label="Loop">
+          <label for="loop-start">Loop bars</label>
+          <input id="loop-start" type="number" inputmode="numeric" min="1" step="1">
+          <label for="loop-end"><span aria-hidden="true">to</span><span class="sr-only">Loop to bar</span></label>
+          <input id="loop-end" type="number" inputmode="numeric" min="1" step="1">
+        </div>
+        <div class="octave" role="group" aria-label="Zoom">
+          <button id="zoom-out" type="button" aria-label="Zoom out" aria-keyshortcuts="Minus">−</button>
+          <button id="zoom-in" type="button" aria-label="Zoom in" aria-keyshortcuts="Equal">+</button>
+          <button id="zoom-fit" type="button" class="fit-btn" aria-keyshortcuts="Backslash">Fit</button>
+          <button id="rows-fold" type="button" class="fit-btn" aria-pressed="false">Collapse rows</button>
+        </div>
       </div>
-      <div class="pattern-tools">
-        <label class="inline">New notes <select id="note-length"></select></label>
-        <button type="button" id="step-input" class="step-input" aria-pressed="false" aria-describedby="step-help">Step input</button>
-        <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
-        <button id="clear" type="button" class="quiet">Clear</button>
+      <p id="playbox-help" class="help">
+        Drag a clip to move it and its right edge to stretch it (the loop repeats). Double-click or double-tap
+        a clip to edit its notes, or an empty spot to make a new clip. Click the ruler to choose where Play starts;
+        drag along it to set the loop. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
+        <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
+      </p>
+      <div class="toolbar" role="group" aria-label="Clip">
+        <span class="toolbar-label" aria-hidden="true">Clip</span>
+        <button type="button" id="clip-copy" aria-keyshortcuts="Control+C">Copy</button>
+        <button type="button" id="clip-cut" aria-keyshortcuts="Control+X">Cut</button>
+        <button type="button" id="clip-paste" aria-keyshortcuts="Control+V">Paste</button>
+        <button type="button" id="clip-dup" aria-keyshortcuts="Control+D">Duplicate</button>
+        <button type="button" id="clip-link" aria-keyshortcuts="Control+Shift+D">Linked copy</button>
+        <button type="button" id="clip-delete" aria-keyshortcuts="Delete">Delete</button>
       </div>
-      <p id="roll-help" class="help">
-        Scroll up and down for higher and lower notes. Click an empty spot to add a note (drag right as you click to draw it longer);
-        drag a note to move it and its right edge to stretch it; double-click a note to delete it. On a phone, tap to add.
-        With a keyboard: arrows move the cursor (<kbd>Ctrl</kbd> a beat, <kbd>Page Up</kbd>/<kbd>Page Down</kbd> an octave),
-        <kbd>Enter</kbd> adds or removes a note, <kbd>Shift</kbd> + arrows stretch it, <kbd>Alt</kbd> + arrows move it,
-        <kbd>Delete</kbd> removes the selected notes. <kbd>Space</kbd> plays and stops from anywhere.
-      </p>
-      <p id="step-help" class="help">
-        Step input: play a key (on screen or on your computer keyboard) and that note goes in at the cursor,
-        then the cursor moves on by the new-note length. Hold several keys for a chord. It's always on while the piano roll has focus.
-      </p>
-      <p id="record-help" class="help">
-        Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
-        snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
-      </p>
-      <div id="roll" class="roll" aria-describedby="roll-help"></div>
-      <div id="roll-zoombar"></div>
-    </div>
-  </section>
+      <div class="toolbar" role="group" aria-label="Section (the loop range, every track)">
+        <span class="toolbar-label" aria-hidden="true">Section</span>
+        <button type="button" id="sec-dup">Duplicate section</button>
+        <button type="button" id="sec-insert">Insert bar at cursor</button>
+        <button type="button" id="sec-delete">Delete section</button>
+      </div>
+      <div class="toolbar" role="group" aria-label="Tempo">
+        <span class="toolbar-label" aria-hidden="true">Tempo</span>
+        <button type="button" id="tap" aria-describedby="tap-help">Tap tempo</button>
+        <button type="button" id="metronome" aria-pressed="false">Metronome</button>
+        <button type="button" id="count-in" aria-pressed="true" aria-describedby="count-in-help">Count-in</button>
+        <button type="button" id="tempo-add">Tempo change at cursor</button>
+      </div>
+      <p id="tap-help" class="sr-only">Tap in time with the beat, four times or more; the tempo follows your taps.</p>
+      <p id="count-in-help" class="sr-only">When on, recording starts with one bar of clicks so you can come in on time.</p>
+      <ul id="tempo-list" class="tempo-list" aria-label="Tempo changes"></ul>
+      <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
+      <div id="tl-zoombar"></div>
+      <p id="song-status" class="song-status"></p>
+    </section>
 
-  <!-- Note Edit: paged settings for the selected notes and the selected track -->
-  <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
-    <div class="panel-head">
-      <h2 id="note-edit-h">Note Edit</h2>
-      <span id="note-edit-track" class="track-chip"></span>
-    </div>
-    <div class="pager">
-      <button id="page-prev" type="button" class="page-arrow" aria-label="Previous page"><span aria-hidden="true">◀</span></button>
-      <div class="pages" role="tablist" aria-label="Note Edit pages">
-        <button type="button" role="tab" id="tab-p-note" aria-controls="p-note">Note</button>
-        <button type="button" role="tab" id="tab-p-track" aria-controls="p-track">Track</button>
-        <button type="button" role="tab" id="tab-p-sound" aria-controls="p-sound">Sound</button>
-        <button type="button" role="tab" id="tab-p-shape" aria-controls="p-shape">Shape</button>
-        <button type="button" role="tab" id="tab-p-filter" aria-controls="p-filter">Filter</button>
-        <button type="button" role="tab" id="tab-p-warp" aria-controls="p-warp">Warp</button>
-        <button type="button" role="tab" id="tab-p-mix" aria-controls="p-mix">Mix</button>
-        <button type="button" role="tab" id="tab-p-song" aria-controls="p-song">Song</button>
+    <!-- Clip editor: the open clip's notes -->
+    <section id="clip-editor" class="panel clip-editor" aria-labelledby="clip-h" tabindex="-1">
+      <div class="panel-head">
+        <h2 id="clip-h">Clip</h2>
+        <label class="inline clip-name-field">Name <input id="clip-name" type="text" maxlength="40" autocomplete="off"></label>
+        <label class="inline">Loop <select id="clip-bars"></select></label>
+        <button id="close-clip" type="button" class="quiet">Close</button>
       </div>
-      <button id="page-next" type="button" class="page-arrow" aria-label="Next page"><span aria-hidden="true">▶</span></button>
-    </div>
-    <div id="p-note" class="page" role="tabpanel" aria-labelledby="tab-p-note" tabindex="0">
-      <p id="note-sel" class="loop-status" aria-live="polite"></p>
-      <div id="note-controls">
-        <div class="ctl">
-          <div class="ctl-head"><label for="note-len">Length</label><output id="note-len-out" for="note-len" aria-hidden="true"></output></div>
-          <input type="range" id="note-len" min="1" max="64" step="1">
+      <p id="clip-empty" class="help">
+        No clip open. Double-click a clip in the playing box (or select it and press <kbd>Enter</kbd>) to edit its notes.
+        To start from nothing, press New clip.
+      </p>
+      <div id="clip-body">
+        <p id="clip-status" class="loop-status"></p>
+        <div class="toolbar" role="group" aria-label="Notes">
+          <span class="toolbar-label" aria-hidden="true">Notes</span>
+          <button type="button" id="notes-all" aria-keyshortcuts="Control+A">Select all</button>
+          <button type="button" id="notes-copy" aria-keyshortcuts="Control+C">Copy</button>
+          <button type="button" id="notes-cut" aria-keyshortcuts="Control+X">Cut</button>
+          <button type="button" id="notes-paste" aria-keyshortcuts="Control+V">Paste</button>
+          <button type="button" id="notes-dup" aria-keyshortcuts="Control+D">Duplicate</button>
         </div>
-        <div class="ctl">
-          <div class="ctl-head"><label for="note-vel">Loudness</label><output id="note-vel-out" for="note-vel" aria-hidden="true"></output></div>
-          <input type="range" id="note-vel" min="5" max="100" step="5">
+        <div class="pattern-tools">
+          <label class="inline">New notes <select id="note-length"></select></label>
+          <button type="button" id="step-input" class="step-input" aria-pressed="false" aria-describedby="step-help">Step input</button>
+          <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
+          <button id="clear" type="button" class="quiet">Clear</button>
         </div>
-        <div class="note-pitch" role="group" aria-label="Pitch">
-          <button type="button" id="note-oct-down">Octave down</button>
-          <button type="button" id="note-down">Key down</button>
-          <button type="button" id="note-up">Key up</button>
-          <button type="button" id="note-oct-up">Octave up</button>
-        </div>
-        <button type="button" id="note-delete" class="quiet">Delete notes</button>
+        <p id="roll-help" class="help">
+          Scroll up and down for higher and lower notes. Click an empty spot to add a note (drag right as you click to draw it longer);
+          drag a note to move it and its right edge to stretch it; double-click a note to delete it. On a phone, tap to add.
+          With a keyboard: arrows move the cursor (<kbd>Ctrl</kbd> a beat, <kbd>Page Up</kbd>/<kbd>Page Down</kbd> an octave),
+          <kbd>Enter</kbd> adds or removes a note, <kbd>Shift</kbd> + arrows stretch it, <kbd>Alt</kbd> + arrows move it,
+          <kbd>Delete</kbd> removes the selected notes. <kbd>Space</kbd> plays and stops from anywhere.
+        </p>
+        <p id="step-help" class="help">
+          Step input: play a key (on screen or on your computer keyboard) and that note goes in at the cursor,
+          then the cursor moves on by the new-note length. Hold several keys for a chord. It's always on while the piano roll has focus.
+        </p>
+        <p id="record-help" class="help">
+          Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
+          snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
+        </p>
+        <div id="roll" class="roll" aria-describedby="roll-help"></div>
+        <div id="roll-zoombar"></div>
       </div>
-      <section id="patterns" class="patterns" aria-labelledby="pat-h">
-        <h3 id="pat-h">Patterns</h3>
-        <div class="pat-row">
-          <label class="inline">Every <select id="repeat-every"></select></label>
-          <button type="button" id="repeat-go" aria-keyshortcuts="Control+R">Repeat selected</button>
+    </section>
+  </div>
+
+  <div id="col-side" class="col col-side" data-col="side">
+    <!-- Note Edit: paged settings for the selected notes and the selected track -->
+    <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
+      <div class="panel-head">
+        <h2 id="note-edit-h">Note Edit</h2>
+        <span id="note-edit-track" class="track-chip"></span>
+      </div>
+      <div class="pager">
+        <button id="page-prev" type="button" class="page-arrow" aria-label="Previous page"><span aria-hidden="true">◀</span></button>
+        <div class="pages" role="tablist" aria-label="Note Edit pages">
+          <button type="button" role="tab" id="tab-p-note" aria-controls="p-note">Note</button>
+          <button type="button" role="tab" id="tab-p-track" aria-controls="p-track">Track</button>
+          <button type="button" role="tab" id="tab-p-sound" aria-controls="p-sound">Sound</button>
+          <button type="button" role="tab" id="tab-p-shape" aria-controls="p-shape">Shape</button>
+          <button type="button" role="tab" id="tab-p-filter" aria-controls="p-filter">Filter</button>
+          <button type="button" role="tab" id="tab-p-warp" aria-controls="p-warp">Warp</button>
+          <button type="button" role="tab" id="tab-p-mix" aria-controls="p-mix">Mix</button>
+          <button type="button" role="tab" id="tab-p-song" aria-controls="p-song">Song</button>
         </div>
-        <fieldset class="choice">
-          <legend>Stamp a rhythm on the cursor row (<span id="stamp-row">C4</span>)</legend>
-          <div id="stamps" class="stamp-grid"></div>
-        </fieldset>
-        <fieldset class="choice">
-          <legend>Arpeggio from the selected chord</legend>
-          <div class="pat-row">
-            <label class="inline">Rate <select id="arp-rate"></select></label>
+        <button id="page-next" type="button" class="page-arrow" aria-label="Next page"><span aria-hidden="true">▶</span></button>
+      </div>
+      <div id="p-note" class="page" role="tabpanel" aria-labelledby="tab-p-note" tabindex="0">
+        <p id="note-sel" class="loop-status" aria-live="polite"></p>
+        <div id="note-controls">
+          <div class="ctl">
+            <div class="ctl-head"><label for="note-len">Length</label><output id="note-len-out" for="note-len" aria-hidden="true"></output></div>
+            <input type="range" id="note-len" min="1" max="64" step="1">
           </div>
-          <div id="arps" class="stamp-grid"></div>
+          <div class="ctl">
+            <div class="ctl-head"><label for="note-vel">Loudness</label><output id="note-vel-out" for="note-vel" aria-hidden="true"></output></div>
+            <input type="range" id="note-vel" min="5" max="100" step="5">
+          </div>
+          <div class="note-pitch" role="group" aria-label="Pitch">
+            <button type="button" id="note-oct-down">Octave down</button>
+            <button type="button" id="note-down">Key down</button>
+            <button type="button" id="note-up">Key up</button>
+            <button type="button" id="note-oct-up">Octave up</button>
+          </div>
+          <button type="button" id="note-delete" class="quiet">Delete notes</button>
+        </div>
+        <section id="patterns" class="patterns" aria-labelledby="pat-h">
+          <h3 id="pat-h">Patterns</h3>
+          <div class="pat-row">
+            <label class="inline">Every <select id="repeat-every"></select></label>
+            <button type="button" id="repeat-go" aria-keyshortcuts="Control+R">Repeat selected</button>
+          </div>
+          <fieldset class="choice">
+            <legend>Stamp a rhythm on the cursor row (<span id="stamp-row">C4</span>)</legend>
+            <div id="stamps" class="stamp-grid"></div>
+          </fieldset>
+          <fieldset class="choice">
+            <legend>Arpeggio from the selected chord</legend>
+            <div class="pat-row">
+              <label class="inline">Rate <select id="arp-rate"></select></label>
+            </div>
+            <div id="arps" class="stamp-grid"></div>
+          </fieldset>
+          <p class="help">Number keys work too: 1–7 stamp a rhythm, 8 / 9 / 0 make an arpeggio up / down / up-and-down.</p>
+        </section>
+      </div>
+      <div id="p-track" class="page" role="tabpanel" aria-labelledby="tab-p-track" tabindex="0" hidden>
+        <div class="ctl">
+          <label for="track-name">Name</label>
+          <input id="track-name" class="text-field" type="text" maxlength="24" autocomplete="off">
+        </div>
+        <fieldset class="choice">
+          <legend>Color</legend>
+          <div id="track-colors" class="seg"></div>
         </fieldset>
-        <p class="help">Number keys work too: 1–7 stamp a rhythm, 8 / 9 / 0 make an arpeggio up / down / up-and-down.</p>
-      </section>
-    </div>
-    <div id="p-track" class="page" role="tabpanel" aria-labelledby="tab-p-track" tabindex="0" hidden>
-      <div class="ctl">
-        <label for="track-name">Name</label>
-        <input id="track-name" class="text-field" type="text" maxlength="24" autocomplete="off">
-      </div>
-      <fieldset class="choice">
-        <legend>Color</legend>
-        <div id="track-colors" class="seg"></div>
-      </fieldset>
-      <div class="note-pitch" role="group" aria-label="Order">
-        <button type="button" id="track-up">Move up</button>
-        <button type="button" id="track-down">Move down</button>
-      </div>
-      <button type="button" id="track-remove" class="quiet">Remove this track</button>
-      <hr class="divider">
-      <button type="button" id="track-add">Add a track</button>
-      <p id="track-count" class="help"></p>
-    </div>
-    <div id="p-song" class="page" role="tabpanel" aria-labelledby="tab-p-song" tabindex="0" hidden>
-      <fieldset class="choice">
-        <legend>Key</legend>
-        <div class="key-row">
-          <label class="inline"><span class="sr-only">Key note</span><select id="key-root"></select></label>
-          <label class="inline"><span class="sr-only">Scale</span><select id="key-scale"></select></label>
+        <div class="note-pitch" role="group" aria-label="Order">
+          <button type="button" id="track-up">Move up</button>
+          <button type="button" id="track-down">Move down</button>
         </div>
-      </fieldset>
-      <label class="check"><input type="checkbox" id="key-keep"> Keep new notes in key</label>
-      <p class="help">With a scale chosen, piano roll rows outside it are dimmed. Keep in key moves notes you place or drag onto the nearest note that fits; what you play and record stays as played.</p>
-      <label class="inline">Snap <select id="snap"></select></label>
-      <div class="ctl">
-        <div class="ctl-head"><label for="swing">Swing</label><output id="swing-out" for="swing" aria-hidden="true"></output></div>
-        <input type="range" id="swing" min="0" max="50" step="5">
+        <button type="button" id="track-remove" class="quiet">Remove this track</button>
+        <hr class="divider">
+        <button type="button" id="track-add">Add a track</button>
+        <p id="track-count" class="help"></p>
       </div>
-      <p class="help">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
-    </div>
-    <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
-      <div class="preset">
-        <label for="preset">Preset</label>
-        <select id="preset"></select>
+      <div id="p-song" class="page" role="tabpanel" aria-labelledby="tab-p-song" tabindex="0" hidden>
+        <fieldset class="choice">
+          <legend>Key</legend>
+          <div class="key-row">
+            <label class="inline"><span class="sr-only">Key note</span><select id="key-root"></select></label>
+            <label class="inline"><span class="sr-only">Scale</span><select id="key-scale"></select></label>
+          </div>
+        </fieldset>
+        <label class="check"><input type="checkbox" id="key-keep"> Keep new notes in key</label>
+        <p class="help">With a scale chosen, piano roll rows outside it are dimmed. Keep in key moves notes you place or drag onto the nearest note that fits; what you play and record stays as played.</p>
+        <label class="inline">Snap <select id="snap"></select></label>
+        <div class="ctl">
+          <div class="ctl-head"><label for="swing">Swing</label><output id="swing-out" for="swing" aria-hidden="true"></output></div>
+          <input type="range" id="swing" min="0" max="50" step="5">
+        </div>
+        <p class="help">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
       </div>
-      <section class="morph-box" aria-labelledby="morph-h">
-        <h3 id="morph-h">Morph</h3>
-        <div id="morph"></div>
-      </section>
-    </div>
-    <div id="p-shape" class="page" role="tabpanel" aria-labelledby="tab-p-shape" tabindex="0" hidden></div>
-    <div id="p-filter" class="page" role="tabpanel" aria-labelledby="tab-p-filter" tabindex="0" hidden></div>
-    <div id="p-warp" class="page" role="tabpanel" aria-labelledby="tab-p-warp" tabindex="0" hidden></div>
-    <div id="p-mix" class="page" role="tabpanel" aria-labelledby="tab-p-mix" tabindex="0" hidden>
-      <div id="mixer-strips" class="strips"></div>
-    </div>
-    <div id="synth-controls" hidden></div>
-  </section>
+      <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
+        <div class="preset">
+          <label for="preset">Preset</label>
+          <select id="preset"></select>
+        </div>
+        <section class="morph-box" aria-labelledby="morph-h">
+          <h3 id="morph-h">Morph</h3>
+          <div id="morph"></div>
+        </section>
+      </div>
+      <div id="p-shape" class="page" role="tabpanel" aria-labelledby="tab-p-shape" tabindex="0" hidden></div>
+      <div id="p-filter" class="page" role="tabpanel" aria-labelledby="tab-p-filter" tabindex="0" hidden></div>
+      <div id="p-warp" class="page" role="tabpanel" aria-labelledby="tab-p-warp" tabindex="0" hidden></div>
+      <div id="p-mix" class="page" role="tabpanel" aria-labelledby="tab-p-mix" tabindex="0" hidden>
+        <div id="mixer-strips" class="strips"></div>
+      </div>
+      <div id="synth-controls" hidden></div>
+    </section>
+  </div>
 
-  <!-- Editor / inputs: the keyboard, along the bottom -->
-  <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
-    <div class="panel-head">
-      <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
-      <div class="octave" role="group" aria-label="Octave">
-        <button id="oct-down" type="button" aria-label="Octave down">−</button>
-        <span id="oct-label" class="oct-label"></span>
-        <button id="oct-up" type="button" aria-label="Octave up">+</button>
-      </div>
-      <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
-      <fieldset class="keys-mode">
-        <legend class="sr-only">Computer keys</legend>
-        <div class="seg">
-          <input type="radio" name="keys-mode" id="keys-play" value="play"><label for="keys-play">Keys play</label>
-          <input type="radio" name="keys-mode" id="keys-edit" value="edit"><label for="keys-edit">Keys edit</label>
+  <div id="col-bottom" class="col col-bottom" data-col="bottom">
+    <!-- Editor / inputs: the keyboard, along the bottom -->
+    <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
+      <div class="panel-head">
+        <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
+        <div class="octave" role="group" aria-label="Octave">
+          <button id="oct-down" type="button" aria-label="Octave down">−</button>
+          <span id="oct-label" class="oct-label"></span>
+          <button id="oct-up" type="button" aria-label="Octave up">+</button>
         </div>
-      </fieldset>
-      <button id="shortcuts-btn" type="button" class="quiet" aria-haspopup="dialog" aria-keyshortcuts="Shift+Slash">Shortcuts</button>
-      <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
-    </div>
-    <div id="keys-body">
-      <p id="keys-help" class="help">
-        Plays the selected track. Tap or click the keys, or use your computer keys
-        <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work even with the keyboard hidden).
-        <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
-        On a focused key, arrows move and <kbd>Enter</kbd> plays.
-      </p>
-      <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
-           aria-label="Piano keyboard" aria-describedby="keys-help"></div>
-    </div>
-  </section>
+        <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
+        <fieldset class="keys-mode">
+          <legend class="sr-only">Computer keys</legend>
+          <div class="seg">
+            <input type="radio" name="keys-mode" id="keys-play" value="play"><label for="keys-play">Keys play</label>
+            <input type="radio" name="keys-mode" id="keys-edit" value="edit"><label for="keys-edit">Keys edit</label>
+          </div>
+        </fieldset>
+        <button id="shortcuts-btn" type="button" class="quiet" aria-haspopup="dialog" aria-keyshortcuts="Shift+Slash">Shortcuts</button>
+        <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
+      </div>
+      <div id="keys-body">
+        <p id="keys-help" class="help">
+          Plays the selected track. Tap or click the keys, or use your computer keys
+          <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work even with the keyboard hidden).
+          <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
+          On a focused key, arrows move and <kbd>Enter</kbd> plays.
+        </p>
+        <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
+             aria-label="Piano keyboard" aria-describedby="keys-help"></div>
+      </div>
+    </section>
+  </div>
 </main>
 
 <dialog id="songs" class="settings" aria-labelledby="songs-h">
@@ -353,6 +368,8 @@
       <tr><th scope="row">8 / 9 / 0</th><td>Arpeggio from the selected chord: up / down / up-and-down</td></tr>
       <tr><th scope="row">Esc</th><td>Stop every note</td></tr>
       <tr><th scope="row">?</th><td>This list</td></tr>
+      <tr><th scope="row">Ctrl + Shift + L</th><td>Arrange panels (move them between columns); Esc when done</td></tr>
+      <tr><th scope="row">\ / - / =</th><td>Zoom to fit / out / in (the piano roll when it has focus, else the timeline)</td></tr>
     </table>
     <h3>Copy and paste (Ctrl works in both modes; the letter alone in Edit mode)</h3>
     <table class="keys-table">
@@ -411,6 +428,7 @@
       </div>
     </fieldset>
     <p class="help">Auto picks from the window's width. Desktop always uses the side-by-side layout; Phone always stacks everything with the keyboard pinned at the bottom.</p>
+    <button type="button" id="arrange-btn" aria-keyshortcuts="Control+Shift+L">Arrange panels</button>
     <fieldset class="choice">
       <legend>Background</legend>
       <div class="seg">
@@ -473,6 +491,7 @@
 <script src="src/ui/timeline.js"></script>
 <script src="src/ui/tabs.js"></script>
 <script src="src/ui/morph-pad.js"></script>
+<script src="src/ui/arrange.js"></script>
 <script src="src/ui/app.js"></script>
 </body>
 </html>

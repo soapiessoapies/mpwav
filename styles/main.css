@@ -97,17 +97,31 @@ kbd {
     grid-template-columns: minmax(0, 1fr) 380px;
     grid-template-areas:
       "transport title"
-      "playbox notes"
-      "editor notes"
-      "keys keys";
+      "bar bar"
+      "main side"
+      "bottom bottom";
     align-items: start;
+  }
+/* Settings > Arrange panels: the side column can sit on the left. */
+[data-layout="wide"][data-side="left"] .studio {
+    grid-template-columns: 380px minmax(0, 1fr);
+    grid-template-areas:
+      "title transport"
+      "bar bar"
+      "side main"
+      "bottom bottom";
+  }
+/* Nothing in the side column (and not arranging): the main column takes the width. */
+[data-layout="wide"]:not([data-arrange="on"]) .studio:has(#col-side.empty) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "transport title" "bar bar" "main main" "bottom bottom";
   }
 [data-layout="wide"] .transport-bar { grid-area: transport; }
 [data-layout="wide"] .title-block { grid-area: title; }
-[data-layout="wide"] .playbox { grid-area: playbox; }
-[data-layout="wide"] .clip-editor { grid-area: editor; }
-[data-layout="wide"] .note-edit { grid-area: notes; position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; }
-[data-layout="wide"] .keys-panel { grid-area: keys; }
+[data-layout="wide"] .arrange-bar { grid-area: bar; }
+[data-layout="wide"] .col-main { grid-area: main; }
+[data-layout="wide"] .col-side { grid-area: side; position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; }
+[data-layout="wide"] .col-bottom { grid-area: bottom; }
 
 [hidden] { display: none !important; }
 
@@ -745,3 +759,60 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .tl-row.collapsed .clip-notes, .tl-row.collapsed .clip-link { display: none; }
 [data-layout="compact"] .tl-row.collapsed { height: 28px; }
 .octave .fit-btn { width: auto; padding: 0 12px; font-size: 0.9rem; }
+
+/* ---------- window edit mode (Settings > Arrange panels) ---------- */
+.col { display: grid; gap: var(--gap); min-width: 0; align-content: start; }
+.col > * { min-width: 0; }
+:root:not([data-arrange="on"]) .col.empty { display: none; }
+/* On phones the columns step aside so the keyboard can stay pinned to the bottom. */
+[data-layout="compact"]:not([data-arrange="on"]) .col { display: contents; }
+
+.arrange-bar {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  padding: 10px var(--gap); border: 2px dashed var(--accent); border-radius: var(--radius);
+  background: var(--panel);
+}
+.arrange-bar p { margin: 0 auto 0 0; }
+
+.panel-tools { display: contents; }
+.drag-handle, .arrange-only { display: none; }
+[data-arrange="on"] .arrange-only { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+[data-arrange="on"] .arrange-only button { min-height: 36px; padding: 0 10px; }
+[data-arrange="on"] .drag-handle {
+  display: inline-block; width: 36px; height: 36px; flex: 0 0 auto;
+  border: 1px solid var(--line); border-radius: 6px; cursor: grab; touch-action: none;
+  background:
+    radial-gradient(circle, var(--text) 2px, transparent 2.5px) 0 0 / 12px 12px,
+    var(--panel);
+  background-position: 6px 6px;
+}
+[data-arrange="on"] .panel { outline: 2px dashed var(--line); outline-offset: 2px; }
+[data-arrange="on"] .col {
+  min-height: 72px; padding: 6px; border-radius: var(--radius);
+  outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+}
+[data-arrange="on"] .col.empty::before {
+  content: "Empty column: drop a panel here"; color: var(--muted);
+  display: grid; place-items: center; min-height: 60px;
+}
+.panel.dragging { opacity: 0.7; outline-color: var(--accent) !important; }
+body.arranging-drag, body.arranging-drag * { cursor: grabbing !important; user-select: none; }
+
+.panel.folded > :not(.panel-head) { display: none !important; }
+.panel.folded .panel-head { margin-bottom: 0; }
+.panel-fold {
+  width: 40px; min-height: 40px; padding: 0; flex: 0 0 auto;
+  display: inline-grid; place-items: center;
+}
+.panel-fold::before {
+  content: ""; width: 10px; height: 10px; margin-top: 4px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-135deg); transition: transform 0.15s;
+}
+.panel-fold[aria-expanded="false"]::before { transform: rotate(45deg); margin-top: -4px; }
+@media (prefers-reduced-motion: reduce) { .panel-fold::before { transition: none; } }
+/* Phones while arranging: the pinned keyboard bar unpins and wraps so the controls fit. */
+[data-layout="compact"][data-arrange="on"] .keys-panel { position: static; box-shadow: none; }
+[data-layout="compact"][data-arrange="on"] .keys-panel .panel-head { flex-wrap: wrap; }
+[data-layout="compact"][data-arrange="on"] .col { padding: 4px; }

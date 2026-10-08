@@ -38,6 +38,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, collapsed: ui.collapsed,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -56,7 +57,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, ...uiSaved };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -475,7 +476,7 @@
       return;
     }
     if (typingInto(e.target)) return;
-    if (e.key === "Escape") { panic(); return; }
+    if (e.key === "Escape") { if (arrange.arranging) setArranging(false); panic(); return; }
     if (e.key === "?") { e.preventDefault(); openShortcuts(); return; }
     if (ui.singleKeys) {
       if (!e.repeat && !e.shiftKey && patternKey(e.code)) { e.preventDefault(); return; }
@@ -1023,6 +1024,7 @@
     if (k === "z" && !e.shiftKey) { undo(); return true; }
     if (k === "y" || (k === "z" && e.shiftKey)) { redo(); return true; }
     if (k === "e") { setKeysMode(ui.keysMode === "edit" ? "play" : "edit", true); return true; }
+    if (k === "l" && e.shiftKey) { setArranging(!arrange.arranging); return true; }
     if (k === "r" && find(open) && selNotes.size) { repeatSelected(); return true; }
     return editAction(k, e.shiftKey);
   }
@@ -1745,6 +1747,49 @@
     fsBtn.setAttribute("aria-pressed", String(on));
     Announce.say(on ? "Fullscreen" : "Left fullscreen");
   });
+
+  // --- window edit mode: move panels between the columns ---
+  const arrange = Arrange.create([
+    { id: "playbox", name: "Playing box" },
+    { id: "clip-editor", name: "Clip editor" },
+    { id: "note-edit", name: "Note Edit" },
+    { id: "keys-section", name: "Keyboard" },
+  ], ui.panels, ui.folded, {
+    onChange(layout, folded, text) {
+      ui.panels = layout;
+      ui.folded = folded;
+      // Panels changed width: the timeline and the piano roll refit.
+      timeline.render();
+      roll.rebuild();
+      if (text) Announce.say(text);
+      save();
+    },
+  });
+  function setArranging(on) {
+    arrange.setArranging(on);
+    $("arrange-bar").hidden = !on;
+    if (on) {
+      if ($("settings").open) $("settings").close();
+      $("arrange-done").focus();
+      Announce.say("Arranging panels. Drag a panel by its handle, or use its Move and Place controls. Press Done or Escape when finished.");
+    } else {
+      Announce.say("Panels arranged");
+    }
+  }
+  $("arrange-btn").addEventListener("click", () => setArranging(true));
+  $("arrange-done").addEventListener("click", () => setArranging(false));
+  $("arrange-reset").addEventListener("click", () => arrange.reset());
+  const sideLeft = $("side-left");
+  const showSide = () => { document.documentElement.dataset.side = ui.sideLeft ? "left" : "right"; sideLeft.checked = ui.sideLeft; };
+  sideLeft.addEventListener("change", () => {
+    ui.sideLeft = sideLeft.checked;
+    showSide();
+    timeline.render();
+    roll.rebuild();
+    Announce.say(ui.sideLeft ? "Side column on the left" : "Side column on the right");
+    save();
+  });
+  showSide();
 
   // --- first paint ---
   if (!find(picked)) picked = null;

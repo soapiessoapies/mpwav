@@ -34,6 +34,8 @@ The app opens on the timeline: every track stacked as a row, time running left t
 - **A playhead** sweeps across while playing. Tap or click the ruler at the top to move it; Play starts from there.
 - **Loop brace.** A bracket on the ruler marks a section to repeat while you work on it (Ableton's loop switch). Off = play the whole song.
 - **Zoom.** Pinch on a phone, Ctrl + wheel on Windows, or + / − buttons: zoomed out shows the whole song, zoomed in shows single steps.
+- **Zoom bar (like Premiere Pro).** A thick bar under the timeline, and another under the piano roll, shows which part is in view. Drag its middle to scroll; drag either end to zoom. Double-click it, press Fit, or press \ to fit everything. Until you zoom by hand the song keeps fitting the width as it grows. The bar never gets thinner than a finger can grab, and from a keyboard its middle and ends are sliders (arrows, - / =, Home / End).
+- **Collapsible rows.** Each track row folds to a thin strip; Collapse rows folds them all.
 
 ## Clips, not loose notes
 
@@ -94,6 +96,17 @@ Everything can be selected and copied: notes inside a clip, whole clips, or a ti
 - **Phone:** long-press selects and opens a small action bar (Copy, Paste, Duplicate, Delete, Link); a second finger tap adds to the selection.
 - **Screen readers:** the same actions are buttons in the action bar, and each one is announced ("3 notes copied", "Pasted at bar 5").
 - **Undo everything.** One undo history covers notes, clips, sections and recording takes.
+- **Patterns.** The Note page stamps a rhythm on the cursor's key (beats, eighths, sixteenths, off-beats, backbeat, tresillo, clave), repeats the selected notes to the end of the clip every 1, 2 or 4 beats or every bar, and turns a selected chord into an arpeggio (up, down, up-down). In Edit keys mode the number keys do the same: 1-7 stamp, 8 / 9 / 0 arpeggiate.
+- **Keys mode.** Play keys (default) makes the computer keyboard a piano; Edit keys turns letters into editing shortcuts (Ctrl + E switches). Shortcuts without Ctrl can be turned off in Settings for speech input users. Press ? for the full list.
+
+## Arranging the windows
+
+Settings › Arrange panels (Ctrl + Shift + L) lets people lay the studio out for how they work. The four panels (playing box, clip editor, Note Edit, keyboard) sit in three columns: main, side and bottom.
+
+- Drag a panel by its handle to another place or column, or use its Move up / Move down / Place in controls (the same moves from a keyboard or a screen reader).
+- The side column can sit on the left; an empty side column gives the main column the full width.
+- Every panel can collapse to its header.
+- Reset layout returns to the standard one. Done or Escape leaves arrange mode; the layout is saved with the other view settings.
 
 ## Tempo
 
