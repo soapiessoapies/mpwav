@@ -7,12 +7,22 @@
 //                                                                  +-> echo -> out
 //                                                                  +-> reverb send
 // One LFO per synth wobbles every voice's pitch (vibrato) and filter (wobble).
+//
+// A note from the timeline can carry its own sound on top (`fx`, see
+// Song.NOTE_FX): a pitch slide over its length, a fast pitch sweep at the
+// start, fine tuning, its own vibrato, a brighter or darker filter, a pan,
+// retriggering, and a burst of noise at the start. playNote() handles all
+// of it; live playing from the keyboard uses noteOn() without fx.
 (function (root) {
   "use strict";
 
   const MAX_VOICES = 12;
   const VOICE_GAIN = 0.3; // headroom so a chord doesn't slam the limiter
   const CUT_FADE = 0.005; // seconds; stolen voices fade this fast instead of clicking
+  const SWEEP_TIME = 0.03; // seconds; how fast a pitch sweep falls onto its note (time constant)
+  const NOTE_VIB_HZ = 6;   // a note's own vibrato rate
+  const BURST = 0.06;      // seconds of noise in a noise burst
+  const clampHz = (f) => Math.min(20000, Math.max(20, f));
 
   // Per-context caches: pulse waves and the noise buffer only need making once.
   const caches = new WeakMap();
@@ -164,17 +174,66 @@
       return osc;
     }
 
-    function noteOn(midi, velocity = 1, when = ctx.currentTime) {
+    // fx: the note's own sound (or null); length: seconds it's held, which
+    // a pitch slide spreads over.
+    function noteOn(midi, velocity = 1, when = ctx.currentTime, fx = null, length = 0) {
+      const f = fx || {};
       const src = makeSource(midi);
       const filter = ctx.createBiquadFilter();
       filter.type = p.filterType;
-      filter.frequency.value = p.cutoff;
+      const cutMul = f.cut ? Math.pow(2, f.cut) : 1;
+      filter.frequency.value = clampHz(p.cutoff * cutMul);
       filter.Q.value = filterQ(p.filterType, p.resonance);
       const vca = ctx.createGain();
       vca.gain.value = 0;
       src.connect(filter);
       filter.connect(vca);
-      vca.connect(out);
+      // A panned note gets its own panner; the rest go straight out.
+      const panner = f.pan ? ctx.createStereoPanner() : null;
+      if (panner) {
+        panner.pan.value = f.pan;
+        vca.connect(panner);
+        panner.connect(out);
+      } else vca.connect(out);
+
+      // Pitch: tuning (and where a retriggered slide has got to) on detune,
+      // a sweep falling onto the note, a slide across its length.
+      const tune = (f.tune || 0) + (f.from || 0);
+      const baseDetune = p.detune + tune;
+      if (f.sweep) {
+        src.detune.setValueAtTime(baseDetune + f.sweep * 100, when);
+        src.detune.setTargetAtTime(baseDetune, when, SWEEP_TIME);
+      } else src.detune.value = baseDetune;
+      if (f.bend && length > 0) {
+        const pitch = p.wave === "noise" ? src.playbackRate : src.frequency;
+        const from = pitch.value, to = from * Math.pow(2, f.bend / 12);
+        pitch.setValueAtTime(from, when);
+        pitch.exponentialRampToValueAtTime(p.wave === "noise" ? Math.min(16, Math.max(1 / 16, to)) : clampHz(to), when + length);
+      }
+      // The note's own vibrato: a little LFO of its own, only when asked for.
+      let noteLfo = null;
+      if (f.vib) {
+        noteLfo = ctx.createOscillator();
+        noteLfo.frequency.value = NOTE_VIB_HZ;
+        const depth = ctx.createGain();
+        depth.gain.value = f.vib;
+        noteLfo.connect(depth);
+        depth.connect(src.detune);
+        noteLfo.start(when);
+      }
+      // A noise burst: a short hiss at the start, outside the note's envelope.
+      if (f.noise) {
+        const hiss = ctx.createBufferSource();
+        hiss.buffer = noiseBuffer(ctx);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(VOICE_GAIN * velocity * f.noise, when);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + BURST);
+        hiss.connect(g);
+        g.connect(panner || out);
+        hiss.onended = () => { hiss.disconnect(); g.disconnect(); };
+        hiss.start(when, Math.random() * 1.5);
+        hiss.stop(when + BURST + 0.01);
+      }
       // Only wire the LFO in when vibrato / wobble are turned up: a connected
       // modulator makes the filter recalculate on every sample, which costs a
       // lot of CPU (live, and when exporting) for no audible change at zero.
@@ -192,11 +251,13 @@
       const fenv = p.filterEnv > 0 ? { ...env, peak: p.filterEnv * 1200 } : null;
       if (fenv) Envelope.scheduleOn(filter.detune, fenv);
 
-      const voice = { midi, src, filter, vca, env, fenv };
+      const voice = { midi, src, filter, vca, env, fenv, tune, cutMul, noteLfo };
       src.onended = () => {
         if (vibOn) vib.disconnect(src.detune);
         if (wobOn) wob.disconnect(filter.detune);
+        if (noteLfo) { try { noteLfo.stop(); } catch (e) { /* not started yet */ } noteLfo.disconnect(); }
         src.disconnect(); filter.disconnect(); vca.disconnect();
+        if (panner) panner.disconnect();
         pool.remove(voice);
       };
 
@@ -234,6 +295,27 @@
       if (pool.releaseVoice(v)) releaseVoice(v, when);
     }
 
+    // Plays a note from a clip: { midi, vel, len, fx } starting `at`, each
+    // step `stepDur` seconds long. Retrigger splits it into quick repeats,
+    // with a pitch slide carried across them (each repeat picks up where
+    // the last left off).
+    function playNote(n, at, stepDur) {
+      const fx = n.fx || null;
+      const times = fx && fx.ratchet > 1 ? fx.ratchet : 1;
+      if (times === 1) {
+        const len = stepDur * (n.len - 0.08);
+        voiceOff(noteOn(n.midi, n.vel, at, fx, len), at + len);
+        return;
+      }
+      const each = (stepDur * n.len) / times;
+      const bend = fx.bend || 0;
+      for (let i = 0; i < times; i++) {
+        const start = at + i * each, len = each * 0.8;
+        const part = { ...fx, bend: bend / times, from: (bend * 100 * i) / times };
+        voiceOff(noteOn(n.midi, n.vel, start, part, len), start + len);
+      }
+    }
+
     // Panic: everything silent now.
     function allOff() {
       for (const v of pool.all()) cutVoice(v);
@@ -266,9 +348,9 @@
           if (v > 0 && !reverbPlugged) { post.connect(reverbSend); reverbPlugged = true; }
           glide(reverbSend.gain, v);
           break;
-        case "cutoff": for (const x of pool.all()) glide(x.filter.frequency, v); break;
+        case "cutoff": for (const x of pool.all()) glide(x.filter.frequency, clampHz(v * (x.cutMul || 1))); break;
         case "resonance": for (const x of pool.all()) glide(x.filter.Q, filterQ(x.filter.type, v)); break;
-        case "detune": for (const x of pool.all()) glide(x.src.detune, v); break;
+        case "detune": for (const x of pool.all()) glide(x.src.detune, v + (x.tune || 0)); break;
       }
     }
 
@@ -297,7 +379,7 @@
     }
 
     return {
-      noteOn, noteOff, voiceOff, allOff, set, load, setTempo, dispose,
+      noteOn, noteOff, voiceOff, playNote, allOff, set, load, setTempo, dispose,
       held: () => pool.held(),
       get params() { return { ...p }; },
       output: out,

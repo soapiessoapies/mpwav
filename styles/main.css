@@ -969,3 +969,14 @@ dialog .check { white-space: normal; align-items: flex-start; }
 [data-fit="on"] .toolbar { gap: 4px; }
 [data-fit="on"] .toolbar button, [data-fit="on"] .pattern-tools button { padding: 0 9px; }
 [data-fit="on"] .pattern-tools { gap: 6px 10px; }
+
+/* ---------- a note's own sound (Note page) ---------- */
+.note-fx { display: grid; gap: 8px; margin-top: 4px; padding: 10px 12px; background: var(--panel-2); border-radius: 8px; }
+.note-fx h3 { margin: 0; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.note-fx-ctls { display: grid; gap: 6px; }
+.note-fx .help { margin: 0; font-size: 0.85rem; }
+/* Notes with their own sound wear a small dot. */
+.tl-note.fx::before, .note.fx::before {
+  content: ""; position: absolute; right: 2px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px;
+  border-radius: 50%; background: currentColor; pointer-events: none;
+}

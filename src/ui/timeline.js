@@ -80,7 +80,7 @@
           const x = off + n.step;
           if (x >= total) continue;
           const len = Math.min(n.len, total - x);
-          const d = el("span", "tl-note" + (picked && picked.has(n) ? " selected" : ""));
+          const d = el("span", "tl-note" + (picked && picked.has(n) ? " selected" : "") + (n.fx ? " fx" : ""));
           d.dataset.note = i;
           d.style.left = (x / total) * 100 + "%";
           d.style.width = (len / total) * 100 + "%";
@@ -88,7 +88,7 @@
           d.style.height = 100 / rows + "%";
           d.style.background = Colors.noteColor(t.color, n.midi);
           d.style.color = Colors.noteInk(t.color, n.midi);
-          d.style.opacity = (0.55 + 0.45 * (n.vel || 0) / 100).toFixed(2);
+          d.style.opacity = (0.5 + 0.5 * (n.vel || 0)).toFixed(2);
           if (len * stepPx >= 26 && rowPx >= 11) d.textContent = Notes.noteName(n.midi);
           box.append(d);
         }

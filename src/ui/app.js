@@ -161,8 +161,7 @@
       const at = pos % 2 ? time + song.swing * dur : time; // swing: offbeat sixteenths play late
       for (const n of Song.notesAtPos(song, t, pos)) {
         if (t.id === song.selected && skipOnce.delete(pos + ":" + n.midi)) continue;
-        const v = synth.noteOn(n.midi, n.vel, at);
-        synth.voiceOff(v, at + dur * (n.len - 0.08));
+        synth.playNote(n, at, dur);
       }
     }
     playheadQueue.push({ pos, time });
@@ -828,6 +827,7 @@
     $("note-vel-out").textContent = same("vel") ? Math.round(first.vel * 100) + "%" : "mixed";
     noteLen.setAttribute("aria-valuetext", same("len") ? steps(first.len) : `mixed, ${steps(first.len)} on the first`);
     noteVel.setAttribute("aria-valuetext", same("vel") ? Math.round(first.vel * 100) + " percent" : "mixed");
+    renderNoteFx(list);
   }
 
   // Applies a change to every selected note, then redraws.
@@ -837,6 +837,70 @@
     for (const n of selNotes) fn(o.c, n);
     afterChange(text);
   }
+  // --- the selected notes' own sound (Song.NOTE_FX) ---
+  const signed = (v, unit) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v) + " " + unit;
+  const FX_TEXT = {
+    bend: (v) => (v ? signed(v, Math.abs(v) === 1 ? "key" : "keys") : "off"),
+    sweep: (v) => (v ? signed(v, Math.abs(v) === 1 ? "key" : "keys") : "off"),
+    tune: (v) => (v ? signed(v, "cents") : "in tune"),
+    vib: (v) => (v ? v + " cents" : "off"),
+    cut: (v) => (v ? signed(v, "octaves") : "as the track"),
+    pan: (v) => (v ? (v < 0 ? "left " : "right ") + Math.round(Math.abs(v) * 100) : "center"),
+    ratchet: (v) => (v > 1 ? v + " times" : "off"),
+    noise: (v) => (v ? Math.round(v * 100) + "%" : "off"),
+  };
+  const fxViews = {};
+  for (const d of Song.NOTE_FX) {
+    const wrap = document.createElement("div");
+    wrap.className = "ctl";
+    wrap.innerHTML = `<div class="ctl-head"><label for="nfx-${d.id}">${d.label}</label>` +
+      `<output id="nfx-${d.id}-out" for="nfx-${d.id}" aria-hidden="true"></output></div>` +
+      `<input type="range" id="nfx-${d.id}" min="${d.min}" max="${d.max}" step="${d.step}">`;
+    const input = wrap.querySelector("input"), out = wrap.querySelector("output");
+    if (d.help) {
+      const help = document.createElement("p");
+      help.id = `nfx-${d.id}-help`;
+      help.className = "help tip";
+      help.textContent = d.help;
+      wrap.append(help);
+      input.setAttribute("aria-describedby", help.id);
+    }
+    input.addEventListener("input", () => editNotes((c, n) => Song.setNoteFx(n, d.id, Number(input.value))));
+    input.addEventListener("change", () => hearNotes());
+    input.addEventListener("dblclick", () => {
+      editNotes((c, n) => Song.setNoteFx(n, d.id, d.def), `${d.label} back to ${FX_TEXT[d.id](d.def)}`);
+    });
+    fxViews[d.id] = { input, out };
+    $("note-fx-ctls").append(wrap);
+  }
+  function renderNoteFx(list) {
+    const first = list[0];
+    for (const d of Song.NOTE_FX) {
+      const v = Song.noteFx(first, d.id);
+      const same = list.every((n) => Song.noteFx(n, d.id) === v);
+      const { input, out } = fxViews[d.id];
+      if (document.activeElement !== input) input.value = v;
+      out.textContent = same ? FX_TEXT[d.id](v) : "mixed";
+      input.setAttribute("aria-valuetext", same ? FX_TEXT[d.id](v) : `mixed, ${FX_TEXT[d.id](v)} on the first`);
+    }
+    $("note-fx-reset").disabled = !list.some((n) => n.fx);
+  }
+  // Plays the selected notes once, with their own sound, so changes can be heard.
+  function hearNotes() {
+    const o = find(open);
+    if (!o || !selNotes.size || (transport && transport.playing)) return;
+    ready().then(() => {
+      const first = Math.min(...[...selNotes].map((n) => n.step));
+      const dur = Song.stepSeconds(song, 0);
+      const now = Engine.ctx.currentTime + 0.03;
+      for (const n of selNotes) audio[o.t.id].synth.playNote(n, now + (n.step - first) * dur, dur);
+    });
+  }
+  $("note-fx-hear").addEventListener("click", hearNotes);
+  $("note-fx-reset").addEventListener("click", () => {
+    editNotes((c, n) => { delete n.fx; }, "Note sound reset to the track's");
+  });
+
   noteLen.addEventListener("input", () => editNotes((c, n) => Song.resizeNote(c, n, Number(noteLen.value))));
   noteVel.addEventListener("input", () => editNotes((c, n) => { n.vel = Number(noteVel.value) / 100; }));
   const transpose = (by, words) => () => {

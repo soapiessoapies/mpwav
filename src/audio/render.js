@@ -44,8 +44,7 @@
         if (bpm !== echoBpm) { echoBpm = bpm; for (const p of parts) p.synth.setTempo(bpm); }
         for (const p of parts) {
           for (const n of Song.notesAtPos(song, p.track, pos)) {
-            const v = p.synth.noteOn(n.midi, n.vel, at);
-            p.synth.voiceOff(v, at + dur * (n.len - 0.08));
+            p.synth.playNote(n, at, dur);
           }
         }
       }

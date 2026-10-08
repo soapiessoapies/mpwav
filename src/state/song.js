@@ -7,7 +7,9 @@
 //   song.contents{}  what clips play: { id, trackId, name, bars, notes[] },
 //                    a loop of `bars` bars; notes are { step, midi, len, vel }:
 //                    where it starts (16 steps, sixteenths, to a bar), its
-//                    pitch, how many steps it lasts and how loud (0..1). Clips that share a
+//                    pitch, how many steps it lasts and how loud (0..1), and
+//                    optionally `fx`: that note's own sound (NOTE_FX below,
+//                    only the ones moved off their default). Clips that share a
 //                    content are linked: edit one, they all change. A clip
 //                    longer than its content repeats it.
 //   song.bpm         the tempo the song starts at; song.tempos[] are changes
@@ -53,9 +55,52 @@
     dorian: [0, 2, 3, 5, 7, 9, 10],
   };
 
+  // A note's own sound, on top of its track's: each note can slide or sweep
+  // its pitch, be tuned, wobble, sit brighter or darker, pan, retrigger
+  // itself, or start with a burst of noise. Defaults are left out of the
+  // saved note, so most notes stay { step, midi, len, vel }.
+  const NOTE_FX = [
+    { id: "bend", label: "Pitch slide", min: -24, max: 24, step: 1, def: 0, unit: "keys",
+      help: "Slides the pitch this many keys up or down over the note's length." },
+    { id: "sweep", label: "Pitch sweep", min: -36, max: 36, step: 1, def: 0, unit: "keys",
+      help: "Starts this many keys away and drops quickly onto the note: lasers, zaps and drum hits." },
+    { id: "tune", label: "Fine tune", min: -100, max: 100, step: 5, def: 0, unit: "cents" },
+    { id: "vib", label: "Vibrato", min: 0, max: 100, step: 5, def: 0, unit: "cents" },
+    { id: "cut", label: "Brightness", min: -3, max: 3, step: 0.25, def: 0, unit: "octaves",
+      help: "Opens or closes the track's filter for this note." },
+    { id: "pan", label: "Pan", min: -1, max: 1, step: 0.1, def: 0, unit: "pan" },
+    { id: "ratchet", label: "Retrigger", min: 1, max: 8, step: 1, def: 1, unit: "times",
+      help: "Plays the note this many times within its length, for stutters and rolls." },
+    { id: "noise", label: "Noise burst", min: 0, max: 1, step: 0.05, def: 0, unit: "amount",
+      help: "A short hiss at the start of the note, for a percussive click." },
+  ];
+  const FX_BY_ID = Object.fromEntries(NOTE_FX.map((d) => [d.id, d]));
+
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const num = (v, d) => (typeof v === "number" && Number.isFinite(v) ? v : d);
   const int = (v, d) => (Number.isInteger(v) ? v : d);
+
+  // A note's fx, cleaned: known ids only, in range, on their step, and only
+  // the ones that aren't at their default. Returns null when nothing is left.
+  function cleanFx(fx) {
+    if (!fx || typeof fx !== "object") return null;
+    const out = {};
+    for (const d of NOTE_FX) {
+      const v = num(fx[d.id], d.def);
+      const x = Math.round(clamp(v, d.min, d.max) / d.step) * d.step;
+      const tidy = Number(x.toFixed(4));
+      if (tidy !== d.def) out[d.id] = tidy;
+    }
+    return Object.keys(out).length ? out : null;
+  }
+  // Sets one fx on a note (removing it when back at its default).
+  function setNoteFx(n, id, value) {
+    const fx = cleanFx({ ...(n.fx || {}), [id]: value });
+    if (fx) n.fx = fx;
+    else delete n.fx;
+    return fx ? fx[id] ?? FX_BY_ID[id].def : FX_BY_ID[id].def;
+  }
+  const noteFx = (n, id) => (n.fx && n.fx[id] !== undefined ? n.fx[id] : FX_BY_ID[id].def);
 
   function createTrack({ id, name, preset, color, gridBase = 60, length = 1 }) {
     return {
@@ -359,9 +404,11 @@
   const notesAt = (c, step) => c.notes.filter((n) => n.step === step);
 
   // Adds a note unless one already starts there. Returns it, or null.
-  function addNote(c, step, midi, len = 1, vel = VEL) {
+  function addNote(c, step, midi, len = 1, vel = VEL, fx = null) {
     if (step < 0 || step >= loopSteps(c) || hasNote(c, step, midi)) return null;
     const n = { step, midi, len: Math.max(1, Math.min(len, loopSteps(c) - step)), vel };
+    const f = cleanFx(fx);
+    if (f) n.fx = f;
     c.notes.push(n);
     return n;
   }
@@ -401,7 +448,7 @@
   // Copied notes, positioned from the earliest one (so they paste anywhere).
   function copyNotes(notes) {
     const first = Math.min(...notes.map((n) => n.step));
-    return { kind: "notes", notes: notes.map((n) => ({ ...n, step: n.step - first })) };
+    return { kind: "notes", notes: notes.map((n) => ({ ...n, step: n.step - first, ...(n.fx ? { fx: { ...n.fx } } : {}) })) };
   }
 
   // Pastes copied notes starting at `step`. Notes that would land past the
@@ -409,7 +456,7 @@
   function pasteNotes(c, data, step) {
     const added = [];
     for (const n of data.notes) {
-      const m = addNote(c, step + n.step, n.midi, n.len, n.vel);
+      const m = addNote(c, step + n.step, n.midi, n.len, n.vel, n.fx);
       if (m) added.push(m);
     }
     return added;
@@ -442,7 +489,7 @@
     const added = [];
     for (let shift = every; first + shift < loopSteps(c); shift += every) {
       for (const n of notes) {
-        const m = addNote(c, n.step + shift, n.midi, n.len, n.vel);
+        const m = addNote(c, n.step + shift, n.midi, n.len, n.vel, n.fx);
         if (m) added.push(m);
       }
     }
@@ -595,11 +642,16 @@
       .filter((n) => n && Number.isInteger(n.step) && Number.isInteger(n.midi))
       .filter((n) => n.step >= 0 && n.step < loop && n.midi >= LOWEST && n.midi <= HIGHEST)
       .filter((n, i, all) => all.findIndex((m) => m.step === n.step && m.midi === n.midi) === i)
-      .map((n) => ({
-        step: n.step, midi: n.midi,
-        len: clamp(int(n.len, defLen), 1, loop - n.step),
-        vel: clamp(num(n.vel, VEL), 0.05, 1),
-      }));
+      .map((n) => {
+        const out = {
+          step: n.step, midi: n.midi,
+          len: clamp(int(n.len, defLen), 1, loop - n.step),
+          vel: clamp(num(n.vel, VEL), 0.05, 1),
+        };
+        const fx = cleanFx(n.fx);
+        if (fx) out.fx = fx;
+        return out;
+      });
   }
 
   // Older saves (before the timeline) had per-track patterns A-D and a
@@ -744,7 +796,7 @@
 
   const api = {
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
-    MAX_TRACKS, SNAPS, SWING_MAX, SCALES,
+    MAX_TRACKS, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,

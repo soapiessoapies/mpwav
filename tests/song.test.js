@@ -430,3 +430,34 @@ test("arpeggios: a chord becomes its notes one after another", () => {
   assert.deepEqual(ud.map((n) => n.midi), [60, 64, 67, 64, 60, 64, 67, 64]);
   assert.deepEqual(S.arpeggiate(c, [ud[0]], "up"), [], "one note isn't a chord");
 });
+
+test("a note's own sound (fx): cleaned, defaults left out, kept through copy, paste, repeat and saving", () => {
+  assert.equal(S.cleanFx(null), null);
+  assert.equal(S.cleanFx({ bend: 0, ratchet: 1, nope: 5 }), null, "defaults and unknown ids leave nothing");
+  assert.deepEqual(S.cleanFx({ bend: 99, cut: 0.3, pan: -0.04, ratchet: 2.4 }), { bend: 24, cut: 0.25, ratchet: 2 },
+    "clamped to range and rounded to each step; a pan that rounds to the middle is dropped");
+
+  const s = S.createSong();
+  const t = lead(s);
+  const c = S.content(s, S.addClip(s, t, 0, 1));
+  const n = S.addNote(c, 0, 60, 4);
+  assert.equal(n.fx, undefined, "plain notes stay plain");
+  assert.equal(S.setNoteFx(n, "sweep", 12), 12);
+  assert.equal(S.noteFx(n, "sweep"), 12);
+  assert.equal(S.noteFx(n, "ratchet"), 1, "unset fx read as their default");
+  S.setNoteFx(n, "sweep", 0);
+  assert.equal(n.fx, undefined, "back at its default, the fx goes away");
+
+  S.setNoteFx(n, "bend", -5);
+  const pasted = S.pasteNotes(c, S.copyNotes([n]), 8);
+  assert.deepEqual(pasted[0].fx, { bend: -5 });
+  S.setNoteFx(pasted[0], "bend", 7);
+  assert.deepEqual(n.fx, { bend: -5 }, "editing a copy leaves the original alone");
+  const repeated = S.repeatNotes(c, [n], 4);
+  assert.ok(repeated.every((m) => m.fx && m.fx.bend === -5));
+
+  const back = S.sanitize(JSON.parse(JSON.stringify(s)));
+  const notes = S.content(back, lead(back).clips[0]).notes;
+  assert.deepEqual(notes.find((m) => m.step === 0).fx, { bend: -5 });
+  assert.deepEqual(notes.find((m) => m.step === 8).fx, { bend: 7 });
+});

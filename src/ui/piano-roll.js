@@ -102,7 +102,7 @@
       notesLayer.textContent = "";
       view.c.notes.forEach((n, i) => {
         const d = document.createElement("div");
-        d.className = "note" + (view.selected.has(n) ? " selected" : "");
+        d.className = "note" + (view.selected.has(n) ? " selected" : "") + (n.fx ? " fx" : "");
         d.dataset.i = i;
         d.style.left = xOf(n.step) + "px";
         d.style.top = yOf(n.midi) + "px";
@@ -169,7 +169,7 @@
       let text = `${Notes.spokenName(cursor.midi)}, ${where(cursor.step)}, `;
       if (!n) text += "empty";
       else text += `note, ${lenWords(n.len)} long` + (n.step !== cursor.step ? `, started at ${where(n.step)}` : "") +
-        (view.selected.has(n) ? ", selected" : "");
+        (n.fx ? ", with its own sound" : "") + (view.selected.has(n) ? ", selected" : "");
       return text;
     }
 
