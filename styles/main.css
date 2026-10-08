@@ -678,3 +678,12 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 .song-open[aria-current="true"] { border-color: var(--accent); }
 .song-meta { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
 .song-list button.quiet { min-height: 36px; }
+
+/* ---------- patterns (Note page) ---------- */
+.patterns { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.patterns h3 { margin: 0; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.pat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pat-row button { min-height: 40px; }
+.stamp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.stamp-grid button { min-height: 40px; padding: 0 8px; font-size: 0.85rem; text-align: left; }
+.stamp-grid kbd { margin-right: 4px; }

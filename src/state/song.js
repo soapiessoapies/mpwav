@@ -422,6 +422,70 @@
     return pasteNotes(c, copyNotes(notes), end);
   }
 
+  // --- patterns ---
+  // Rhythm stamps: the steps of one bar each one hits, repeated every bar.
+  const STAMPS = {
+    beats: { name: "Beats", steps: [0, 4, 8, 12] },
+    eighths: { name: "Eighths", steps: [0, 2, 4, 6, 8, 10, 12, 14] },
+    sixteenths: { name: "Sixteenths", steps: [...Array(16).keys()] },
+    offbeats: { name: "Offbeats", steps: [2, 6, 10, 14] },
+    backbeat: { name: "Backbeat", steps: [4, 12] },
+    tresillo: { name: "Tresillo", steps: [0, 3, 6, 8, 11, 14] },
+    clave: { name: "Clave", steps: [0, 3, 6, 10, 12] },
+  };
+
+  // Repeats notes every `every` steps until the end of the loop: one kick
+  // repeated every beat becomes four on the floor. Returns the new notes.
+  function repeatNotes(c, notes, every) {
+    if (!notes.length || every < 1) return [];
+    const first = Math.min(...notes.map((n) => n.step));
+    const added = [];
+    for (let shift = every; first + shift < loopSteps(c); shift += every) {
+      for (const n of notes) {
+        const m = addNote(c, n.step + shift, n.midi, n.len, n.vel);
+        if (m) added.push(m);
+      }
+    }
+    return added;
+  }
+
+  // Stamps a rhythm onto one pitch across the whole loop. Each note lasts
+  // `len` steps, but never runs into the next hit. Returns the new notes.
+  function stampNotes(c, kind, midi, len = 1) {
+    const st = STAMPS[kind];
+    if (!st) return [];
+    const hits = [];
+    for (let bar = 0; bar < c.bars; bar++) for (const x of st.steps) hits.push(bar * STEPS + x);
+    const added = [];
+    hits.forEach((step, i) => {
+      const gap = (i + 1 < hits.length ? hits[i + 1] : loopSteps(c)) - step;
+      const m = addNote(c, step, midi, Math.max(1, Math.min(len, gap)), VEL);
+      if (m) added.push(m);
+    });
+    return added;
+  }
+
+  // Turns a chord (any notes) into an arpeggio: its pitches one after
+  // another, every `rate` steps, up / down / up-and-down, from where the
+  // chord starts to where it ends. The chord's notes are replaced.
+  // Returns the new notes.
+  function arpeggiate(c, notes, dir, rate = 2) {
+    if (notes.length < 2) return [];
+    const start = Math.min(...notes.map((n) => n.step));
+    const end = Math.max(...notes.map((n) => n.step + n.len), start + rate * notes.length);
+    const up = [...new Set(notes.map((n) => n.midi))].sort((a, b) => a - b);
+    const order = dir === "down" ? up.slice().reverse()
+      : dir === "updown" ? [...up, ...up.slice(1, -1).reverse()] : up;
+    const vel = notes[0].vel;
+    removeNotes(c, notes);
+    const added = [];
+    for (let step = start, i = 0; step < Math.min(end, loopSteps(c)); step += rate, i++) {
+      const m = addNote(c, step, order[i % order.length], rate, vel);
+      if (m) added.push(m);
+    }
+    return added;
+  }
+
   // Changes how many bars a content loops; notes past the new end are
   // dropped and notes running over it are cut short.
   function setContentBars(c, bars) {
@@ -686,6 +750,7 @@
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,
     freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, insertBars, deleteBars, duplicateBars,
     copyNotes, pasteNotes, duplicateNotes, setTempo, removeTempo, bpmAt, stepSeconds,
+    STAMPS, repeatNotes, stampNotes, arpeggiate,
     noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,
     localStep, notesAtPos, songBars, viewBars, playRange, audible,
   };

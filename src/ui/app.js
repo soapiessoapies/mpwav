@@ -475,6 +475,7 @@
     }
     if (typingInto(e.target)) return;
     if (e.key === "Escape") { panic(); return; }
+    if (!e.repeat && !e.shiftKey && patternKey(e.code)) { e.preventDefault(); return; }
     const off = Notes.KEY_OFFSETS[e.code];
     if (off != null) {
       e.preventDefault();
@@ -713,6 +714,10 @@
     const list = [...selNotes];
     const o = find(open);
     $("note-controls").hidden = !list.length;
+    $("patterns").hidden = !o;
+    if (o) $("stamp-row").textContent = Notes.noteName(roll.cursor.midi);
+    $("repeat-go").disabled = !list.length;
+    for (const b of $("arps").querySelectorAll("button")) b.disabled = list.length < 2;
     if (!o) {
       $("note-sel").textContent = "Open a clip to edit its notes.";
       return;
@@ -971,6 +976,7 @@
     const k = e.key.toLowerCase();
     if (k === "z" && !e.shiftKey) { undo(); return true; }
     if (k === "y" || (k === "z" && e.shiftKey)) { redo(); return true; }
+    if (k === "r" && find(open) && selNotes.size) { repeatSelected(); return true; }
     if (inRoll()) {
       if (k === "a") { notesSelectAll(); return true; }
       if (k === "c") { notesCopy(false); return true; }
@@ -1363,6 +1369,78 @@
       exportStatus.textContent = "Couldn't import: " + (e && e.message ? e.message : e);
     }
   });
+
+  // --- patterns: repeat, rhythm stamps, arpeggios ---
+  const repeatEvery = $("repeat-every"), arpRate = $("arp-rate");
+  for (const [n, words] of [[2, "1/8 (2 steps)"], [4, "beat"], [8, "half bar"], [16, "bar"]]) repeatEvery.add(new Option(words, n));
+  repeatEvery.value = 4;
+  for (const [n, words] of [[1, "1/16"], [2, "1/8"], [4, "1/4"]]) arpRate.add(new Option(words, n));
+  arpRate.value = 2;
+
+  // Number keys: 1-7 stamp rhythms, 8 / 9 / 0 arpeggiate.
+  const STAMP_KEYS = ["beats", "eighths", "sixteenths", "offbeats", "backbeat", "tresillo", "clave"];
+  const ARP_KEYS = [["up", "Up", "8"], ["down", "Down", "9"], ["updown", "Up-down", "0"]];
+  const keyBadge = (k) => `<kbd aria-hidden="true">${k}</kbd> `;
+  STAMP_KEYS.forEach((kind, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = keyBadge(i + 1) + Song.STAMPS[kind].name;
+    b.setAttribute("aria-keyshortcuts", String(i + 1));
+    b.addEventListener("click", () => stamp(kind));
+    $("stamps").append(b);
+  });
+  for (const [dir, words, key] of ARP_KEYS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = keyBadge(key) + words;
+    b.setAttribute("aria-keyshortcuts", key);
+    b.addEventListener("click", () => arpeggio(dir));
+    $("arps").append(b);
+  }
+
+  function selectOnly(notes) {
+    selNotes.clear();
+    for (const n of notes) selNotes.add(n);
+  }
+
+  function stamp(kind) {
+    const o = find(open);
+    if (!o) { Announce.say("Open a clip first"); return; }
+    const midi = roll.cursor.midi;
+    const added = Song.stampNotes(o.c, kind, midi, o.t.length);
+    selectOnly(added);
+    preview(o.t, midi);
+    afterChange(`${Song.STAMPS[kind].name} on ${Notes.spokenName(midi)}: ${plural(added.length, "note")} added`);
+  }
+
+  function repeatSelected() {
+    const o = find(open);
+    if (!o || !selNotes.size) { Announce.say("Select notes to repeat first"); return; }
+    const every = Number(repeatEvery.value);
+    const before = [...selNotes];
+    const added = Song.repeatNotes(o.c, before, every);
+    selectOnly([...before, ...added]);
+    afterChange(added.length ? `Repeated every ${repeatEvery.selectedOptions[0].text}: ${plural(added.length, "note")} added` : "Nothing to add: the loop is already full of them");
+  }
+  $("repeat-go").addEventListener("click", repeatSelected);
+
+  function arpeggio(dir) {
+    const o = find(open);
+    if (!o || selNotes.size < 2) { Announce.say("Select a chord (two notes or more) first"); return; }
+    const added = Song.arpeggiate(o.c, [...selNotes], dir, Number(arpRate.value));
+    selectOnly(added);
+    afterChange(`Arpeggio ${dir === "updown" ? "up and down" : dir}: ${plural(added.length, "note")}`);
+  }
+
+  // A number key, if it means a pattern. Returns whether it did something.
+  function patternKey(code) {
+    const d = /^(Digit|Numpad)(\d)$/.exec(code);
+    if (!d || !find(open)) return false;
+    const n = Number(d[2]);
+    if (n >= 1 && n <= 7) stamp(STAMP_KEYS[n - 1]);
+    else arpeggio(ARP_KEYS[{ 8: 0, 9: 1, 0: 2 }[n]][0]);
+    return true;
+  }
 
   // --- title ---
   const titleField = $("song-title");

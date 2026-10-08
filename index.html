@@ -201,6 +201,25 @@
         </div>
         <button type="button" id="note-delete" class="quiet">Delete notes</button>
       </div>
+      <section id="patterns" class="patterns" aria-labelledby="pat-h">
+        <h3 id="pat-h">Patterns</h3>
+        <div class="pat-row">
+          <label class="inline">Every <select id="repeat-every"></select></label>
+          <button type="button" id="repeat-go" aria-keyshortcuts="Control+R">Repeat selected</button>
+        </div>
+        <fieldset class="choice">
+          <legend>Stamp a rhythm on the cursor row (<span id="stamp-row">C4</span>)</legend>
+          <div id="stamps" class="stamp-grid"></div>
+        </fieldset>
+        <fieldset class="choice">
+          <legend>Arpeggio from the selected chord</legend>
+          <div class="pat-row">
+            <label class="inline">Rate <select id="arp-rate"></select></label>
+          </div>
+          <div id="arps" class="stamp-grid"></div>
+        </fieldset>
+        <p class="help">Number keys work too: 1–7 stamp a rhythm, 8 / 9 / 0 make an arpeggio up / down / up-and-down.</p>
+      </section>
     </div>
     <div id="p-track" class="page" role="tabpanel" aria-labelledby="tab-p-track" tabindex="0" hidden>
       <div class="ctl">

@@ -394,3 +394,39 @@ test("sanitize repairs bad track lists, keys, snaps and swings", () => {
   assert.equal(bad.snap, 1);
   assert.equal(bad.swing, S.SWING_MAX);
 });
+
+test("repeat notes every beat to the end of the loop", () => {
+  const s = S.createSong();
+  const c = S.content(s, S.addClip(s, lead(s), 0, 1));
+  const kick = S.addNote(c, 0, 36), hat = S.addNote(c, 2, 42);
+  const added = S.repeatNotes(c, [kick, hat], 4);
+  assert.deepEqual(c.notes.filter((n) => n.midi === 36).map((n) => n.step), [0, 4, 8, 12]);
+  assert.deepEqual(c.notes.filter((n) => n.midi === 42).map((n) => n.step), [2, 6, 10, 14]);
+  assert.equal(added.length, 6);
+  assert.deepEqual(S.repeatNotes(c, [kick], 4), [], "already there: nothing new");
+});
+
+test("rhythm stamps fill every bar of the loop, notes never overlapping the next hit", () => {
+  const s = S.createSong();
+  const c = S.content(s, S.addClip(s, lead(s), 0, 2));
+  S.stampNotes(c, "backbeat", 38, 8);
+  assert.deepEqual(c.notes.map((n) => [n.step, n.len]), [[4, 8], [12, 8], [20, 8], [28, 4]], "the last one stops at the loop's end");
+  const tres = S.stampNotes(c, "tresillo", 60, 4);
+  assert.deepEqual(tres.slice(0, 6).map((n) => [n.step, n.len]), [[0, 3], [3, 3], [6, 2], [8, 3], [11, 3], [14, 2]]);
+  assert.deepEqual(S.stampNotes(c, "nope", 60), []);
+  for (const k of Object.keys(S.STAMPS)) assert.ok(S.STAMPS[k].steps.every((x) => x >= 0 && x < 16), k);
+});
+
+test("arpeggios: a chord becomes its notes one after another", () => {
+  const s = S.createSong();
+  const c = S.content(s, S.addClip(s, lead(s), 0, 1));
+  const chord = [S.addNote(c, 0, 60, 8), S.addNote(c, 0, 64, 8), S.addNote(c, 0, 67, 8)];
+  const up = S.arpeggiate(c, chord, "up", 2);
+  assert.deepEqual(up.map((n) => [n.step, n.midi]), [[0, 60], [2, 64], [4, 67], [6, 60]], "fills the chord's 8 steps");
+  assert.equal(c.notes.length, 4, "the chord itself is replaced");
+  const down = S.arpeggiate(c, up, "down", 2);
+  assert.deepEqual(down.map((n) => n.midi), [67, 64, 60, 67]);
+  const ud = S.arpeggiate(c, down, "updown", 1);
+  assert.deepEqual(ud.map((n) => n.midi), [60, 64, 67, 64, 60, 64, 67, 64]);
+  assert.deepEqual(S.arpeggiate(c, [ud[0]], "up"), [], "one note isn't a chord");
+});
