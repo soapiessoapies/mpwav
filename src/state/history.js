@@ -40,8 +40,15 @@
     // without counting it as a change.
     function sync(json) { present = json; }
 
+    // A different song was opened: start its history afresh.
+    function reset(json) {
+      past.length = 0;
+      future.length = 0;
+      present = json;
+    }
+
     return {
-      commit, undo, redo, sync,
+      commit, undo, redo, sync, reset,
       get canUndo() { return past.length > 0; },
       get canRedo() { return future.length > 0; },
     };

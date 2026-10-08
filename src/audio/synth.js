@@ -102,7 +102,7 @@
     const out = ctx.createGain(); // the synth's volume
     out.gain.value = volumeGain(p.volume);
     const drive = ctx.createWaveShaper();
-    drive.oversample = "2x"; // less harsh aliasing when driven hard
+    drive.oversample = "none"; // "2x" once drive is turned up (less harsh aliasing then)
     const crush = ctx.createWaveShaper();
     const post = ctx.createGain();
     out.connect(drive);
@@ -117,7 +117,9 @@
     echoTone.frequency.value = 3500;
     const feedback = ctx.createGain();
     feedback.gain.value = ECHO_FEEDBACK;
-    post.connect(echoSend);
+    // The echo loop is plugged in only once Echo is turned up: left running
+    // at zero it would still cost CPU on every track, live and in export.
+    let echoPlugged = false;
     echoSend.connect(delay);
     delay.connect(echoTone);
     echoTone.connect(feedback);
@@ -125,7 +127,7 @@
     echoTone.connect(destination);
 
     const reverbSend = ctx.createGain();
-    post.connect(reverbSend);
+    let reverbPlugged = false; // the same goes for the reverb send
     if (opts.reverb) reverbSend.connect(opts.reverb);
 
     // --- the LFO ---
@@ -173,8 +175,12 @@
       src.connect(filter);
       filter.connect(vca);
       vca.connect(out);
-      vib.connect(src.detune);
-      wob.connect(filter.detune);
+      // Only wire the LFO in when vibrato / wobble are turned up: a connected
+      // modulator makes the filter recalculate on every sample, which costs a
+      // lot of CPU (live, and when exporting) for no audible change at zero.
+      const vibOn = p.vibrato > 0, wobOn = p.wobble > 0;
+      if (vibOn) vib.connect(src.detune);
+      if (wobOn) wob.connect(filter.detune);
 
       const env = {
         start: when, attack: p.attack, decay: p.decay, sustain: p.sustain,
@@ -188,7 +194,8 @@
 
       const voice = { midi, src, filter, vca, env, fenv };
       src.onended = () => {
-        vib.disconnect(src.detune); wob.disconnect(filter.detune);
+        if (vibOn) vib.disconnect(src.detune);
+        if (wobOn) wob.disconnect(filter.detune);
         src.disconnect(); filter.disconnect(); vca.disconnect();
         pool.remove(voice);
       };
@@ -247,11 +254,18 @@
         case "wobble": glide(wob.gain, v * 1200); break;
         case "drive":
           drive.curve = curve("drive", v);
+          drive.oversample = v > 0 ? "2x" : "none";
           glide(post.gain, 1 / (1 + v * DRIVE_MAKEUP));
           break;
         case "crush": crush.curve = curve("crush", v); break;
-        case "echo": glide(echoSend.gain, v * 0.7); break;
-        case "reverb": glide(reverbSend.gain, v); break;
+        case "echo":
+          if (v > 0 && !echoPlugged) { post.connect(echoSend); echoPlugged = true; }
+          glide(echoSend.gain, v * 0.7);
+          break;
+        case "reverb":
+          if (v > 0 && !reverbPlugged) { post.connect(reverbSend); reverbPlugged = true; }
+          glide(reverbSend.gain, v);
+          break;
         case "cutoff": for (const x of pool.all()) glide(x.filter.frequency, v); break;
         case "resonance": for (const x of pool.all()) glide(x.filter.Q, filterQ(x.filter.type, v)); break;
         case "detune": for (const x of pool.all()) glide(x.src.detune, v); break;

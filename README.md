@@ -35,7 +35,7 @@ level of sound design.
 - **Double-click `Sound Studio.cmd`** to open it in Chrome as an app window.
 - **To test on a phone:** run `npm run serve` and open the "on your network" address it prints
   from a phone on the same Wi-Fi.
-- **Tests:** `npm test` covers the song model, note math, envelopes, voices, presets, and the WCAG AA
+- **Tests:** `npm test` covers the song model, song library, WAV encoding, undo history, note math, envelopes, voices, presets, and the WCAG AA
   contrast of every color pair in every background theme.
 
 ## Playing
@@ -57,6 +57,7 @@ level of sound design.
 | Step input | With the piano roll focused (or Step input on), play a key to write it at the cursor; hold keys for a chord |
 | Tracks | Note Edit › Track: rename, color, move up/down, remove, add (up to 12) |
 | Song | Note Edit › Song: key and scale (dims notes outside it, optional keep-in-key), snap, swing |
+| Songs | The Songs button by the title: new, from the demo, duplicate, open, delete; Export WAV; export / import a song file |
 | Settings | Layout (Auto / Desktop / Phone), background, fullscreen, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |

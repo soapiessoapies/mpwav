@@ -58,7 +58,10 @@
   <header class="title-block">
     <label for="song-title" class="sr-only">Song title</label>
     <input id="song-title" class="song-title" type="text" maxlength="80" autocomplete="off" spellcheck="false">
-    <p class="byline">by Phie &amp; Claude</p>
+    <div class="title-row">
+      <p class="byline">by Phie &amp; Claude</p>
+      <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Songs</button>
+    </div>
   </header>
 
   <!-- Playing box: the timeline -->
@@ -278,6 +281,32 @@
   </section>
 </main>
 
+<dialog id="songs" class="settings" aria-labelledby="songs-h">
+  <div class="settings-head">
+    <h2 id="songs-h">Songs</h2>
+    <button id="songs-close" type="button" class="quiet">Close</button>
+  </div>
+  <p class="help">Your songs are saved in this browser as you work. Export a song file to keep a copy or move it to another computer.</p>
+  <div class="toolbar" role="group" aria-label="New">
+    <button type="button" id="song-new">New song</button>
+    <button type="button" id="song-demo">New from the demo</button>
+    <button type="button" id="song-dup">Duplicate this song</button>
+  </div>
+  <ul id="song-list" class="song-list" aria-label="Your songs"></ul>
+
+  <section aria-labelledby="set-export-h">
+    <h3 id="set-export-h">Export and import</h3>
+    <div class="toolbar" role="group" aria-label="Export and import">
+      <button type="button" id="export-wav" aria-describedby="export-wav-help">Export WAV</button>
+      <button type="button" id="export-file">Export song file</button>
+      <button type="button" id="import-file">Import song file</button>
+      <input type="file" id="import-input" accept=".json,application/json" hidden>
+    </div>
+    <p id="export-wav-help" class="help">Export WAV renders the whole song, every track with its effects and mix, to a sound file you can use anywhere.</p>
+    <p id="export-status" class="help" aria-live="polite"></p>
+  </section>
+</dialog>
+
 <dialog id="settings" class="settings" aria-labelledby="settings-h">
   <div class="settings-head">
     <h2 id="settings-h">Settings</h2>
@@ -335,9 +364,12 @@
 <script src="src/audio/mixer.js"></script>
 <script src="src/audio/transport.js"></script>
 <script src="src/audio/morph.js"></script>
+<script src="src/audio/wav.js"></script>
+<script src="src/audio/render.js"></script>
 <script src="src/state/presets.js"></script>
 <script src="src/state/song.js"></script>
 <script src="src/state/history.js"></script>
+<script src="src/state/library.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>
 <script src="src/ui/keyboard.js"></script>

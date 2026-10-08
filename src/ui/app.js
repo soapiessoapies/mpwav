@@ -10,7 +10,6 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  const SONG_KEY = "sound-studio.song";
   const UI_KEY = "sound-studio.ui";
 
   // --- remembered state (this browser only; fine if it's unavailable) ---
@@ -34,19 +33,30 @@
     const json = JSON.stringify(song);
     history.commit(historyJson());
     showUndo();
+    library.save(songId, json);
     try {
-      localStorage.setItem(SONG_KEY, json);
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn,
-        open: open, picked: picked,
+        open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
   }
 
-  const savedSong = load(SONG_KEY);
-  const song = savedSong ? Song.sanitize(savedSong) : Song.demoSong();
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, ...(load(UI_KEY) || {}) };
+  // Songs live in a library in this browser (in memory only, if the browser blocks storage).
+  let store;
+  try {
+    localStorage.setItem("sound-studio.probe", "1");
+    localStorage.removeItem("sound-studio.probe");
+    store = localStorage;
+  } catch (e) { store = Library.memoryStorage(); }
+  const library = Library.create(store);
+  const uiSaved = load(UI_KEY) || {};
+  let songId = uiSaved.songId;
+  if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
+  if (!library.load(songId)) songId = library.list()[0].id;
+  const song = Song.sanitize(library.load(songId));
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, ...uiSaved };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -766,7 +776,14 @@
 
   // Puts a saved version of the song back and redraws everything from it.
   function restore(json) {
-    const next = Song.sanitize({ ...JSON.parse(json), selected: song.selected, cursor: song.cursor });
+    applySong(Song.sanitize({ ...JSON.parse(json), selected: song.selected, cursor: song.cursor }));
+    history.sync(historyJson());
+    writeNowQuiet();
+  }
+
+  // Swaps the whole song (an undo step, or another song from the library)
+  // and redraws everything: the audio, the mixer, every panel.
+  function applySong(next) {
     endTake();
     panic();
     for (const k of Object.keys(song)) delete song[k];
@@ -789,12 +806,10 @@
     showLoop();
     renderTempoList();
     renderSongPage();
-    history.sync(historyJson());
-    writeNowQuiet();
   }
   // Saves without adding a history step (after undo / redo).
   function writeNowQuiet() {
-    try { localStorage.setItem(SONG_KEY, JSON.stringify(song)); } catch (e) { /* storage blocked */ }
+    library.save(songId, JSON.stringify(song));
     showUndo();
   }
 
@@ -1184,6 +1199,170 @@
   });
   snapSel.addEventListener("change", () => { song.snap = Number(snapSel.value); afterChange(`Snap to ${SNAP_NAMES[song.snap]}`); });
   swing.addEventListener("input", () => { song.swing = Number(swing.value) / 100; renderSongPage(); save(); });
+
+  // --- songs: open, new, duplicate, delete, export, import ---
+  const songsDlg = $("songs");
+  const exportStatus = $("export-status");
+
+  function openSong(id) {
+    if (saveTimer) writeNow();
+    const data = library.load(id);
+    if (!data) return;
+    if (transport && transport.playing) stopLoop();
+    songId = id;
+    open = null;
+    picked = null;
+    applySong(Song.sanitize(data));
+    history.reset(historyJson());
+    writeNow();
+    renderSongList();
+    Announce.say(`Opened ${song.title}`);
+  }
+
+  function addAndOpen(data, words) {
+    if (saveTimer) writeNow();
+    const id = library.add(Song.sanitize(data));
+    openSong(id);
+    if (words) Announce.say(words);
+  }
+
+  const when = (ms) => {
+    const mins = Math.round((Date.now() - ms) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins} minute${mins > 1 ? "s" : ""} ago`;
+    if (mins < 60 * 24) return `${Math.round(mins / 60)} hour${Math.round(mins / 60) > 1 ? "s" : ""} ago`;
+    return new Date(ms).toLocaleDateString();
+  };
+
+  let armedDelete = null; // a song whose Delete was pressed once
+  function renderSongList() {
+    const list = $("song-list");
+    list.textContent = "";
+    for (const e of library.list()) {
+      const li = document.createElement("li");
+      const current = e.id === songId;
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "song-open";
+      openBtn.textContent = e.title;
+      if (current) openBtn.setAttribute("aria-current", "true");
+      openBtn.setAttribute("aria-label", `${e.title}${current ? ", open now" : ""}, edited ${when(e.updated)}`);
+      openBtn.addEventListener("click", () => { if (!current) openSong(e.id); });
+      const meta = document.createElement("span");
+      meta.className = "song-meta";
+      meta.setAttribute("aria-hidden", "true");
+      meta.textContent = (current ? "Open now · " : "") + when(e.updated);
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "quiet";
+      del.textContent = armedDelete === e.id ? "Really delete?" : "Delete";
+      del.setAttribute("aria-label", armedDelete === e.id ? `Really delete ${e.title}? Press again to delete` : `Delete ${e.title}`);
+      del.disabled = library.list().length <= 1;
+      del.addEventListener("click", () => {
+        if (armedDelete !== e.id) {
+          armedDelete = e.id;
+          renderSongList();
+          list.querySelector(`[data-id="${e.id}"] button.quiet`)?.focus();
+          Announce.say(`Press Delete again to delete ${e.title}`);
+          setTimeout(() => { if (armedDelete === e.id) { armedDelete = null; renderSongList(); } }, 5000);
+          return;
+        }
+        armedDelete = null;
+        if (current) {
+          const other = library.list().find((x) => x.id !== e.id);
+          openSong(other.id);
+        }
+        library.remove(e.id);
+        renderSongList();
+        Announce.say(`Deleted ${e.title}`);
+      });
+      li.dataset.id = e.id;
+      li.append(openBtn, meta, del);
+      list.append(li);
+    }
+  }
+
+  $("songs-btn").addEventListener("click", () => {
+    if (saveTimer) writeNow();
+    armedDelete = null;
+    exportStatus.textContent = "";
+    renderSongList();
+    songsDlg.showModal();
+  });
+  $("songs-close").addEventListener("click", () => songsDlg.close());
+  songsDlg.addEventListener("click", (e) => { if (e.target === songsDlg) songsDlg.close(); });
+  songsDlg.addEventListener("close", () => $("songs-btn").focus());
+
+  $("song-new").addEventListener("click", () => {
+    const blank = Song.createSong();
+    blank.title = `Untitled song ${library.list().length + 1}`;
+    addAndOpen(blank, `New song: ${blank.title}`);
+  });
+  $("song-demo").addEventListener("click", () => {
+    const demo = Song.demoSong();
+    demo.title = "Demo song";
+    addAndOpen(demo, "New song from the demo");
+  });
+  $("song-dup").addEventListener("click", () => {
+    const copy = JSON.parse(JSON.stringify(song));
+    copy.title = (song.title + " copy").slice(0, 80);
+    addAndOpen(copy, `Opened ${copy.title}`);
+  });
+
+  // Hands the browser a file to save.
+  function download(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  $("export-wav").addEventListener("click", async () => {
+    const btn = $("export-wav");
+    if (!Song.songBars(song)) { exportStatus.textContent = "Add a clip first: there's nothing to export yet."; return; }
+    btn.disabled = true;
+    exportStatus.textContent = "Rendering the song…";
+    try {
+      const buffer = await Render.renderSong(song, live, {
+        onProgress: (f) => { exportStatus.textContent = `Rendering the song… ${Math.round(f * 100)}%`; },
+      });
+      const name = Wav.fileName(song.title, ".wav");
+      download(new Blob([Wav.encode(buffer)], { type: "audio/wav" }), name);
+      exportStatus.textContent = `Saved ${name} (${Math.round(buffer.duration)} seconds). Check your downloads.`;
+    } catch (e) {
+      exportStatus.textContent = "Couldn't export: " + (e && e.message ? e.message : e);
+    }
+    btn.disabled = false;
+  });
+
+  $("export-file").addEventListener("click", () => {
+    if (saveTimer) writeNow();
+    const name = Wav.fileName(song.title, ".soundstudio.json");
+    const data = { app: "Sound Studio", format: 1, song: JSON.parse(JSON.stringify(song)) };
+    download(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }), name);
+    exportStatus.textContent = `Saved ${name}. Import it here, in any browser, to keep working on it.`;
+  });
+
+  const importInput = $("import-input");
+  $("import-file").addEventListener("click", () => importInput.click());
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files && importInput.files[0];
+    importInput.value = "";
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const songData = data && data.song ? data.song : data;
+      if (!songData || !Array.isArray(songData.tracks)) throw new Error("that file isn't a Sound Studio song");
+      addAndOpen(songData);
+      exportStatus.textContent = `Imported ${song.title}.`;
+    } catch (e) {
+      exportStatus.textContent = "Couldn't import: " + (e && e.message ? e.message : e);
+    }
+  });
 
   // --- title ---
   const titleField = $("song-title");

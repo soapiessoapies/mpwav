@@ -21,7 +21,13 @@
   function create() {
     const AC = root.AudioContext || root.webkitAudioContext;
     ctx = new AC({ latencyHint: "interactive" });
+    bus = buildBus(ctx);
+    ctx.onstatechange = emit;
+  }
 
+  // The master bus on any context: the live one, or an offline one when a
+  // song is rendered to a WAV file (so the file sounds just like playback).
+  function buildBus(ctx) {
     const input = ctx.createGain(); // instruments connect here
     const master = ctx.createGain();
     master.gain.value = 0.8;
@@ -45,9 +51,7 @@
     room.buffer = roomImpulse(ctx, 2.4);
     reverb.connect(room);
     room.connect(master);
-    bus = { input, master, limiter, analyser, reverb };
-
-    ctx.onstatechange = emit;
+    return { input, master, limiter, analyser, reverb };
   }
 
   // A made-up room: stereo noise fading away over `seconds`, a little
@@ -173,6 +177,7 @@
     get ctx() { return ctx; },
     get input() { return bus && bus.input; },
     get reverb() { return bus && bus.reverb; },
+    buildBus,
     get state() { return ctx ? ctx.state : "off"; },
   };
   root.Engine = api;
