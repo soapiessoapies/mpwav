@@ -76,8 +76,10 @@
         <input id="loop-end" type="number" inputmode="numeric" min="1" step="1">
       </div>
       <div class="octave" role="group" aria-label="Zoom">
-        <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
-        <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+        <button id="zoom-out" type="button" aria-label="Zoom out" aria-keyshortcuts="Minus">−</button>
+        <button id="zoom-in" type="button" aria-label="Zoom in" aria-keyshortcuts="Equal">+</button>
+        <button id="zoom-fit" type="button" class="fit-btn" aria-keyshortcuts="Backslash">Fit</button>
+        <button id="rows-fold" type="button" class="fit-btn" aria-pressed="false">Collapse rows</button>
       </div>
     </div>
     <p id="playbox-help" class="help">
@@ -112,6 +114,7 @@
     <p id="count-in-help" class="sr-only">When on, recording starts with one bar of clicks so you can come in on time.</p>
     <ul id="tempo-list" class="tempo-list" aria-label="Tempo changes"></ul>
     <div id="timeline" class="tl-scroll" aria-describedby="playbox-help"></div>
+    <div id="tl-zoombar"></div>
     <p id="song-status" class="song-status"></p>
   </section>
 
@@ -159,6 +162,7 @@
         snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
       </p>
       <div id="roll" class="roll" aria-describedby="roll-help"></div>
+      <div id="roll-zoombar"></div>
     </div>
   </section>
 
@@ -465,6 +469,7 @@
 <script src="src/ui/mixer-view.js"></script>
 <script src="src/ui/colors.js"></script>
 <script src="src/ui/piano-roll.js"></script>
+<script src="src/ui/zoombar.js"></script>
 <script src="src/ui/timeline.js"></script>
 <script src="src/ui/tabs.js"></script>
 <script src="src/ui/morph-pad.js"></script>

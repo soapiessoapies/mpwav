@@ -16,17 +16,23 @@
 (function (root) {
   "use strict";
 
-  const HEAD = 96; // width of the track names column
-  const ZOOMS = [24, 32, 44, 60, 80, 110, 150];
+  const HEAD = 116; // width of the track names column (fold arrow + name)
+  const MIN_BW = 10, MAX_BW = 240; // px per bar, zoomed all the way out / in
   const DOUBLE_TAP_MS = 350;
 
   function create(scroller, h) {
     // h: { song(), selectedClip(), onSelectTrack(id), onSelectClip(t, clip), onOpenClip(t, clip),
     //      onNewClip(t, bar), onCursor(bar), onLoop(start, end), onChanged(text) }
-    let zoom = 3;
+    // Zoom: px per bar. While `fitting`, the whole song fits the width and
+    // keeps fitting as it grows; zooming or scrolling by hand stops that
+    // until Zoom to fit is pressed again.
+    let bw = 60;
+    let fitting = true;
     let lastTap = { id: null, at: 0 };
 
-    const barW = () => ZOOMS.at(zoom);
+    const barW = () => bw;
+    const avail = () => Math.max(100, scroller.clientWidth - HEAD - 2);
+    const clampBw = (w) => Math.max(MIN_BW, Math.min(MAX_BW, w));
     const el = (tag, cls, attrs = {}) => {
       const e = document.createElement(tag);
       if (cls) e.className = cls;
@@ -75,6 +81,7 @@
     function render() {
       const song = h.song();
       const bars = Song.viewBars(song);
+      if (fitting) bw = clampBw(avail() / bars);
       const sel = h.selectedClip();
       const hadFocus = scroller.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
       scroller.textContent = "";
@@ -101,6 +108,8 @@
         ruler.append(mark);
       }
       const tempoAt = (b) => song.tempos.find((m) => m.bar === b);
+      // Zoomed far out, bar numbers would overlap: only every 4th or 8th shows.
+      const labelEvery = bw >= 24 ? 1 : bw >= 12 ? 4 : 8;
       for (let b = 0; b < bars; b++) {
         const tm = tempoAt(b);
         const btn = el("button", "tl-bar" + (b % 4 === 0 ? " four" : ""), {
@@ -108,7 +117,7 @@
             (tm ? `, tempo ${tm.ramp ? "ramps to" : "changes to"} ${tm.bpm}` : ""),
           "data-bar": b, "data-focus-key": "bar" + b,
         });
-        btn.textContent = b + 1;
+        btn.textContent = b % labelEvery === 0 ? b + 1 : "";
         if (b === song.cursor) btn.setAttribute("aria-current", "true");
         ruler.append(btn);
       }
@@ -117,8 +126,14 @@
 
       // --- tracks ---
       for (const t of song.tracks) {
-        const row = el("div", "tl-row" + (t.id === song.selected ? " selected" : ""), { "data-track": t.id });
+        const folded = h.isCollapsed(t.id);
+        const row = el("div", "tl-row" + (t.id === song.selected ? " selected" : "") + (folded ? " collapsed" : ""), { "data-track": t.id });
         const head = el("div", "tl-head");
+        const fold = el("button", "tl-fold", {
+          type: "button", "aria-expanded": String(!folded), "aria-label": `${t.name} row`, "data-focus-key": "fold-" + t.id,
+        });
+        fold.addEventListener("click", () => h.onToggleRow(t.id));
+        head.append(fold);
         const name = el("button", "tl-name", {
           type: "button", "aria-pressed": String(t.id === song.selected), "data-focus-key": "head-" + t.id,
           "aria-label": `${t.name} track` + (t.mute ? ", muted" : "") + (t.solo ? ", soloed" : ""),
@@ -166,6 +181,7 @@
       scroller.append(tl);
 
       if (hadFocus) scroller.querySelector(`[data-focus-key="${hadFocus}"]`)?.focus();
+      if (h.onView) h.onView(); // the zoom bar follows the song's length
     }
 
     // --- finding things from events ---
@@ -321,22 +337,46 @@
       scroller.querySelector(`[data-clip="${clip.id}"]`)?.focus();
     }
 
-    // --- zoom ---
-    function setZoom(z) {
-      const old = barW();
-      zoom = Math.max(0, Math.min(ZOOMS.length - 1, z));
-      if (barW() !== old) {
-        const mid = (scroller.scrollLeft + scroller.clientWidth / 2 - HEAD) / old;
-        render();
-        scroller.scrollLeft = HEAD + mid * barW() - scroller.clientWidth / 2;
-      }
-      return { canIn: zoom < ZOOMS.length - 1, canOut: zoom > 0 };
+    // --- zoom and view ---
+    // The part of the song in view, in bars: { start, end, total }.
+    function getView() {
+      const total = Song.viewBars(h.song());
+      const start = scroller.scrollLeft / bw;
+      return { start, end: Math.min(total, start + avail() / bw), total };
     }
+    // Shows bars start..end (zooming to fit them in the width).
+    function setView(start, end) {
+      const total = Song.viewBars(h.song());
+      const span = Math.max(avail() / MAX_BW, Math.min(total, end - start));
+      start = Math.max(0, Math.min(total - span, start));
+      fitting = false;
+      bw = clampBw(avail() / span);
+      render();
+      scroller.scrollLeft = start * bw;
+      h.onView();
+    }
+    function fit() {
+      fitting = true;
+      render();
+      scroller.scrollLeft = 0;
+      h.onView();
+    }
+    const zoomBy = (f) => {
+      const v = getView(), mid = (v.start + v.end) / 2, half = (v.end - v.start) / 2 / f;
+      setView(mid - half, mid + half);
+    };
     scroller.addEventListener("wheel", (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
-      h.onZoom(setZoom(zoom + (e.deltaY < 0 ? 1 : -1)));
+      zoomBy(e.deltaY < 0 ? 1.25 : 0.8);
     }, { passive: false });
+    scroller.addEventListener("scroll", () => h.onView());
+    // The window changing width: keep fitting, if fitting.
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { if (fitting) render(); h.onView(); }, 120);
+    });
 
     // --- playhead (pos = steps from the song's start, or -1) ---
     function setPlayhead(pos) {
@@ -353,9 +393,10 @@
     }
 
     return {
-      render, setPlayhead, focusClip,
-      zoomIn: () => setZoom(zoom + 1),
-      zoomOut: () => setZoom(zoom - 1),
+      render, setPlayhead, focusClip, getView, setView, fit,
+      zoomIn: () => zoomBy(1.5),
+      zoomOut: () => zoomBy(1 / 1.5),
+      get fitting() { return fitting; },
     };
   }
 

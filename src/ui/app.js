@@ -37,7 +37,7 @@
     try {
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
-        metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys,
+        metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, collapsed: ui.collapsed,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -56,7 +56,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], ...uiSaved };
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -76,6 +76,7 @@
   // --- audio: a synth and a mixer channel per track, made on first use ---
   const audio = {}; // track id -> { synth, channel }
   let transport = null;
+  let tlZoom = null, rollZoom = null; // the zoom bars under the timeline and the piano roll
 
   // Once sound is on, every track has a synth and a mixer channel: tracks
   // added later get theirs straight away, removed ones are unplugged.
@@ -478,6 +479,14 @@
     if (e.key === "?") { e.preventDefault(); openShortcuts(); return; }
     if (ui.singleKeys) {
       if (!e.repeat && !e.shiftKey && patternKey(e.code)) { e.preventDefault(); return; }
+      if (e.code === "Backslash" || e.code === "Minus" || e.code === "Equal") {
+        e.preventDefault();
+        const target = inRoll() ? roll : timeline;
+        if (e.code === "Backslash") { target.fit(); Announce.say(inRoll() ? "Whole clip in view" : "Whole song in view"); }
+        else if (e.code === "Minus") target.zoomOut();
+        else target.zoomIn();
+        return;
+      }
       if (ui.keysMode === "edit") {
         if (!e.repeat && editKey(e)) e.preventDefault();
         return; // in Edit mode, letters don't play notes
@@ -543,7 +552,16 @@
     },
     onLoop: (start, end) => setLoop(start, end, true),
     onChanged: (text) => afterChange(text),
-    onZoom: showZoom,
+    onView: () => { if (tlZoom) tlZoom.draw(); },
+    isCollapsed: (id) => ui.collapsed.includes(id),
+    onToggleRow(id) {
+      const t = Song.track(song, id);
+      ui.collapsed = ui.collapsed.includes(id) ? ui.collapsed.filter((x) => x !== id) : [...ui.collapsed, id];
+      timeline.render();
+      showRowsFold();
+      Announce.say(`${t.name} row ${ui.collapsed.includes(id) ? "collapsed" : "expanded"}`);
+      save();
+    },
   });
 
   // After a finished edit (a button, a shortcut, the end of a drag): redraw,
@@ -558,12 +576,27 @@
     writeNow();
   }
 
-  function showZoom(z) {
-    $("zoom-in").disabled = !z.canIn;
-    $("zoom-out").disabled = !z.canOut;
+  // --- zoom bars (Premiere-style) and collapsible rows ---
+  tlZoom = ZoomBar.create($("tl-zoombar"), {
+    label: "Timeline", unit: (n) => "bar " + n,
+    get: () => timeline.getView(), set: (a, b) => timeline.setView(a, b), fit: () => timeline.fit(),
+  });
+  $("zoom-in").addEventListener("click", () => timeline.zoomIn());
+  $("zoom-out").addEventListener("click", () => timeline.zoomOut());
+  $("zoom-fit").addEventListener("click", () => { timeline.fit(); Announce.say("Whole song in view"); });
+
+  function showRowsFold() {
+    const all = song.tracks.every((t) => ui.collapsed.includes(t.id));
+    $("rows-fold").setAttribute("aria-pressed", String(all));
   }
-  $("zoom-in").addEventListener("click", () => showZoom(timeline.zoomIn()));
-  $("zoom-out").addEventListener("click", () => showZoom(timeline.zoomOut()));
+  $("rows-fold").addEventListener("click", () => {
+    const collapse = !song.tracks.every((t) => ui.collapsed.includes(t.id));
+    ui.collapsed = collapse ? song.tracks.map((t) => t.id) : [];
+    timeline.render();
+    showRowsFold();
+    Announce.say(collapse ? "All rows collapsed" : "All rows expanded");
+    save();
+  });
 
   $("new-clip").addEventListener("click", () => {
     const t = sel();
@@ -603,9 +636,15 @@
       return o ? Song.resizeNote(o.c, n, len) : n.len;
     },
     onSelect: () => { renderNotePage(); showActions(); },
+    onView: () => { if (rollZoom) rollZoom.draw(); },
     onChanged: (text) => afterChange(text),
     onPreview: (midi) => preview(sel(), midi),
     say: (text) => Announce.say(text),
+  });
+
+  rollZoom = ZoomBar.create($("roll-zoombar"), {
+    label: "Piano roll", unit: (n) => "step " + n,
+    get: () => roll.getView(), set: (a, b) => roll.setView(a, b), fit: () => roll.fit(),
   });
 
   const barsSel = $("clip-bars");
@@ -1713,7 +1752,12 @@
   applyLayout();
   selectTrack(song.selected, false);
   showLoop();
-  showZoom({ canIn: true, canOut: true });
+  showRowsFold();
+  // Draw the zoom bars once the layout has settled (and again after fonts load).
+  const drawZooms = () => { tlZoom.draw(); rollZoom.draw(); };
+  requestAnimationFrame(drawZooms);
+  setTimeout(drawZooms, 250);
+  window.addEventListener("load", drawZooms);
   showActions();
   showUndo();
   showTempoTools();

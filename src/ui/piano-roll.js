@@ -32,8 +32,11 @@
 
     const rowH = () => (document.documentElement.dataset.layout === "compact" ? 22 : 18);
     // Steps stretch to fill the editor's width, but never get narrower than this.
-    const minStepW = () => (document.documentElement.dataset.layout === "compact" ? 30 : 24);
+    // Fitting, steps get no narrower than this (still big enough to tap / click).
+    const minStepW = () => (document.documentElement.dataset.layout === "compact" ? 16 : 12);
     let sw = 24;
+    // Steps fill the width ("fitting") until zoomed by hand.
+    let fitting = true;
     const stepW = () => sw;
     const fitStepW = () => Math.max(minStepW(), Math.floor((el.clientWidth - KEYS_W - 2) / view.steps));
     const yOf = (midi) => (TOP - midi) * rowH();
@@ -130,17 +133,20 @@
       const first = !view || view.c !== v.c;
       view = v;
       if (cursor.step >= v.steps) cursor.step = 0;
-      sw = fitStepW();
+      if (fitting) sw = fitStepW();
       if (builtFor !== sig()) {
         buildBackground();
         // Its vertical scrollbar can appear only now, leaving a little less
         // room than measured: fit again so a short clip never scrolls sideways.
-        const refit = fitStepW();
-        if (refit !== sw) { sw = refit; buildBackground(); }
+        if (fitting) {
+          const refit = fitStepW();
+          if (refit !== sw) { sw = refit; buildBackground(); }
+        }
       }
       el.setAttribute("aria-label", `${v.name} notes, piano roll`);
       drawNotes();
       if (first) centerOn(v.c.notes.length ? Math.round(v.c.notes.reduce((a, n) => a + n.midi, 0) / v.c.notes.length) : 60);
+      if (h.onView) h.onView(); // the zoom bar follows the clip's length
     }
 
     function centerOn(midi) {
@@ -370,8 +376,44 @@
     let resizeTimer = 0;
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => { if (view && fitStepW() !== sw) rebuild(); }, 120);
+      resizeTimer = setTimeout(() => { if (view && fitting && fitStepW() !== sw) rebuild(); if (h.onView) h.onView(); }, 120);
     });
+
+    // --- zoom (time axis) ---
+    const roomW = () => Math.max(60, el.clientWidth - KEYS_W - 2);
+    function getView() {
+      if (!view) return { start: 0, end: 1, total: 1 };
+      const start = el.scrollLeft / sw;
+      return { start, end: Math.min(view.steps, start + roomW() / sw), total: view.steps };
+    }
+    function setView(start, end) {
+      if (!view) return;
+      const span = Math.max(roomW() / 80, Math.min(view.steps, end - start));
+      start = Math.max(0, Math.min(view.steps - span, start));
+      fitting = false;
+      sw = Math.max(8, Math.min(80, roomW() / span));
+      builtFor = "";
+      render(view);
+      el.scrollLeft = start * sw;
+      if (h.onView) h.onView();
+    }
+    function fit() {
+      fitting = true;
+      builtFor = "";
+      if (view) render(view);
+      el.scrollLeft = 0;
+      if (h.onView) h.onView();
+    }
+    const zoomBy = (f) => {
+      const v = getView(), mid = (v.start + v.end) / 2, half = (v.end - v.start) / 2 / f;
+      setView(mid - half, mid + half);
+    };
+    el.addEventListener("scroll", () => { if (h.onView) h.onView(); });
+    el.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.25 : 0.8);
+    }, { passive: false });
 
     // Moves the cursor (step input moves it on after each note).
     function setCursor(step, midi) {
@@ -385,7 +427,8 @@
     }
 
     return {
-      render, setPlayhead, rebuild, setCursor, element: el,
+      render, setPlayhead, rebuild, setCursor, element: el, getView, setView, fit,
+      zoomIn: () => zoomBy(1.5), zoomOut: () => zoomBy(1 / 1.5),
       focus: () => el.focus(),
       get cursor() { return { ...cursor }; },
       where: (s) => where(s),
