@@ -176,3 +176,25 @@ The layout sketch is in the Layout sketch section; these questions come from rea
 5. Done: tap tempo, metronome, one-bar count-in before recording, tempo changes along the song (jumps or ramps), shown on the ruler.
 6. Done: Track page (rename, 8 colors, reorder, remove, add up to 12 tracks) and Song page (key and scale with dimmed rows and optional keep-in-key, snap from 1/16 to a bar, swing). Still to come: time signatures other than 4/4 and triplet snap, which need a finer timing grid.
 7. Done: a Songs list (new, from the demo, duplicate, open, delete; saved in the browser), Export WAV (the whole song with its effects and mix), and export / import of a song file. Still to come: suggesting a tempo from a free recording, which needs recording without snapping first.
+8. Done: faster note editing (patterns, Play / Edit keys modes, shortcut list), Premiere-style zoom bars with zoom to fit, collapsible track rows, and Arrange panels (drag, move or collapse panels; side column left or right).
+9. Done: accessibility pass (axe plus manual WCAG 2.2 AA checks; fixes listed below) and install as an app with offline use.
+
+## Accessibility audit (2026-10-08)
+
+Checked with axe-core (WCAG 2.0 to 2.2 AA plus best practice) in every layout (320, 390, 800 and 1280 px wide), every Note Edit page, the clip editor, all dialogs and arrange mode, then by hand for what axe can't judge. Fixed:
+
+- **Nested controls:** the zoom bar's end handles were inside its middle slider; now they sit beside it.
+- **Dragging (2.5.7):** a "Plays for N bars" box stretches a clip without dragging. Every other drag already had a button or field.
+- **Target size (2.5.8):** bars never get narrower than 24 px, so ruler buttons and one-bar clips stay tappable (the zoom bar scrolls the rest); phone black keys are 24 px wide.
+- **Focus not obscured (2.4.11):** focus never hides under the sticky transport bar or the pinned phone keyboard.
+- **Reflow (1.4.10):** at 320 px (the same as 400% zoom) the transport and keyboard header fit without scrolling sideways.
+- **Labels:** the phone layout hid the tempo field's label from screen readers; the page heading moved inside the main landmark.
+- **Fewer Tab stops:** the ruler and each track's clips are one Tab stop each (arrows move along them): the timeline went from 36 stops to 13.
+
+Already passing: contrast in every theme (unit-tested), text spacing (1.4.12), reduced motion, single-key shortcuts can be turned off (2.1.4), live announcements for every edit.
+
+Still worth testing with people: NVDA on Windows and VoiceOver on iPhone, during the Week 9 sessions.
+
+## Install and offline
+
+Sound Studio is a PWA: `manifest.webmanifest`, icons drawn by `tools/make-icons.js`, and a service worker (`sw.js`). Settings › App has an Install button where the browser supports one (Chrome, Edge) and the steps for Safari on iPhone / iPad. The service worker fetches fresh files when online (so pushes show up on the next load) and falls back to its cache offline or after 3 seconds on a slow connection.

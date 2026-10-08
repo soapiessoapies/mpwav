@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#121419">
 <meta name="description" content="A music studio in the browser: a timeline of clips, synths, a mixing desk and a keyboard.">
 <title>Sound Studio</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sound Studio">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="styles/main.css">
 <script>
   // Pick the layout before the first paint (Settings > Layout; app.js keeps it up to date).
@@ -443,6 +451,13 @@
     <p class="help">High contrast is the default. Every background keeps all text and controls at full readability (WCAG AA).</p>
   </section>
 
+  <section aria-labelledby="set-app-h">
+    <h3 id="set-app-h">App</h3>
+    <button id="install-btn" type="button" hidden>Install Sound Studio</button>
+    <p id="install-help" class="help"></p>
+    <p id="offline-status" class="help" role="status"></p>
+  </section>
+
   <section aria-labelledby="set-keys-h">
     <h3 id="set-keys-h">Keyboard</h3>
     <label class="check"><input type="checkbox" id="single-keys"> Single-key shortcuts (number keys and Edit-mode letters)</label>
@@ -493,6 +508,7 @@
 <script src="src/ui/tabs.js"></script>
 <script src="src/ui/morph-pad.js"></script>
 <script src="src/ui/arrange.js"></script>
+<script src="src/ui/install.js"></script>
 <script src="src/ui/app.js"></script>
 </body>
 </html>

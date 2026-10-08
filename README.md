@@ -32,11 +32,15 @@ level of sound design.
 
 - **Live:** https://soapiessoapies.github.io/sound-studio/ (GitHub Pages, redeploys on every push to `main`)
 
+- **Install it:** Settings › App › Install Sound Studio (Chrome or Edge on Windows and Android), or on an
+  iPhone / iPad: Safari › Share › Add to Home Screen. Once loaded it works offline (`sw.js`).
 - **Double-click `Sound Studio.cmd`** to open it in Chrome as an app window.
 - **To test on a phone:** run `npm run serve` and open the "on your network" address it prints
   from a phone on the same Wi-Fi.
-- **Tests:** `npm test` covers the song model, song library, WAV encoding, undo history, note math, envelopes, voices, presets, and the WCAG AA
-  contrast of every color pair in every background theme.
+- **Tests:** `npm test` covers the song model, song library, WAV encoding, undo history, note math, envelopes, voices, presets, the WCAG AA
+  contrast of every color pair in every background theme, and that the offline cache lists every file the app loads.
+- **Icons:** `node tools/make-icons.js` redraws `assets/icons/` (no dependencies).
+- **Adding a script?** Add it to `SHELL` in `sw.js` too (a test fails until you do).
 
 ## Playing
 
@@ -58,7 +62,7 @@ level of sound design.
 | Tracks | Note Edit › Track: rename, color, move up/down, remove, add (up to 12) |
 | Song | Note Edit › Song: key and scale (dims notes outside it, optional keep-in-key), snap, swing |
 | Songs | The Songs button by the title: new, from the demo, duplicate, open, delete; Export WAV; export / import a song file |
-| Settings | Layout (Auto / Desktop / Phone), background, fullscreen, credits |
+| Settings | Layout (Auto / Desktop / Phone), Arrange panels, background, install as an app, single-key shortcuts, credits |
 | Play live | Tap/click the keys (slide to glide), or computer keys `A W S E D F T G Y H U J K` |
 | Octave | `Z` / `X`, or the − / + buttons |
 | Stop every note | `Esc`, or Stop all notes |

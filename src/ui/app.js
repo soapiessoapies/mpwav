@@ -1706,6 +1706,7 @@
 
   const settings = $("settings");
   $("version").textContent = "v" + window.STUDIO_VERSION;
+  Install.init({ button: $("install-btn"), help: $("install-help"), status: $("offline-status") }, (t) => Announce.say(t));
   $("settings-btn").addEventListener("click", () => {
     $("layout-" + ui.layout).checked = true;
     ($("theme-" + ui.theme) || $("theme-contrast")).checked = true;
