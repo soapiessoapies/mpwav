@@ -54,7 +54,7 @@
     function clipLabel(song, t, clip) {
       const c = Song.content(song, clip);
       const links = Song.linkCount(song, c.id);
-      return `${c.name}, ${t.name}, ${span(clip)}, ${c.bars}-bar loop` +
+      return `${c.name}, ${c.audio ? "audio clip" : t.name}, ${span(clip)}, ${c.bars}-bar loop` +
         (links > 1 ? `, linked with ${links - 1} other clip${links > 2 ? "s" : ""}` : "");
     }
 
@@ -93,6 +93,45 @@
           box.append(d);
         }
       });
+      return box;
+    }
+
+    // An audio clip's sound as a waveform, once per pass of its loop, as
+    // long as the trimmed sound lasts there (fit to tempo fills the loop).
+    function waveBox(song, t, clip) {
+      const c = Song.content(song, clip);
+      const box = el("div", "clip-notes clip-wave", { "aria-hidden": "true" });
+      const v = h.soundView && h.soundView(c);
+      if (!v || !v.peaks) return box;
+      const a = c.audio, dur = v.duration, n = v.peaks.length / 2;
+      const end = Math.min(dur, a.end == null ? dur : a.end), start = Math.min(a.start, end);
+      const trimmed = end - start, loopSecs = c.bars * Song.STEPS * v.stepSecs;
+      if (trimmed <= 0) return box;
+      const rate = a.fit ? Math.min(4, Math.max(0.25, trimmed / loopSecs)) : 1;
+      const plays = Math.min(1, trimmed / rate / loopSecs); // the share of each pass with sound
+      const total = clip.length, loop = c.bars, P = 160;
+      const ns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", `0 0 ${total * 100} 100`);
+      svg.setAttribute("preserveAspectRatio", "none");
+      for (let p0 = -(clip.offset || 0); p0 < total; p0 += loop) {
+        const from = Math.max(0, p0), to = Math.min(total, p0 + loop * plays);
+        if (to <= from) continue;
+        let top = "", bottom = "";
+        for (let j = 0; j <= P; j++) {
+          const x = from + ((to - from) * j) / P;
+          const u = (x - p0) / (loop * plays);           // 0..1 through the trimmed sound
+          const time = a.reverse ? end - u * trimmed : start + u * trimmed;
+          const k = Math.max(0, Math.min(n - 1, Math.floor((time / dur) * (n - 1))));
+          const px = (x * 100).toFixed(1);
+          top += `${px},${(50 - v.peaks[k * 2 + 1] * 48).toFixed(1)} `;
+          bottom = `${px},${(50 - v.peaks[k * 2] * 48).toFixed(1)} ` + bottom;
+        }
+        const shape = document.createElementNS(ns, "polygon");
+        shape.setAttribute("points", top + bottom);
+        svg.append(shape);
+      }
+      box.append(svg);
       return box;
     }
 
@@ -191,7 +230,7 @@
           b.style.width = clip.length * barW() + "px";
           const label = el("span", "clip-name", { "aria-hidden": "true" });
           label.textContent = c.name;
-          b.append(label, notesBox(song, t, clip));
+          b.append(label, c.audio ? waveBox(song, t, clip) : notesBox(song, t, clip));
           if (Song.linkCount(song, c.id) > 1) b.append(el("span", "clip-link", { "aria-hidden": "true", title: "Linked" }));
           // Loop repeats marked with a notch where each repeat starts.
           for (let r = c.bars; r < clip.length; r += c.bars) {

@@ -980,3 +980,41 @@ dialog .check { white-space: normal; align-items: flex-start; }
   content: ""; position: absolute; right: 2px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px;
   border-radius: 50%; background: currentColor; pointer-events: none;
 }
+
+/* ---------- sound files: audio clips, the wave editor, the instrument ---------- */
+.clip-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.clip-wave polygon { fill: var(--track); opacity: 0.9; }
+.tl-scroll.dropping { outline: 3px dashed var(--accent); outline-offset: -3px; }
+#clip-body:not(.audio) .audio-only, #clip-body.audio .notes-only, #clip-body.audio #roll-zoombar { display: none !important; }
+#clip-body.audio .tip#roll-help, #clip-body.audio #step-help, #clip-body.audio #record-help { display: none; }
+.wave-editor { display: flex; flex-direction: column; gap: 6px; }
+.wave-fields { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.wave-fields input { width: 5.5em; padding: 0 6px; }
+.wave {
+  position: relative; height: 140px; min-height: 80px; overflow: hidden; touch-action: none;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+}
+.wave svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wave-shape { fill: var(--track, var(--accent)); opacity: 0.3; }
+.wave-part {
+  position: absolute; top: 0; bottom: 0; overflow: visible;
+  background: color-mix(in srgb, var(--track, var(--accent)) 22%, transparent);
+  box-shadow: inset 0 0 0 2px var(--track, var(--accent));
+}
+.wave-fade { position: absolute; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.45); pointer-events: none; }
+.wave-fade.in { left: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.wave-fade.out { right: 0; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.wave-edge { position: absolute; top: 0; bottom: 0; left: -8px; width: 16px; cursor: ew-resize; }
+.wave-edge.right { left: auto; right: -8px; }
+.wave-edge::after { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 4px; background: var(--track, var(--accent)); }
+.wave-knob {
+  position: absolute; top: 0; width: 14px; height: 14px; margin-left: -7px; cursor: ew-resize;
+  background: var(--text); border: 2px solid var(--bg);
+}
+.wave-knob.right { margin: 0 -7px 0 0; }
+.wave-status { margin: 0; color: var(--muted); font-size: 0.85rem; }
+[data-fit="on"] #clip-body > .wave-editor { flex: 1 1 0; min-height: 0; }
+[data-fit="on"] .wave-editor > .wave { flex: 1 1 0; height: auto; }
+.inst-now { margin: 0 0 8px; font-weight: 600; }
+.inst-sample { display: grid; gap: 8px; margin-top: 8px; }
+#wave-reverse[aria-pressed="true"], #wave-fit[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

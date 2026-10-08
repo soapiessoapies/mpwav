@@ -60,7 +60,8 @@ level of sound design.
 | Undo | Ctrl + Z / Ctrl + Y, or the Undo / Redo buttons: every edit, one step at a time |
 | Tempo | Type it, or Tap tempo; Metronome clicks on every beat; Count-in gives a bar of clicks before recording; Tempo change at cursor adds a jump or ramp, shown on the ruler |
 | Step input | With the piano roll focused (or Step input on), play a key to write it at the cursor; hold keys for a chord |
-| Tracks | Note Edit › Track: rename, color, move up/down, remove, add (up to 12) |
+| Tracks | Note Edit › Track: rename, color, move up/down, remove, add a synth track or an audio track (up to 12) |
+| Sound files | Upload .wav / .mp3 (or drop them on the timeline). On an **audio track** they become audio clips (waveforms on the timeline); open one to trim (drag the edges or type Start / End), fade in / out, set gain, reverse, fit to tempo (speeds it up or down, like a record, to fill the loop), loop the whole sound or replace it. On a **synth track** (Note Edit › Sound › Instrument, or drop on its row) a sound becomes the instrument: pitched by key from its root note, still shaped by the filter, envelope, Warp and each note's own sound. Sounds are kept in this browser and travel inside exported song files |
 | Song | Note Edit › Song: key and scale (dims notes outside it, optional keep-in-key), snap, swing |
 | Songs | The Songs button by the title: new, from the demo, duplicate, open, delete; Export WAV; export / import a song file |
 | One screen | On desktop everything fits the window (Settings › Layout › Fit to the window); a panel with more than fits scrolls inside itself. Drag the bar between two panels (or focus it and use the arrows) to share the room differently |

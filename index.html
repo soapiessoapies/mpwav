@@ -165,7 +165,7 @@
       </p>
       <div id="clip-body">
         <p id="clip-status" class="loop-status"></p>
-        <div class="tool-row">
+        <div class="tool-row notes-only">
         <div class="toolbar" role="group" aria-label="Notes">
           <span class="toolbar-label" aria-hidden="true">Notes</span>
           <button type="button" id="notes-all" aria-keyshortcuts="Control+A">Select all</button>
@@ -196,8 +196,31 @@
           Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
           snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
         </p>
-        <div id="roll" class="roll" aria-describedby="roll-help"></div>
-        <div id="roll-zoombar"></div>
+        <div id="roll" class="roll notes-only" aria-describedby="roll-help"></div>
+        <div id="roll-zoombar" class="notes-only"></div>
+        <!-- An audio clip opens here instead of the piano roll -->
+        <div id="wave-editor" class="wave-editor audio-only">
+          <div class="tool-row">
+            <div class="toolbar" role="group" aria-label="Sound">
+              <button type="button" id="wave-hear">Hear it</button>
+              <button type="button" id="wave-reverse" aria-pressed="false">Reverse</button>
+              <button type="button" id="wave-fit" aria-pressed="false" aria-describedby="wave-fit-help">Fit to tempo</button>
+              <button type="button" id="wave-fill">Loop the whole sound</button>
+              <button type="button" id="wave-replace">Replace sound…</button>
+            </div>
+          </div>
+          <p id="wave-fit-help" class="help tip">Fit to tempo speeds the sound up or slows it down so it fills the clip's loop exactly. Like a record, its pitch moves with it.</p>
+          <div class="wave-fields">
+            <label class="inline">Start <input id="wave-start" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+            <label class="inline">End <input id="wave-end" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+            <label class="inline">Fade in <input id="wave-fadein" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
+            <label class="inline">Fade out <input id="wave-fadeout" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
+            <label class="inline">Gain <input id="wave-gain" type="number" inputmode="decimal" step="0.5" min="-24" max="12"> dB</label>
+          </div>
+          <p class="help tip">Drag the edges of the bright part to trim, and the small squares at its top corners to fade. The fields above do the same from a keyboard.</p>
+          <div id="wave" class="wave" aria-hidden="true"></div>
+          <p id="wave-status" class="wave-status"></p>
+        </div>
       </div>
     </section>
   </div>
@@ -286,7 +309,11 @@
         </div>
         <button type="button" id="track-remove" class="quiet">Remove this track</button>
         <hr class="divider">
-        <button type="button" id="track-add">Add a track</button>
+        <div class="note-pitch">
+          <button type="button" id="track-add">Add a synth track</button>
+          <button type="button" id="track-add-audio">Add an audio track</button>
+        </div>
+        <p class="help tip">Synth tracks play notes. Audio tracks play sound files (.wav, .mp3) as clips on the timeline: drop a file on a row, or press New clip on one.</p>
         <p id="track-count" class="help"></p>
       </div>
       <div id="p-song" class="page" role="tabpanel" aria-labelledby="tab-p-song" tabindex="0" hidden>
@@ -307,6 +334,25 @@
         <p class="help tip">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
       </div>
       <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
+        <p id="audio-track-note" class="loop-status" hidden>An audio track plays sound files. Warp and Mix shape it; open one of its clips to trim, fade or reverse it.</p>
+        <section id="instrument" class="morph-box" aria-labelledby="inst-h">
+          <h3 id="inst-h">Instrument</h3>
+          <p id="inst-now" class="inst-now"></p>
+          <div class="note-pitch">
+            <button type="button" id="inst-load">Use a sound file…</button>
+            <button type="button" id="inst-synth" class="quiet">Back to the synth</button>
+          </div>
+          <div id="inst-sample" class="inst-sample">
+            <label class="inline">Its own pitch on <select id="inst-root"></select></label>
+            <div class="wave-fields">
+              <label class="inline">Start <input id="inst-start" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+              <label class="inline">End <input id="inst-end" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+              <label class="inline">Gain <input id="inst-gain" type="number" inputmode="decimal" step="0.5" min="-24" max="12"> dB</label>
+            </div>
+            <label class="check"><input type="checkbox" id="inst-reverse"> Reverse</label>
+          </div>
+          <p class="help tip">A sound file plays at its own pitch on that key, and higher or lower on the others. The Shape, Filter and Warp pages and each note's own sound still shape it.</p>
+        </section>
         <div class="preset">
           <label for="preset">Preset</label>
           <select id="preset"></select>
@@ -515,7 +561,7 @@
       <dt>Design and direction</dt><dd>Phie</dd>
       <dt>Code</dt><dd>Phie &amp; Claude (Anthropic)</dd>
       <dt>Made for</dt><dd>Creative Coding &amp; Innovation</dd>
-      <dt>Sound</dt><dd>Synthesized live in your browser with the Web Audio API</dd>
+      <dt>Sound</dt><dd>Synthesized live in your browser with the Web Audio API, plus any sound files you add</dd>
       <dt>Look</dt><dd>Modeled on Bezier, the class's drawing app</dd>
       <dt>Fonts</dt><dd>Nunito, Pixelify Sans and Caveat Brush (SIL Open Font License; in assets/fonts)</dd>
     </dl>
@@ -523,6 +569,7 @@
 </dialog>
 
 <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+<input type="file" id="sound-input" accept="audio/*,.wav,.mp3,.ogg,.m4a,.flac,.aif,.aiff" hidden>
 
 <script src="src/version.js"></script>
 <script src="src/ui/fill.js"></script>
@@ -541,6 +588,7 @@
 <script src="src/state/song.js"></script>
 <script src="src/state/history.js"></script>
 <script src="src/state/library.js"></script>
+<script src="src/state/samples.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>
 <script src="src/ui/keyboard.js"></script>

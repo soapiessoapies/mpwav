@@ -13,6 +13,11 @@
 // start, fine tuning, its own vibrato, a brighter or darker filter, a pan,
 // retriggering, and a burst of noise at the start. playNote() handles all
 // of it; live playing from the keyboard uses noteOn() without fx.
+//
+// Sound files: setSample() swaps the oscillator for an uploaded sound,
+// pitched by key from its root note (a sampler), still through the filter,
+// envelope and effects. playAudio() plays a stretch of a sound as it is
+// (an audio clip) through the volume and warp effects, with its fades.
 (function (root) {
   "use strict";
 
@@ -149,12 +154,23 @@
     lfo.start();
 
     let bpm = opts.bpm || 120;
+    let sample = null;            // { buffer, root, from, len, gain } when playing a sound file
+    const clipVoices = new Set(); // audio clips playing: { src, g }
 
     function volumeGain(db) {
       return db <= Params.BY_ID.volume.min ? 0 : Params.dbToGain(db);
     }
 
     function makeSource(midi) {
+      if (sample) {
+        const src = ctx.createBufferSource();
+        src.buffer = sample.buffer;
+        src.playbackRate.value = Math.min(16, Math.max(1 / 16, Math.pow(2, (midi + p.octave * 12 - sample.root) / 12)));
+        src.detune.value = p.detune;
+        src.sampleFrom = sample.from;
+        src.sampleLen = sample.len;
+        return src;
+      }
       const freq = Notes.mtof(midi + p.octave * 12);
       if (p.wave === "noise") {
         const src = ctx.createBufferSource();
@@ -205,10 +221,11 @@
         src.detune.setTargetAtTime(baseDetune, when, SWEEP_TIME);
       } else src.detune.value = baseDetune;
       if (f.bend && length > 0) {
-        const pitch = p.wave === "noise" ? src.playbackRate : src.frequency;
+        const buffered = !src.frequency; // noise and sound files move playbackRate
+        const pitch = buffered ? src.playbackRate : src.frequency;
         const from = pitch.value, to = from * Math.pow(2, f.bend / 12);
         pitch.setValueAtTime(from, when);
-        pitch.exponentialRampToValueAtTime(p.wave === "noise" ? Math.min(16, Math.max(1 / 16, to)) : clampHz(to), when + length);
+        pitch.exponentialRampToValueAtTime(buffered ? Math.min(16, Math.max(1 / 16, to)) : clampHz(to), when + length);
       }
       // The note's own vibrato: a little LFO of its own, only when asked for.
       let noteLfo = null;
@@ -243,7 +260,7 @@
 
       const env = {
         start: when, attack: p.attack, decay: p.decay, sustain: p.sustain,
-        release: p.release, peak: VOICE_GAIN * velocity,
+        release: p.release, peak: VOICE_GAIN * velocity * (sample ? sample.gain : 1),
       };
       Envelope.scheduleOn(vca.gain, env);
       // The filter envelope sweeps the cutoff up by `filterEnv` octaves,
@@ -265,7 +282,8 @@
       for (const v of release) releaseVoice(v, when);
       for (const v of cut) cutVoice(v);
 
-      src.start(when);
+      if (src.sampleLen != null) src.start(when, src.sampleFrom, src.sampleLen);
+      else src.start(when);
       return voice;
     }
 
@@ -319,6 +337,50 @@
     // Panic: everything silent now.
     function allOff() {
       for (const v of pool.all()) cutVoice(v);
+      const now = ctx.currentTime;
+      for (const { src, g } of clipVoices) {
+        g.gain.cancelScheduledValues(now);
+        g.gain.setTargetAtTime(0, now, CUT_FADE);
+        try { src.stop(now + CUT_FADE * 6); } catch (e) { /* already stopping */ }
+      }
+    }
+
+    // The instrument: a sound file (pitched by key) or, with null, the oscillator.
+    // s: { buffer (already reversed if it should be), root, start, end, gain (dB) }
+    function setSample(s) {
+      if (!s || !s.buffer) { sample = null; return; }
+      const dur = s.buffer.duration;
+      const end = Math.min(dur, s.end == null ? dur : s.end), start = Math.min(s.start || 0, end);
+      sample = {
+        buffer: s.buffer, root: s.root,
+        from: s.reverse ? dur - end : start, len: Math.max(0.001, end - start),
+        gain: Params.dbToGain(s.gain || 0),
+      };
+    }
+
+    // An audio clip: plays `seg` (see Song.audioSegment) of `buffer` from
+    // `at`, with its fades (and a few milliseconds of fade always, so it
+    // never clicks), as loud as a full synth note at 0 dB.
+    function playAudio(buffer, seg, at) {
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.playbackRate.value = seg.rate;
+      const g = ctx.createGain();
+      const peak = VOICE_GAIN * Params.dbToGain(seg.gain || 0);
+      const secs = seg.length / seg.rate;
+      const fi = Math.max(0.004, Math.min(seg.fadeIn || 0, secs / 2));
+      const fo = Math.max(0.004, Math.min(seg.fadeOut || 0, secs / 2));
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(peak, at + fi);
+      g.gain.setValueAtTime(peak, at + secs - fo);
+      g.gain.linearRampToValueAtTime(0, at + secs);
+      src.connect(g);
+      g.connect(out);
+      const voice = { src, g };
+      clipVoices.add(voice);
+      src.onended = () => { clipVoices.delete(voice); src.disconnect(); g.disconnect(); };
+      src.start(at, seg.offset, seg.length);
+      src.stop(at + secs + 0.01);
     }
 
     // Changes a parameter. Filter, tuning, volume and warp changes are heard
@@ -379,7 +441,7 @@
     }
 
     return {
-      noteOn, noteOff, voiceOff, playNote, allOff, set, load, setTempo, dispose,
+      noteOn, noteOff, voiceOff, playNote, allOff, set, load, setTempo, dispose, setSample, playAudio,
       held: () => pool.held(),
       get params() { return { ...p }; },
       output: out,

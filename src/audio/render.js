@@ -10,6 +10,7 @@
 
   const SAMPLE_RATE = 44100;
   const TAIL = 3; // seconds after the last bar, for echoes and reverb to ring out
+  const durationOf = (id) => (Samples.info(id) || {}).duration || 0;
 
   // live(track) -> the synth settings to play it with (the morph pad applied).
   // Bars [from, to) are rendered; by default the whole song.
@@ -17,6 +18,7 @@
   async function renderSong(song, live, { from = 0, to = Song.songBars(song), onProgress } = {}) {
     const steps = (to - from) * Song.STEPS;
     if (steps <= 0) throw new Error("The song has no clips to export yet.");
+    await Samples.load(Song.soundIds(song)); // uploaded sounds, decoded
 
     // When each step starts, following tempo changes and ramps.
     const times = [];
@@ -31,6 +33,8 @@
       channel.setVolume(track.volume, Song.FADER.min);
       channel.setPan(track.pan);
       const synth = Synth.create(ctx, channel.input, live(track), { reverb: bus.reverb, bpm: song.bpm });
+      const s = track.sampler;
+      if (s) synth.setSample({ ...s, buffer: Samples.buffer(s.sampleId, s.reverse) });
       return { track, synth };
     });
 
@@ -46,6 +50,8 @@
           for (const n of Song.notesAtPos(song, p.track, pos)) {
             p.synth.playNote(n, at, dur);
           }
+          const seg = Song.audioSegment(song, p.track, pos, from * Song.STEPS, durationOf, dur);
+          if (seg) p.synth.playAudio(Samples.buffer(seg.sampleId, seg.reverse), seg, times[i]);
         }
       }
     }

@@ -461,3 +461,64 @@ test("a note's own sound (fx): cleaned, defaults left out, kept through copy, pa
   assert.deepEqual(notes.find((m) => m.step === 0).fx, { bend: -5 });
   assert.deepEqual(notes.find((m) => m.step === 8).fx, { bend: 7 });
 });
+
+test("audio tracks and clips: made, cleaned, copied only between audio tracks, saved", () => {
+  const s = S.createSong();
+  const a = S.addTrack(s, { kind: "audio" });
+  assert.equal(a.kind, "audio");
+  assert.match(a.name, /^Audio/);
+  assert.equal(S.addAudioClip(s, lead(s), 0, "snd-abc", "Kick", 1), null, "synth tracks don't take audio clips");
+  s.bpm = 120; // a bar is 2 seconds
+  const clip = S.addAudioClip(s, a, 2, "snd-abc", "Vocal.wav", 5.1);
+  assert.equal(clip.start, 2);
+  assert.equal(clip.length, 3, "5.1 seconds at 120 BPM needs 3 bars");
+  const c = S.content(s, clip);
+  assert.deepEqual(c.notes, []);
+  assert.equal(c.audio.sampleId, "snd-abc");
+
+  const data = S.copyClip(s, clip);
+  assert.equal(S.pasteClip(s, lead(s), data, 0), null, "an audio clip won't paste onto a synth track");
+  assert.ok(S.pasteClip(s, a, data, 0));
+
+  lead(s).sampler = { sampleId: "snd-xyz", root: 200, start: -3, gain: 99 };
+  c.audio.fadeIn = 50;
+  const back = S.sanitize(JSON.parse(JSON.stringify(s)));
+  const a2 = back.tracks.find((t) => t.id === a.id);
+  assert.equal(a2.kind, "audio");
+  assert.equal(a2.clips.length, 2);
+  const orig = S.content(back, a2.clips.find((x) => x.start === 2));
+  assert.equal(orig.bars, 3, "audio loops can be longer than 4 bars");
+  assert.equal(orig.audio.fadeIn, 10, "fades are capped");
+  assert.deepEqual(lead(back).sampler, { sampleId: "snd-xyz", root: 108, start: 0, end: null, reverse: false, gain: 12 });
+  assert.deepEqual(S.soundIds(back).sort(), ["snd-abc", "snd-xyz"]);
+});
+
+test("audio segments: which part of a sound plays at a step", () => {
+  const s = S.createSong();
+  s.bpm = 120; // a step is 0.125 s, a bar 2 s
+  const a = S.addTrack(s, { kind: "audio" });
+  const clip = S.addAudioClip(s, a, 0, "snd-abc", "Loop", 3); // 2 bars
+  clip.length = 4; // the 2-bar loop plays twice
+  const step = 0.125;
+  const at = (pos, from = 0) => S.audioSegment(s, a, pos, from, (id) => (id === "snd-abc" ? 3 : 0), step);
+
+  assert.deepEqual(at(0), { sampleId: "snd-abc", offset: 0, length: 3, rate: 1, fadeIn: 0, fadeOut: 0, gain: 0, reverse: false });
+  assert.equal(at(5), null, "nothing new starts mid-loop");
+  assert.equal(at(32).offset, 0, "the loop's second pass starts the sound again");
+  const mid = at(8, 8); // play started at step 8 (1 second in)
+  assert.equal(mid.offset, 1);
+  assert.equal(mid.length, 2);
+
+  const c = S.content(s, clip);
+  c.audio.start = 0.5; c.audio.end = 2.5; c.audio.reverse = true;
+  const r = at(0);
+  assert.equal(r.offset, 0.5, "reversed: starts where the trim's end lands in the reversed sound");
+  assert.equal(r.length, 2);
+  c.audio.reverse = false;
+  c.audio.fit = true; // 2 seconds of sound fills the 4-second loop at half speed
+  const f = at(0);
+  assert.equal(f.rate, 0.5);
+  assert.equal(f.length, 2);
+  clip.length = 1; // the clip ends after a bar: the sound stops there
+  assert.equal(at(0).length, 1);
+});

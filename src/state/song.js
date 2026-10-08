@@ -17,6 +17,12 @@
 //                    from the tempo before up to this one, arriving at `bar`.
 //                    Notes sit in bars and beats, so a tempo change speeds
 //                    the music up or slows it down without moving anything.
+//   Sounds:          uploaded files live outside the song (src/state/samples.js);
+//                    the song keeps their ids. A synth track can play one as
+//                    its instrument (`sampler`: pitched by key), and an
+//                    audio track (`kind: "audio"`) holds audio clips: their
+//                    content has `audio` { sampleId, start, end, fadeIn,
+//                    fadeOut, reverse, gain, fit } and no notes.
 //   song.loop        { on, start, end } in bars: the stretch Play repeats.
 //                    With the loop off, Play runs from the cursor to the
 //                    end of the song and stops.
@@ -76,6 +82,12 @@
   ];
   const FX_BY_ID = Object.fromEntries(NOTE_FX.map((d) => [d.id, d]));
 
+  // Sounds: an audio clip loops up to this many bars, and sound ids look like this.
+  const AUDIO_BARS_MAX = 64;
+  const SOUND_RE = /^snd-[a-z0-9]{1,24}$/;
+  const SAMPLER_DEF = { sampleId: null, root: 60, start: 0, end: null, reverse: false, gain: 0 };
+  const AUDIO_DEF = { sampleId: null, start: 0, end: null, fadeIn: 0, fadeOut: 0, reverse: false, gain: 0, fit: false };
+
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const num = (v, d) => (typeof v === "number" && Number.isFinite(v) ? v : d);
   const int = (v, d) => (Number.isInteger(v) ? v : d);
@@ -102,9 +114,34 @@
   }
   const noteFx = (n, id) => (n.fx && n.fx[id] !== undefined ? n.fx[id] : FX_BY_ID[id].def);
 
-  function createTrack({ id, name, preset, color, gridBase = 60, length = 1 }) {
+  // Trim points in seconds (end null = the sound's end), fades in seconds, gain in dB.
+  function cleanTrim(x, out) {
+    out.start = Math.max(0, num(x.start, 0));
+    out.end = typeof x.end === "number" && Number.isFinite(x.end) && x.end > out.start ? x.end : null;
+    out.reverse = x.reverse === true;
+    out.gain = clamp(Math.round(num(x.gain, 0) * 2) / 2, -24, 12);
+    return out;
+  }
+  function cleanSampler(x) {
+    if (!x || typeof x !== "object" || !SOUND_RE.test(x.sampleId)) return null;
+    const out = cleanTrim(x, { ...SAMPLER_DEF, sampleId: x.sampleId });
+    out.root = clamp(int(x.root, 60), LOWEST, HIGHEST);
+    return out;
+  }
+  function cleanAudio(x) {
+    if (!x || typeof x !== "object" || !SOUND_RE.test(x.sampleId)) return null;
+    const out = cleanTrim(x, { ...AUDIO_DEF, sampleId: x.sampleId });
+    out.fadeIn = clamp(num(x.fadeIn, 0), 0, 10);
+    out.fadeOut = clamp(num(x.fadeOut, 0), 0, 10);
+    out.fit = x.fit === true;
+    return out;
+  }
+
+  function createTrack({ id, name, preset, color, gridBase = 60, length = 1, kind = "synth" }) {
     return {
       id, name, preset, color,
+      kind,          // "synth" (notes) or "audio" (sound files)
+      sampler: null, // a synth track playing a sound file instead of its oscillator
       params: Params.sanitize(Presets.find(preset).params),
       clips: [], // { id, contentId, start, length, offset } in bars, sorted by start, never overlapping
       gridBase,  // lowest row shown in the clip editor (a C)
@@ -148,10 +185,23 @@
   const content = (song, clip) => song.contents[clip.contentId];
   const clipEnd = (c) => c.start + c.length;
 
-  function makeContent(song, trackId, name, bars = 1, notes = []) {
+  function makeContent(song, trackId, name, bars = 1, notes = [], audio = null) {
     const id = newId(song, "n");
     song.contents[id] = { id, trackId, name, bars, notes };
+    if (audio) song.contents[id].audio = { ...audio };
     return song.contents[id];
+  }
+
+  // Bars a sound takes at the song's tempo (at least one).
+  const barsFor = (song, seconds) => clamp(Math.ceil(seconds / (stepSeconds(song, 0) * STEPS) - 0.02), 1, AUDIO_BARS_MAX);
+
+  // A new audio clip on an audio track, playing a sound from `bar` (or
+  // the next free space). Returns the clip, or null.
+  function addAudioClip(song, t, bar, sampleId, name, seconds) {
+    if (t.kind !== "audio" || !SOUND_RE.test(sampleId)) return null;
+    const bars = barsFor(song, seconds || 0);
+    const c = makeContent(song, t.id, cleanName(name) || nextName(song, t), bars, [], { ...AUDIO_DEF, sampleId });
+    return addClip(song, t, freeBar(t, bar, bars), bars, c.id);
   }
 
   // The next free name for a track's clips: "Lead 1", "Lead 2"...
@@ -198,7 +248,7 @@
   // A content of its own with the same notes (for copies that aren't linked).
   function cloneContent(song, c, name) {
     return makeContent(song, c.trackId, name || nextName(song, Song_track(song, c.trackId)), c.bars,
-      c.notes.map((n) => ({ ...n })));
+      c.notes.map((n) => ({ ...n })), c.audio);
   }
 
   // A copy of a clip right after it (or the next free space): linked shares
@@ -215,13 +265,16 @@
   // What a copied clip carries: its notes, so it pastes as an independent clip.
   function copyClip(song, clip) {
     const c = content(song, clip);
-    return { kind: "clip", name: c.name, bars: c.bars, notes: c.notes.map((n) => ({ ...n })), length: clip.length, offset: clip.offset };
+    return { kind: "clip", name: c.name, bars: c.bars, notes: c.notes.map((n) => ({ ...n })), length: clip.length, offset: clip.offset,
+      ...(c.audio ? { audio: { ...c.audio } } : {}) };
   }
 
   // Pastes a copied clip onto a track at the first free space from `bar`.
+  // An audio clip only pastes onto an audio track, and notes onto a synth track.
   function pasteClip(song, t, data, bar) {
+    if (!!data.audio !== (t.kind === "audio")) return null;
     const c = makeContent(song, t.id, data.name + (Object.values(song.contents).some((x) => x.trackId === t.id && x.name === data.name) ? " copy" : ""),
-      data.bars, data.notes.map((n) => ({ ...n })));
+      data.bars, data.notes.map((n) => ({ ...n })), data.audio);
     const clip = addClip(song, t, freeBar(t, bar, data.length), data.length, c.id);
     clip.offset = data.offset % data.bars;
     return clip;
@@ -339,12 +392,12 @@
   const cleanName = (v, max = 24) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
   // A new track at the end, in the first color not in use. Returns it, or null at the limit.
-  function addTrack(song, { name, preset = "chip-lead", color } = {}) {
+  function addTrack(song, { name, preset = "chip-lead", color, kind = "synth" } = {}) {
     if (song.tracks.length >= MAX_TRACKS) return null;
     const used = new Set(song.tracks.map((t) => t.color));
     const t = createTrack({
-      id: newId(song, "t"),
-      name: cleanName(name) || `Track ${song.tracks.length + 1}`,
+      id: newId(song, "t"), kind: kind === "audio" ? "audio" : "synth",
+      name: cleanName(name) || (kind === "audio" ? `Audio ${song.tracks.length + 1}` : `Track ${song.tracks.length + 1}`),
       preset: Presets.find(preset) ? preset : "init",
       color: COLORS.includes(color) ? color : COLORS.find((c) => !used.has(c)) || COLORS[song.tracks.length % COLORS.length],
     });
@@ -591,6 +644,50 @@
     return clip ? notesAt(content(song, clip), localStep(song, clip, pos)) : [];
   }
 
+  // The part of an audio clip's sound that starts playing at step `pos`:
+  // at the start of each repeat of its loop, or partway in when play starts
+  // inside it (`from`, the step play started at). `durationOf(id)` gives a
+  // sound's length in seconds (0 if it isn't loaded) and `stepSecs` is a
+  // step's length now. Returns null, or { sampleId, offset, length, rate,
+  // fadeIn, fadeOut, gain, reverse }:
+  // where to start in the (reversed, if so) sound and for how many seconds
+  // of it, at what speed. Fit to tempo speeds the trimmed sound up or down
+  // (like a record) so it fills the loop exactly.
+  function audioSegment(song, t, pos, from, durationOf, stepSecs) {
+    if (t.kind !== "audio") return null;
+    const clip = clipAt(t, Math.floor(pos / STEPS));
+    const c = clip && content(song, clip);
+    if (!c || !c.audio) return null;
+    const local = localStep(song, clip, pos);
+    if (local !== 0 && pos !== from) return null;
+    const a = c.audio;
+    const duration = durationOf(a.sampleId) || 0;
+    const end = Math.min(duration, a.end == null ? duration : a.end), start = Math.min(a.start, end);
+    const trimmed = end - start;
+    const loopSecs = c.bars * STEPS * stepSecs;
+    if (trimmed <= 0 || loopSecs <= 0) return null;
+    const rate = a.fit ? clamp(trimmed / loopSecs, 0.25, 4) : 1;
+    const into = local * stepSecs * rate;         // seconds of sound already past
+    // Plays to the end of the trim, or the end of this pass of the loop,
+    // or the end of the clip, whichever comes first.
+    const clipLeft = (clipEnd(clip) * STEPS - pos) * stepSecs * rate;
+    const length = Math.min(trimmed - into, (loopSecs - local * stepSecs) * rate, clipLeft);
+    if (length <= 0.001) return null;
+    const offset = a.reverse ? duration - end + into : start + into;
+    return {
+      sampleId: a.sampleId, offset, length, rate,
+      fadeIn: into === 0 ? a.fadeIn : 0,
+      fadeOut: a.fadeOut, gain: a.gain, reverse: a.reverse,
+    };
+  }
+
+  // Every sound a song uses (to load them before playing, or to export them).
+  function soundIds(song) {
+    const ids = song.tracks.map((t) => t.sampler && t.sampler.sampleId);
+    for (const c of Object.values(song.contents)) if (c.audio) ids.push(c.audio.sampleId);
+    return [...new Set(ids.filter(Boolean))];
+  }
+
   // How long the song is: to the end of its last clip.
   function songBars(song) {
     return song.tracks.reduce((m, t) => Math.max(m, ...t.clips.map(clipEnd)), 0);
@@ -710,7 +807,7 @@
         out.tracks = saved.map((x, i) => {
           const def = DEFAULT_TRACKS.find((d) => d.id === x.id) || {};
           return createTrack({
-            id: x.id,
+            id: x.id, kind: x.kind === "audio" ? "audio" : "synth",
             name: cleanName(x.name) || def.name || "Track",
             preset: Presets.find(x.preset) ? x.preset : def.preset || "init",
             color: COLORS.includes(x.color) ? x.color : def.color || COLORS[i % COLORS.length],
@@ -737,13 +834,18 @@
         return st && LENGTHS.includes(st.length) ? st.length : ((DEFAULT_TRACKS.find((d) => d.id === trackId) || {}).length || 1);
       };
       for (const [id, c] of Object.entries(input.contents)) {
-        if (!c || !out.tracks.some((t) => t.id === c.trackId)) continue;
-        const bars = CONTENT_BARS.includes(c.bars) ? c.bars : 1;
+        const owner = c && out.tracks.find((t) => t.id === c.trackId);
+        if (!owner) continue;
+        // Audio tracks hold audio contents (any loop up to 64 bars); synth tracks hold notes.
+        const audio = owner.kind === "audio" ? cleanAudio(c.audio) : null;
+        if (owner.kind === "audio" && !audio) continue;
+        const bars = audio ? clamp(int(c.bars, 1), 1, AUDIO_BARS_MAX) : CONTENT_BARS.includes(c.bars) ? c.bars : 1;
         out.contents[id] = {
           id, trackId: c.trackId, bars,
           name: typeof c.name === "string" && c.name.trim() ? c.name.trim().slice(0, 40) : "Clip",
-          notes: cleanNotes(c.notes, bars, lenFor(c.trackId)),
+          notes: audio ? [] : cleanNotes(c.notes, bars, lenFor(c.trackId)),
         };
+        if (audio) out.contents[id].audio = audio;
       }
     }
 
@@ -753,6 +855,7 @@
       if (Presets.find(s.preset)) t.preset = s.preset;
       if (COLORS.includes(s.color)) t.color = s.color;
       t.params = Params.sanitize(s.params || Presets.find(t.preset).params);
+      if (t.kind === "synth") t.sampler = cleanSampler(s.sampler);
       const base = num(s.gridBase, t.gridBase);
       t.gridBase = clamp(base - (((base % 12) + 12) % 12), LOWEST, HIGHEST - 12);
       if (LENGTHS.includes(s.length)) t.length = s.length;
@@ -797,6 +900,7 @@
   const api = {
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
     MAX_TRACKS, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
+    AUDIO_BARS_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,

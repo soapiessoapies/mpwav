@@ -90,6 +90,7 @@
       const channel = Mixer.createChannel(ctx, Engine.input);
       const synth = Synth.create(ctx, channel.input, live(t), { reverb: Engine.reverb, bpm: song.bpm });
       audio[t.id] = { synth, channel };
+      applySampler(t);
       // A brand-new track has no strip until the mixer is redrawn; rebuildMixer hooks its meter up then.
       const canvas = mixerView.meter(t.id);
       if (canvas) Meter.add(canvas, channel.peak, true);
@@ -101,6 +102,26 @@
       delete audio[id];
     }
     applyMix();
+  }
+
+  // --- uploaded sounds: a synth track's instrument, or an audio track's clips ---
+  const soundSecs = (id) => (Samples.info(id) || {}).duration || 0;
+  function applySampler(t) {
+    const a = audio[t.id];
+    if (!a) return;
+    const s = t.kind === "synth" && t.sampler;
+    const buffer = s && Samples.buffer(s.sampleId, s.reverse);
+    a.synth.setSample(buffer ? { ...s, buffer } : null);
+  }
+  // Decodes the song's sounds (from this browser's storage), then redraws
+  // what shows them.
+  function loadSounds() {
+    return Samples.load(Song.soundIds(song)).then(() => {
+      for (const t of song.tracks) applySampler(t);
+      timeline.render();
+      renderEditor();
+      renderSoundPage();
+    });
   }
 
   async function ready() {
@@ -163,6 +184,8 @@
         if (t.id === song.selected && skipOnce.delete(pos + ":" + n.midi)) continue;
         synth.playNote(n, at, dur);
       }
+      const seg = Song.audioSegment(song, t, pos, r.start * Song.STEPS, soundSecs, dur);
+      if (seg) synth.playAudio(Samples.buffer(seg.sampleId, seg.reverse), seg, time);
     }
     playheadQueue.push({ pos, time });
     booked.push({ pos, time });
@@ -290,6 +313,7 @@
   }
 
   async function startTake() {
+    if (sel().kind === "audio") { Announce.say("Recording plays notes into a synth track. Pick one first."); return; }
     const target = recordTarget();
     const { clip, c, t } = target;
     // Loop the clip while recording into it.
@@ -376,7 +400,16 @@
   const holds = new Map(); // midi -> { n, trackId }
   let lastSpoken = 0;
 
+  let saidAudioOnly = 0;
   function noteOn(m) {
+    if (sel().kind === "audio") {
+      // Audio tracks have no notes; say so (not on every key).
+      if (performance.now() - saidAudioOnly > 4000) {
+        saidAudioOnly = performance.now();
+        Announce.say(`${sel().name} is an audio track: it plays sound files. Pick a synth track to play notes.`);
+      }
+      return;
+    }
     const h = holds.get(m);
     if (h) { h.n++; return; }
     const trackId = song.selected;
@@ -535,6 +568,7 @@
     },
     onOpenClip: (t, clip) => openClip(t, clip, true),
     onNewClip(t, bar) {
+      if (t.kind === "audio") { pickSound({ mode: "clip", trackId: t.id, bar }); return; }
       const clip = Song.addClip(song, t, bar, 1);
       if (!clip) { Announce.say("There's already a clip there"); return; }
       selectTrack(t.id, false);
@@ -555,6 +589,11 @@
     onChanged: (text) => afterChange(text),
     onView: () => { if (tlZoom) tlZoom.draw(); },
     isCollapsed: (id) => ui.collapsed.includes(id),
+    // An audio clip's waveform: the sound's outline and length, once loaded.
+    soundView(c) {
+      const info = c.audio && Samples.info(c.audio.sampleId);
+      return info ? { peaks: Samples.peaks(c.audio.sampleId), duration: info.duration, stepSecs: Song.stepSeconds(song, 0) } : null;
+    },
     // Notes edited right on the timeline: they're the open clip's notes, so
     // the piano roll and the Note page follow along.
     selectedNotes(c) {
@@ -630,6 +669,7 @@
 
   $("new-clip").addEventListener("click", () => {
     const t = sel();
+    if (t.kind === "audio") { pickSound({ mode: "clip", trackId: t.id, bar: song.cursor }); return; }
     let bar = song.cursor;
     while (!Song.fits(t, bar, 1)) bar++;
     const clip = Song.addClip(song, t, bar, 1);
@@ -678,7 +718,16 @@
   });
 
   const barsSel = $("clip-bars");
-  for (const n of Song.CONTENT_BARS) barsSel.add(new Option(n === 1 ? "1 bar" : n + " bars", n));
+  // Note clips loop 1, 2 or 4 bars; audio clips up to 64 (whatever the sound needs).
+  const AUDIO_LOOPS = [1, 2, 3, 4, 5, 6, 8, 12, 16, 24, 32, 48, 64];
+  function fillBarsChoice(c) {
+    const want = c.audio ? [...new Set([...AUDIO_LOOPS, c.bars])].sort((a, b) => a - b) : Song.CONTENT_BARS;
+    if (barsSel.dataset.kind === (c.audio ? "audio" : "notes") && want.length === barsSel.options.length) return;
+    barsSel.dataset.kind = c.audio ? "audio" : "notes";
+    barsSel.textContent = "";
+    for (const n of want) barsSel.add(new Option(n === 1 ? "1 bar" : n + " bars", n));
+  }
+  fillBarsChoice({ bars: 1 });
   barsSel.addEventListener("change", () => {
     const o = find(open);
     if (!o) return;
@@ -776,6 +825,8 @@
       return;
     }
     const { t, clip, c } = o;
+    $("clip-body").classList.toggle("audio", !!c.audio);
+    fillBarsChoice(c);
     $("clip-h").textContent = "Clip: " + t.name;
     $("clip-editor").style.setProperty("--track", `var(--c-${t.color})`);
     nameField.value = c.name;
@@ -786,6 +837,12 @@
     $("clip-status").textContent = `${c.bars}-bar loop · this clip covers ${span}` +
       (clip.length > c.bars ? ", repeating it" : "") +
       (links > 1 ? ` · linked: edits change all ${links} copies` : "");
+    if (c.audio) {
+      selNotes.clear();
+      renderWave(o);
+      renderNotePage();
+      return;
+    }
     for (const n of [...selNotes]) if (!c.notes.includes(n)) selNotes.delete(n);
     roll.render({
       c, color: t.color, name: c.name, steps: c.bars * Song.STEPS, selected: selNotes, snap: song.snap,
@@ -809,6 +866,11 @@
     for (const b of $("arps").querySelectorAll("button")) b.disabled = list.length < 2;
     if (!o) {
       $("note-sel").textContent = "Open a clip to edit its notes.";
+      return;
+    }
+    if (o.c.audio) {
+      $("patterns").hidden = true;
+      $("note-sel").textContent = "Audio clips have no notes: trim, fade and reverse them in the clip editor.";
       return;
     }
     if (!list.length) {
@@ -927,6 +989,268 @@
     afterChange(`Deleted ${n} note${n > 1 ? "s" : ""}`);
   });
 
+  // --- adding sound files: a clip on an audio track, or a synth track's instrument ---
+  // job: { mode: "clip" | "sampler" | "replace", trackId, bar, contentId }
+  const soundInput = $("sound-input");
+  let soundJob = null;
+  function pickSound(job) {
+    soundJob = job;
+    soundInput.click();
+  }
+  soundInput.addEventListener("change", () => {
+    const files = [...(soundInput.files || [])];
+    soundInput.value = "";
+    if (files.length && soundJob) addSoundFiles(files, soundJob);
+  });
+  async function addSoundFiles(files, job) {
+    const t = Song.track(song, job.trackId);
+    let bar = job.bar || 0, added = 0, last = null;
+    for (const file of job.mode === "clip" ? files : files.slice(0, 1)) {
+      Announce.say(`Loading ${file.name}…`);
+      let id;
+      try { id = await Samples.add(file); } catch (e) {
+        Announce.say(`Couldn't read ${file.name} as a sound. Try a .wav or .mp3 file.`);
+        continue;
+      }
+      const info = Samples.info(id);
+      if (job.mode === "sampler") {
+        t.sampler = Song.cleanSampler({ sampleId: id, root: 60 });
+        applySampler(t);
+        selectTrack(t.id, false);
+        afterChange(`${t.name} now plays ${info.name}, at its own pitch on C4`);
+        return;
+      }
+      if (job.mode === "replace") {
+        const c = song.contents[job.contentId];
+        if (!c || !c.audio) return;
+        c.audio = { ...c.audio, sampleId: id, start: 0, end: null };
+        c.name = info.name;
+        afterChange(`Clip now plays ${info.name}`);
+        return;
+      }
+      const clip = Song.addAudioClip(song, t, bar, id, info.name, info.duration);
+      if (!clip) continue;
+      added++;
+      last = clip;
+      bar = Song.clipEnd(clip);
+    }
+    if (last) {
+      openClip(t, last, false);
+      picked = { trackId: t.id, clipId: last.id };
+      afterChange(added > 1 ? `Added ${added} sounds to ${t.name}` : `Added ${Song.content(song, last).name} to ${t.name} at bar ${last.start + 1}`);
+    }
+  }
+  // Files dropped on the timeline: on an audio row they become clips where
+  // they land; on a synth row the first becomes its instrument.
+  const tlEl = $("timeline");
+  tlEl.addEventListener("dragover", (e) => {
+    if (![...(e.dataTransfer.types || [])].includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    tlEl.classList.add("dropping");
+  });
+  tlEl.addEventListener("dragleave", (e) => { if (!tlEl.contains(e.relatedTarget)) tlEl.classList.remove("dropping"); });
+  tlEl.addEventListener("drop", (e) => {
+    tlEl.classList.remove("dropping");
+    const files = [...(e.dataTransfer.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    const lane = document.elementFromPoint(e.clientX, e.clientY)?.closest(".tl-row");
+    const t = lane ? Song.track(song, lane.dataset.track) : sel();
+    const laneEl = lane && lane.querySelector(".tl-lane");
+    const bw = parseFloat(getComputedStyle(tlEl.querySelector(".tl")).getPropertyValue("--bar-w")) || 60;
+    const bar = laneEl ? Math.max(0, Math.floor((e.clientX - laneEl.getBoundingClientRect().left) / bw)) : song.cursor;
+    addSoundFiles(files, { mode: t.kind === "audio" ? "clip" : "sampler", trackId: t.id, bar });
+  });
+
+  // --- Sound page: the instrument (synth or a sound file) ---
+  const instRoot = $("inst-root");
+  for (let m = Song.LOWEST; m <= Song.HIGHEST; m++) instRoot.add(new Option(Notes.noteName(m), m));
+  function renderSoundPage() {
+    const t = sel();
+    const isAudio = t.kind === "audio";
+    $("audio-track-note").hidden = !isAudio;
+    $("instrument").hidden = isAudio;
+    document.querySelector("#p-sound .preset").hidden = isAudio;
+    document.querySelector("#p-sound .morph-box:not(#instrument)").hidden = isAudio;
+    if (isAudio) return;
+    const s = t.sampler, info = s && Samples.info(s.sampleId);
+    $("inst-now").textContent = !s ? "The synth (pick a preset below)" : info ? `Sound file: ${info.name} (${info.duration.toFixed(2)} s)` : "Sound file (not in this browser: import the song file that has it)";
+    $("inst-synth").hidden = !s;
+    $("inst-sample").hidden = !s;
+    if (!s) return;
+    $("inst-root").value = s.root;
+    const keep = (el, v) => { if (document.activeElement !== el) el.value = v; };
+    keep($("inst-start"), s.start);
+    keep($("inst-end"), s.end == null ? (info ? +info.duration.toFixed(3) : "") : s.end);
+    keep($("inst-gain"), s.gain);
+    $("inst-reverse").checked = s.reverse;
+  }
+  function editSampler(fn, text) {
+    const t = sel();
+    if (!t.sampler) return;
+    fn(t.sampler);
+    t.sampler = Song.cleanSampler(t.sampler);
+    applySampler(t);
+    renderSoundPage();
+    afterChange(text);
+  }
+  $("inst-load").addEventListener("click", () => pickSound({ mode: "sampler", trackId: sel().id }));
+  $("inst-synth").addEventListener("click", () => {
+    const t = sel();
+    t.sampler = null;
+    applySampler(t);
+    renderSoundPage();
+    afterChange(`${t.name} plays the synth again`);
+  });
+  instRoot.addEventListener("change", () => editSampler((s) => { s.root = Number(instRoot.value); }, `Plays at its own pitch on ${Notes.spokenName(Number(instRoot.value))}`));
+  $("inst-start").addEventListener("change", (e) => editSampler((s) => { s.start = Number(e.target.value) || 0; }, "Start moved"));
+  $("inst-end").addEventListener("change", (e) => editSampler((s) => { s.end = e.target.value === "" ? null : Number(e.target.value); }, "End moved"));
+  $("inst-gain").addEventListener("change", (e) => editSampler((s) => { s.gain = Number(e.target.value) || 0; }, `Gain ${Number(e.target.value) || 0} dB`));
+  $("inst-reverse").addEventListener("change", (e) => editSampler((s) => { s.reverse = e.target.checked; }, e.target.checked ? "Reversed" : "Forwards"));
+
+  // --- the wave editor: an open audio clip's trim, fades, gain, reverse, fit ---
+  const waveEl = $("wave");
+  const WAVE_FIELDS = { "wave-start": "start", "wave-end": "end", "wave-fadein": "fadeIn", "wave-fadeout": "fadeOut", "wave-gain": "gain" };
+  function renderWave(o) {
+    const a = o.c.audio, info = Samples.info(a.sampleId);
+    const dur = info ? info.duration : 0;
+    const end = a.end == null ? dur : Math.min(a.end, dur);
+    const keep = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
+    keep("wave-start", +a.start.toFixed(3));
+    keep("wave-end", +end.toFixed(3));
+    keep("wave-fadein", Math.round(a.fadeIn * 1000));
+    keep("wave-fadeout", Math.round(a.fadeOut * 1000));
+    keep("wave-gain", a.gain);
+    $("wave-start").max = $("wave-end").max = +dur.toFixed(3);
+    $("wave-reverse").setAttribute("aria-pressed", String(a.reverse));
+    $("wave-fit").setAttribute("aria-pressed", String(a.fit));
+    const loopSecs = o.c.bars * Song.STEPS * Song.stepSeconds(song, o.clip.start * Song.STEPS);
+    const trimmed = Math.max(0, end - a.start);
+    $("wave-status").textContent = !info ? "This sound isn't in this browser. Import the song file that has it, or Replace sound."
+      : `${info.name}: ${dur.toFixed(2)} s, playing ${trimmed.toFixed(2)} s` +
+        (a.fit ? `, fitted to the ${o.c.bars}-bar loop (${(trimmed / loopSecs).toFixed(2)}× speed)`
+          : trimmed > loopSecs + 0.01 ? `; the ${o.c.bars}-bar loop (${loopSecs.toFixed(2)} s) cuts it short` : "");
+    drawWave(o, dur);
+  }
+  // The whole sound, dimmed, with the trimmed part bright, fades as slopes,
+  // and handles to drag: the trim edges and the fade corners.
+  function drawWave(o, dur) {
+    const a = o.c.audio, peaks = Samples.peaks(a.sampleId);
+    const waveEl = $("wave");
+    waveEl.textContent = "";
+    waveEl.style.setProperty("--track", `var(--c-${o.t.color})`);
+    if (!peaks || !dur) return;
+    const W = 1000, H = 100, n = peaks.length / 2;
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    let top = "", bottom = "";
+    for (let i = 0; i < n; i++) {
+      const k = a.reverse ? n - 1 - i : i; // reversed, the outline reads backwards
+      const x = (i / (n - 1)) * W;
+      top += `${x.toFixed(1)},${(H / 2 - peaks[k * 2 + 1] * H / 2).toFixed(1)} `;
+      bottom = `${x.toFixed(1)},${(H / 2 - peaks[k * 2] * H / 2).toFixed(1)} ` + bottom;
+    }
+    const shape = document.createElementNS(ns, "polygon");
+    shape.setAttribute("points", top + bottom);
+    shape.setAttribute("class", "wave-shape");
+    svg.append(shape);
+    waveEl.append(svg);
+    const end = a.end == null ? dur : Math.min(a.end, dur);
+    // In the reversed view the trim shows mirrored, where it plays from.
+    const x0 = (a.reverse ? dur - end : a.start) / dur, x1 = (a.reverse ? dur - a.start : end) / dur;
+    const part = document.createElement("div");
+    part.className = "wave-part";
+    part.style.left = x0 * 100 + "%";
+    part.style.width = (x1 - x0) * 100 + "%";
+    // The view reads in playing order, so the fade in is always on the left.
+    const len = end - a.start || 1;
+    const fiW = a.fadeIn / len, foW = a.fadeOut / len;
+    part.innerHTML = `<span class="wave-fade in" style="width:${Math.min(50, fiW * 100)}%"></span>` +
+      `<span class="wave-fade out" style="width:${Math.min(50, foW * 100)}%"></span>` +
+      `<span class="wave-edge" data-drag="${a.reverse ? "end" : "start"}"></span>` +
+      `<span class="wave-edge right" data-drag="${a.reverse ? "start" : "end"}"></span>` +
+      `<span class="wave-knob" data-drag="fadeIn" style="left:${Math.min(50, fiW * 100)}%"></span>` +
+      `<span class="wave-knob right" data-drag="fadeOut" style="right:${Math.min(50, foW * 100)}%"></span>`;
+    waveEl.append(part);
+  }
+  function editAudio(fn, text) {
+    const o = find(open);
+    if (!o || !o.c.audio) return;
+    fn(o.c.audio, o);
+    o.c.audio = Song.cleanAudio(o.c.audio) || o.c.audio;
+    afterChange(text);
+  }
+  for (const [id, key] of Object.entries(WAVE_FIELDS)) {
+    $(id).addEventListener("change", (e) => {
+      const raw = e.target.value;
+      editAudio((a) => {
+        const v = Number(raw);
+        if (key === "end") a.end = raw === "" ? null : v;
+        else if (key === "fadeIn" || key === "fadeOut") a[key] = (v || 0) / 1000;
+        else a[key] = v || 0;
+      }, `${e.target.closest("label").firstChild.textContent.trim()} ${raw || "reset"}`);
+    });
+  }
+  $("wave-reverse").addEventListener("click", () => editAudio((a) => { a.reverse = !a.reverse; }, "Reverse " + ($("wave-reverse").getAttribute("aria-pressed") === "true" ? "off" : "on")));
+  $("wave-fit").addEventListener("click", () => editAudio((a) => { a.fit = !a.fit; }, "Fit to tempo " + ($("wave-fit").getAttribute("aria-pressed") === "true" ? "off" : "on")));
+  $("wave-fill").addEventListener("click", () => editAudio((a, o) => {
+    const info = Samples.info(a.sampleId);
+    if (!info) return;
+    const end = a.end == null ? info.duration : a.end;
+    const bars = Song.barsFor(song, end - a.start);
+    Song.setContentBars(o.c, bars);
+    if (o.clip.length < bars) Song.resizeClip(o.t, o.clip, bars);
+  }, "The loop now covers the whole sound"));
+  $("wave-replace").addEventListener("click", () => {
+    const o = find(open);
+    if (o) pickSound({ mode: "replace", trackId: o.t.id, contentId: o.c.id });
+  });
+  $("wave-hear").addEventListener("click", () => {
+    const o = find(open);
+    if (!o || !o.c.audio || (transport && transport.playing)) return;
+    ready().then(() => {
+      const from = o.clip.start * Song.STEPS;
+      const seg = Song.audioSegment(song, o.t, from, from, soundSecs, Song.stepSeconds(song, from));
+      if (seg) audio[o.t.id].synth.playAudio(Samples.buffer(seg.sampleId, seg.reverse), seg, Engine.ctx.currentTime + 0.03);
+    });
+  });
+  // Dragging the trim edges and the fade knobs.
+  waveEl.addEventListener("pointerdown", (e) => {
+    const what = e.target.dataset && e.target.dataset.drag;
+    const o = find(open);
+    if (!what || !o || !o.c.audio) return;
+    const info = Samples.info(o.c.audio.sampleId);
+    if (!info) return;
+    e.preventDefault();
+    waveEl.setPointerCapture(e.pointerId);
+    const box = waveEl.getBoundingClientRect(), dur = info.duration, a = o.c.audio;
+    const flip = (x) => (a.reverse ? dur - x : x); // screen position -> time in the sound
+    const move = (ev) => {
+      const q = Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width)) * dur; // seconds along the view
+      const t = flip(q); // ...and in the sound itself
+      const end = a.end == null ? dur : a.end;
+      // The trimmed part as it shows (in playing order): fades are measured from its edges.
+      const v0 = a.reverse ? dur - end : a.start, v1 = a.reverse ? dur - a.start : end, half = (end - a.start) / 2;
+      if (what === "start") a.start = Math.max(0, Math.min(t, end - 0.01));
+      else if (what === "end") a.end = Math.min(dur, Math.max(t, a.start + 0.01));
+      else if (what === "fadeIn") a.fadeIn = Math.max(0, Math.min(q - v0, half));
+      else a.fadeOut = Math.max(0, Math.min(v1 - q, half));
+      renderWave(o);
+      timeline.render();
+    };
+    const up = () => {
+      waveEl.removeEventListener("pointermove", move);
+      editAudio(() => {}, what === "start" || what === "end" ? `Trimmed: ${a.start.toFixed(2)} to ${(a.end == null ? dur : a.end).toFixed(2)} seconds`
+        : `Fade ${what === "fadeIn" ? "in" : "out"} ${Math.round(a[what] * 1000)} ms`);
+    };
+    waveEl.addEventListener("pointermove", move);
+    waveEl.addEventListener("pointerup", up, { once: true });
+    waveEl.addEventListener("pointercancel", up, { once: true });
+  });
+
   // --- undo / redo ---
   function showUndo() {
     $("undo").disabled = !history.canUndo;
@@ -957,8 +1281,10 @@
       if (!audio[t.id]) continue;
       audio[t.id].synth.load(live(t));
       audio[t.id].synth.setTempo(song.bpm);
+      applySampler(t);
     }
     syncAudio();
+    loadSounds();
     rebuildMixer();
     applyMix();
     selectTrack(song.selected, false);
@@ -1056,6 +1382,10 @@
     if (!clipboard || clipboard.kind !== "clip") return false;
     const t = sel();
     const clip = Song.pasteClip(song, t, clipboard, song.cursor);
+    if (!clip) {
+      Announce.say(clipboard.audio ? "Audio clips paste onto audio tracks only" : "Note clips paste onto synth tracks only");
+      return true;
+    }
     picked = { trackId: t.id, clipId: clip.id };
     afterChange(`Pasted ${Song.content(song, clip).name} on ${t.name} at bar ${clip.start + 1}`);
     timeline.focusClip(clip);
@@ -1369,7 +1699,7 @@
     $("track-up").disabled = i === 0;
     $("track-down").disabled = i === song.tracks.length - 1;
     $("track-remove").disabled = song.tracks.length <= 1;
-    $("track-add").disabled = song.tracks.length >= Song.MAX_TRACKS;
+    $("track-add").disabled = $("track-add-audio").disabled = song.tracks.length >= Song.MAX_TRACKS;
     $("track-count").textContent = `${song.tracks.length} of ${Song.MAX_TRACKS} tracks.`;
   }
 
@@ -1400,6 +1730,14 @@
     rebuildMixer();
     selectTrack(song.selected, false);
     afterChange(`Removed ${t.name}. Undo brings it back.`);
+  });
+  $("track-add-audio").addEventListener("click", () => {
+    const t = Song.addTrack(song, { kind: "audio" });
+    if (!t) { Announce.say(`${Song.MAX_TRACKS} tracks is the most a song can have`); return; }
+    syncAudio();
+    rebuildMixer();
+    selectTrack(t.id, false);
+    afterChange(`Added ${t.name}, an audio track. New clip or dropping a file on its row adds a sound.`);
   });
   $("track-add").addEventListener("click", () => {
     const t = Song.addTrack(song);
@@ -1580,10 +1918,12 @@
     btn.disabled = false;
   });
 
-  $("export-file").addEventListener("click", () => {
+  $("export-file").addEventListener("click", async () => {
     if (saveTimer) writeNow();
-    const name = Wav.fileName(song.title, ".soundstudio.json");
-    const data = { app: "mpwav", format: 1, song: JSON.parse(JSON.stringify(song)) };
+    const name = Wav.fileName(song.title, ".mpwav.json");
+    // Uploaded sounds travel inside the file, so it opens anywhere.
+    const sounds = await Samples.exportAll(Song.soundIds(song));
+    const data = { app: "mpwav", format: 1, song: JSON.parse(JSON.stringify(song)), sounds };
     download(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }), name);
     exportStatus.textContent = `Saved ${name}. Import it here, in any browser, to keep working on it.`;
   });
@@ -1598,6 +1938,7 @@
       const data = JSON.parse(await file.text());
       const songData = data && data.song ? data.song : data;
       if (!songData || !Array.isArray(songData.tracks)) throw new Error("that file isn't an mpwav song");
+      if (data.sounds) await Samples.importAll(data.sounds);
       addAndOpen(songData);
       exportStatus.textContent = `Imported ${song.title}.`;
     } catch (e) {
@@ -1785,6 +2126,7 @@
     timeline.render();
     renderEditor();
     renderTrackPage();
+    renderSoundPage();
     if (announce) Announce.say("Selected " + t.name);
     save();
   }
@@ -2012,6 +2354,7 @@
 
   // --- first paint ---
   if (!find(picked)) picked = null;
+  loadSounds();
   history.commit(historyJson());
   applyLayout();
   selectTrack(song.selected, false);
