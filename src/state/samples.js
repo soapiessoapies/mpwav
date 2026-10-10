@@ -60,11 +60,15 @@
   }
 
   // Decoding doesn't need sound to be on: a tiny offline context will do.
+  // (Older Safari: the offline context has a webkit prefix, and decoding
+  // only answers through callbacks, which every browser still supports.)
   let decoder = null;
-  const decode = (bytes) => {
-    decoder = decoder || new OfflineAudioContext(1, 1, 44100);
-    return decoder.decodeAudioData(bytes.slice(0));
-  };
+  const Offline = root.OfflineAudioContext || root.webkitOfflineAudioContext;
+  const decoderCtx = () => (decoder = decoder || new Offline(1, 1, 44100));
+  const decode = (bytes) => new Promise((resolve, reject) => {
+    if (!Offline) { reject(new Error("this browser can't play sounds")); return; }
+    decoderCtx().decodeAudioData(bytes.slice(0), resolve, (e) => reject(e || new Error("not a sound this browser can read")));
+  });
 
   function outline(buf) {
     const out = new Float32Array(PEAKS * 2);
@@ -119,7 +123,8 @@
     const buf = decoded.get(id);
     if (!buf || !rev) return buf || null;
     if (!reversed.has(id)) {
-      const r = new AudioBuffer({ length: buf.length, numberOfChannels: buf.numberOfChannels, sampleRate: buf.sampleRate });
+      // createBuffer, not new AudioBuffer(): older Safari has no AudioBuffer constructor.
+      const r = decoderCtx().createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
       for (let c = 0; c < buf.numberOfChannels; c++) r.getChannelData(c).set(buf.getChannelData(c).slice().reverse());
       reversed.set(id, r);
     }

@@ -46,3 +46,19 @@ test("songs without a title are listed as Untitled song; unknown ids load nothin
   assert.equal(lib.load("nope"), null);
   assert.equal(lib.save("nope", {}), false);
 });
+
+test("songs saved to a file: marked saved, then dirty after a real change (not after re-saving the same data)", () => {
+  const store = L.memoryStorage();
+  let t = 1000;
+  const lib = L.create(store, () => t);
+  const id = lib.add({ title: "A", bpm: 100 });
+  lib.markSaved(id, "A.mpwav", true);
+  assert.deepEqual({ ...lib.entry(id), updated: 0 }, { id, title: "A", updated: 0, file: "A.mpwav", inPlace: true, savedAt: 1000, dirty: false });
+  t = 2000;
+  lib.save(id, { title: "A", bpm: 100 });
+  assert.equal(lib.entry(id).dirty, false, "the same data again isn't a change");
+  assert.equal(lib.entry(id).updated, 1000);
+  lib.save(id, { title: "A", bpm: 120 });
+  assert.equal(lib.entry(id).dirty, true);
+  assert.equal(lib.entry(id).updated, 2000);
+});

@@ -24,7 +24,9 @@
     const times = [];
     let t = 0.05;
     for (let i = 0; i < steps; i++) { times.push(t); t += Song.stepSeconds(song, from * Song.STEPS + i); }
-    const ctx = new OfflineAudioContext(2, Math.ceil((t + TAIL) * SAMPLE_RATE), SAMPLE_RATE);
+    const Offline = root.OfflineAudioContext || root.webkitOfflineAudioContext;
+    if (!Offline) throw new Error("this browser can't render sound");
+    const ctx = new Offline(2, Math.ceil((t + TAIL) * SAMPLE_RATE), SAMPLE_RATE);
 
     const bus = Engine.buildBus(ctx);
     bus.master.gain.value = song.master <= Song.FADER.min ? 0 : Math.pow(10, song.master / 20);

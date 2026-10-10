@@ -10,6 +10,19 @@
 (function (root) {
   "use strict";
 
+  // A soft clip: x up to KNEE unchanged, then a tanh shoulder that tops out at 1.
+  const KNEE = 0.8;
+  const SAFETY_CURVE = (() => {
+    const n = 8193, c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1; // a shaper's curve always spans -1..1 (louder holds at the ends, about 0.95)
+      const a = Math.abs(x);
+      const y = a <= KNEE ? a : KNEE + (1 - KNEE) * Math.tanh((a - KNEE) / (1 - KNEE));
+      c[i] = Math.sign(x) * y;
+    }
+    return c;
+  })();
+
   let ctx = null;
   let bus = null; // { input, master, limiter, analyser, reverb }
   const listeners = new Set();
@@ -38,12 +51,18 @@
     limiter.ratio.value = 20;
     limiter.attack.value = 0.002;
     limiter.release.value = 0.1;
+    // The limiter lets the very first instant of a sudden peak through; this
+    // catches it. Below 0.8 the curve is a straight line (nothing changes),
+    // above it peaks round off and never pass full scale.
+    const safety = ctx.createWaveShaper();
+    safety.curve = SAFETY_CURVE;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256; // only read for peaks; small is enough
 
     input.connect(master);
     master.connect(limiter);
-    limiter.connect(analyser);
+    limiter.connect(safety);
+    safety.connect(analyser);
     analyser.connect(ctx.destination);
 
     const reverb = ctx.createGain(); // tracks' reverb sends connect here

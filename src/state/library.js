@@ -1,5 +1,7 @@
-// Several songs, kept in the browser: an index of { id, title, updated }
-// and each song's data under its own key. Works on any storage with
+// Several songs, kept in the browser: an index of { id, title, updated,
+// file?, inPlace?, savedAt?, dirty? } and each song's data under its own key.
+// `file` is the name of the .mpwav file it was last saved to; `inPlace`
+// whether Save keeps writing to that file; `dirty` that it changed since. Works on any storage with
 // getItem / setItem / removeItem (localStorage, or a stand-in in tests or
 // when the browser blocks storage).
 (function (root) {
@@ -24,17 +26,31 @@
 
     const load = (id) => (index.some((e) => e.id === id) ? read(SONG(id)) : null);
 
-    // Saves a song's data (an object or a JSON string) under its id.
+    // Saves a song's data (an object or a JSON string) under its id. Saving
+    // the same data again changes nothing (opening a song isn't an edit).
     function save(id, data) {
       const obj = typeof data === "string" ? JSON.parse(data) : data;
       const entry = index.find((e) => e.id === id);
       if (!entry) return false;
+      let same = false;
+      try { same = storage.getItem(SONG(id)) === JSON.stringify(obj); } catch (e) { /* storage blocked */ }
+      if (same) return true;
       entry.title = titleOf(obj);
       entry.updated = now();
+      if (entry.file) entry.dirty = true;
       const ok = write(SONG(id), obj);
       saveIndex();
       return ok;
     }
+
+    // Notes that a song was saved to a file (in place, or a downloaded copy).
+    function markSaved(id, file, inPlace) {
+      const entry = index.find((e) => e.id === id);
+      if (!entry) return;
+      Object.assign(entry, { file, inPlace: !!inPlace, savedAt: now(), dirty: false });
+      saveIndex();
+    }
+    const entry = (id) => { const e = index.find((x) => x.id === id); return e ? { ...e } : null; };
 
     // Adds a song to the library. Returns its id.
     function add(data) {
@@ -60,7 +76,7 @@
       return id;
     }
 
-    return { list, load, save, add, remove, adoptLegacy };
+    return { list, load, save, add, remove, adoptLegacy, markSaved, entry };
   }
 
   // A stand-in for localStorage when the browser won't allow storage

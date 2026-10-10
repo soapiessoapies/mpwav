@@ -35,7 +35,7 @@
     document.documentElement.dataset.look = look;
     if (!motion) document.documentElement.dataset.motion = "off";
     var w = window.innerWidth;
-    var layout = pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
+    var layout = pick === "desktop" ? "wide" : pick === "phone" ? "compact" : w >= 1000 ? "wide" : w <= 640 ? "compact" : "medium";
     document.documentElement.dataset.layout = layout;
     document.documentElement.dataset.fit = fit && layout === "wide" ? "on" : "off";
     if (tips) document.documentElement.dataset.tips = "on";
@@ -80,7 +80,8 @@
     <svg class="title-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
     <div class="title-row">
       <p class="byline">by Phie &amp; Claude</p>
-      <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Songs</button>
+      <button id="save-btn" type="button" class="quiet" aria-keyshortcuts="Control+S">Save</button>
+      <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Home</button>
     </div>
   </header>
 
@@ -163,7 +164,7 @@
         <button id="close-clip" type="button" class="quiet">Close</button>
       </div>
       <p id="clip-empty" class="help">
-        No clip open. Double-click a clip (or select it and press <kbd>Enter</kbd>) to edit its notes, or press New clip.
+        No clip open: double-click one, or press New clip.
       </p>
       <div id="clip-body">
         <p id="clip-status" class="loop-status"></p>
@@ -409,30 +410,38 @@
   </div>
 </main>
 
-<dialog id="songs" class="settings" aria-labelledby="songs-h">
-  <div class="settings-head">
-    <h2 id="songs-h">Songs</h2>
-    <button id="songs-close" type="button" class="quiet">Close</button>
-  </div>
-  <p class="help">Your songs are saved in this browser as you work. Export a song file to keep a copy or move it to another computer.</p>
-  <div class="toolbar" role="group" aria-label="New">
-    <button type="button" id="song-new">New song</button>
-    <button type="button" id="song-demo">New from the demo</button>
-    <button type="button" id="song-dup">Duplicate this song</button>
-  </div>
-  <ul id="song-list" class="song-list" aria-label="Your songs"></ul>
-
-  <section aria-labelledby="set-export-h">
-    <h3 id="set-export-h">Export and import</h3>
-    <div class="toolbar" role="group" aria-label="Export and import">
-      <button type="button" id="export-wav" aria-describedby="export-wav-help">Export WAV</button>
-      <button type="button" id="export-file">Export song file</button>
-      <button type="button" id="import-file">Import song file</button>
-      <input type="file" id="import-input" accept=".json,application/json" hidden>
+<dialog id="songs" class="home" aria-labelledby="songs-h">
+  <div class="home-wrap">
+    <nav class="home-nav" aria-label="Start">
+      <p class="home-logo" aria-hidden="true">mpwav</p>
+      <button type="button" id="song-new" class="home-btn primary">+ New song</button>
+      <button type="button" id="song-demo" class="home-btn">New from the demo</button>
+      <button type="button" id="import-file" class="home-btn">Open a song file…</button>
+      <button type="button" id="songs-close" class="home-btn">Back to the studio</button>
+      <p id="home-save-note" class="help home-note"></p>
+    </nav>
+    <div class="home-main">
+      <h2 id="songs-h" class="home-title">Welcome back</h2>
+      <p class="home-sub">Start something new, or pick up where you left off.</p>
+      <div id="ios-note" class="home-ios" hidden>
+        <p><strong>On an iPhone or iPad, save your work to your device.</strong> Safari can clear what a website keeps if you don't visit for about a week.</p>
+        <p><span id="ios-install">Add mpwav to your Home Screen (Share › Add to Home Screen) so it keeps your songs, and save</span><span id="ios-installed" hidden>Save</span> copies to Files: <strong>Save song file</strong> keeps the song to keep working on, <strong>Export WAV</strong> keeps how it sounds.</p>
+      </div>
+      <section class="home-current" aria-labelledby="home-current-h">
+        <h3 id="home-current-h">This song: <span id="home-current-name"></span></h3>
+        <div class="toolbar" role="group" aria-labelledby="home-current-h">
+          <button type="button" id="export-file" aria-keyshortcuts="Control+S">Save song file</button>
+          <button type="button" id="save-as" hidden>Save as…</button>
+          <button type="button" id="export-wav" aria-describedby="export-wav-help">Export WAV</button>
+          <button type="button" id="song-dup">Duplicate</button>
+        </div>
+        <p id="export-wav-help" class="help tip">Export WAV renders the whole song, every track with its effects and mix, to a sound file you can play anywhere.</p>
+        <p id="export-status" class="help" aria-live="polite"></p>
+      </section>
+      <h3 class="home-h">Your songs</h3>
+      <ul id="song-list" class="song-grid" aria-label="Your songs"></ul>
     </div>
-    <p id="export-wav-help" class="help">Export WAV renders the whole song, every track with its effects and mix, to a sound file you can use anywhere.</p>
-    <p id="export-status" class="help" aria-live="polite"></p>
-  </section>
+  </div>
 </dialog>
 
 <dialog id="shortcuts" class="settings shortcuts" aria-labelledby="shortcuts-h">
@@ -548,6 +557,8 @@
 
   <section aria-labelledby="set-tips-h">
     <h3 id="set-tips-h">Tutorial</h3>
+    <button id="tour-btn" type="button">Take the tour</button>
+    <p class="help">A short walk through the studio, one part at a time. It runs once on your first visit.</p>
     <label class="check"><input type="checkbox" id="show-tips"> Show tips: a short how-to under each part of the studio</label>
     <p class="help">Tips are always read out by screen readers, even when they're hidden.</p>
   </section>
@@ -602,6 +613,7 @@
 <script src="src/state/history.js"></script>
 <script src="src/state/library.js"></script>
 <script src="src/state/samples.js"></script>
+<script src="src/state/song-files.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>
 <script src="src/ui/keyboard.js"></script>
@@ -615,6 +627,7 @@
 <script src="src/ui/morph-pad.js"></script>
 <script src="src/ui/arrange.js"></script>
 <script src="src/ui/install.js"></script>
+<script src="src/ui/tour.js"></script>
 <script src="src/ui/app.js"></script>
 </body>
 </html>

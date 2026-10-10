@@ -34,6 +34,7 @@
     history.commit(historyJson());
     showUndo();
     library.save(songId, json);
+    showSaved();
     try {
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
@@ -499,6 +500,12 @@
   const inDialog = (t) => !!(t && t.closest && t.closest("dialog"));
 
   document.addEventListener("keydown", (e) => {
+    // Ctrl + S saves from anywhere, even while typing (Shift: Save as).
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      saveSong(e.shiftKey);
+      return;
+    }
     if (inDialog(e.target)) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !typingInto(e.target) && shortcut(e)) { e.preventDefault(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1600,8 +1607,27 @@
 
   // --- Section and Tempo menus (popovers): they open under their button,
   // and an action closes its menu (toggles like Metronome leave it open) ---
+  // Older browsers (iOS before 17) have no popovers: the button opens and
+  // closes the menu itself, and it sits under the button in the page.
+  const hasPopover = typeof HTMLElement.prototype.showPopover === "function";
   for (const menu of document.querySelectorAll(".menu[popover]")) {
     const btn = document.querySelector(`[popovertarget="${menu.id}"]`);
+    if (!hasPopover) {
+      btn.setAttribute("aria-expanded", "false");
+      btn.setAttribute("aria-controls", menu.id);
+      btn.addEventListener("click", () => {
+        const open = !menu.classList.contains("open");
+        menu.classList.toggle("open", open);
+        btn.setAttribute("aria-expanded", String(open));
+      });
+      menu.hidePopover = () => { menu.classList.remove("open"); btn.setAttribute("aria-expanded", "false"); };
+      menu.addEventListener("keydown", (e) => { if (e.key === "Escape") { menu.hidePopover(); btn.focus(); } });
+      menu.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (b && !b.hasAttribute("aria-pressed") && b.parentElement === menu && b.id !== "tap" && b.id !== "tempo-add") { menu.hidePopover(); btn.focus(); }
+      });
+      continue;
+    }
     menu.addEventListener("toggle", (e) => {
       if (e.newState !== "open") return;
       const r = btn.getBoundingClientRect();
@@ -1814,61 +1840,208 @@
     return new Date(ms).toLocaleDateString();
   };
 
-  let armedDelete = null; // a song whose Delete was pressed once
+  // A song's thumbnail: its timeline in miniature, a stripe per track and
+  // a block per clip in the track's color.
+  function thumbSvg(data) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "song-thumb");
+    svg.setAttribute("aria-hidden", "true");
+    let sd;
+    try { sd = Song.sanitize(data); } catch (e) { return svg; }
+    const bars = Math.max(8, Song.songBars(sd));
+    const rows = Math.max(1, sd.tracks.length);
+    svg.setAttribute("viewBox", `0 0 ${bars * 10} ${rows * 10}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    sd.tracks.forEach((t, i) => {
+      for (const c of t.clips) {
+        const r = document.createElementNS(NS, "rect");
+        r.setAttribute("x", c.start * 10 + 0.5);
+        r.setAttribute("y", i * 10 + 2);
+        r.setAttribute("width", Math.max(1, c.length * 10 - 1));
+        r.setAttribute("height", 6);
+        r.setAttribute("rx", 1.5);
+        r.setAttribute("fill", `var(--c-${t.color})`);
+        svg.append(r);
+      }
+    });
+    return svg;
+  }
+
+  let armedDelete = null; // a song whose Remove was pressed once
   function renderSongList() {
     const list = $("song-list");
     list.textContent = "";
+    $("home-current-name").textContent = song.title;
     for (const e of library.list()) {
+      const data = e.id === songId ? song : library.load(e.id);
       const li = document.createElement("li");
+      li.className = "song-card" + (e.id === songId ? " current" : "");
+      li.dataset.id = e.id;
       const current = e.id === songId;
+      let sd = null;
+      try { sd = Song.sanitize(data); } catch (err) { /* unreadable: still listed */ }
+      const bars = sd ? Song.songBars(sd) : 0;
+      const where = !e.file ? "Only in this browser" : e.dirty ? "Changed since its last save" : e.inPlace ? `Saved in ${e.file}` : `Copy saved as ${e.file}`;
       const openBtn = document.createElement("button");
       openBtn.type = "button";
       openBtn.className = "song-open";
-      openBtn.textContent = e.title;
+      openBtn.setAttribute("aria-label", `${e.title}${current ? ", open now" : ""}, edited ${when(e.updated)}. ${where}.`);
       if (current) openBtn.setAttribute("aria-current", "true");
-      openBtn.setAttribute("aria-label", `${e.title}${current ? ", open now" : ""}, edited ${when(e.updated)}`);
-      openBtn.addEventListener("click", () => { if (!current) openSong(e.id); });
+      const name = document.createElement("span");
+      name.className = "song-name";
+      name.textContent = e.title;
       const meta = document.createElement("span");
       meta.className = "song-meta";
-      meta.setAttribute("aria-hidden", "true");
-      meta.textContent = (current ? "Open now · " : "") + when(e.updated);
+      meta.textContent = `Edited ${when(e.updated)}` + (sd ? ` · ${sd.bpm} BPM · ${bars} bar${bars === 1 ? "" : "s"} · ${sd.tracks.length} tracks` : "");
+      const badges = document.createElement("span");
+      badges.className = "song-badges";
+      const badge = (text, cls) => {
+        const b = document.createElement("span");
+        b.className = "badge " + cls;
+        b.textContent = text;
+        badges.append(b);
+      };
+      if (current) badge("Open now", "now");
+      badge(where, !e.file ? "warn" : e.dirty ? "changed" : "saved");
+      openBtn.append(thumbSvg(data), name, meta, badges);
+      openBtn.addEventListener("click", () => { if (!current) openSong(e.id); songsDlg.close(); });
+      const acts = document.createElement("div");
+      acts.className = "song-acts";
+      const dup = document.createElement("button");
+      dup.type = "button";
+      dup.textContent = "Duplicate";
+      dup.setAttribute("aria-label", `Duplicate ${e.title}`);
+      dup.addEventListener("click", () => {
+        const copy = JSON.parse(JSON.stringify(data));
+        copy.title = (e.title + " copy").slice(0, 80);
+        library.add(Song.sanitize(copy));
+        renderSongList();
+        Announce.say(`Made ${copy.title}`);
+      });
       const del = document.createElement("button");
       del.type = "button";
-      del.className = "quiet";
-      del.textContent = armedDelete === e.id ? "Really delete?" : "Delete";
-      del.setAttribute("aria-label", armedDelete === e.id ? `Really delete ${e.title}? Press again to delete` : `Delete ${e.title}`);
+      del.className = "danger";
+      const armed = armedDelete === e.id;
+      del.textContent = armed ? "Really remove?" : "Remove";
+      del.setAttribute("aria-label", armed ? `Really remove ${e.title}? Press again to remove it` : `Remove ${e.title}` + (e.file ? "" : ": it's only in this browser"));
       del.disabled = library.list().length <= 1;
       del.addEventListener("click", () => {
         if (armedDelete !== e.id) {
           armedDelete = e.id;
           renderSongList();
-          list.querySelector(`[data-id="${e.id}"] button.quiet`)?.focus();
-          Announce.say(`Press Delete again to delete ${e.title}`);
+          list.querySelector(`[data-id="${e.id}"] .danger`)?.focus();
+          Announce.say(e.file && !e.dirty ? `Press Remove again to take ${e.title} off this list. Its file stays where you saved it.`
+            : `Press Remove again to delete ${e.title}. It's only in this browser.`);
           setTimeout(() => { if (armedDelete === e.id) { armedDelete = null; renderSongList(); } }, 5000);
           return;
         }
         armedDelete = null;
-        if (current) {
-          const other = library.list().find((x) => x.id !== e.id);
-          openSong(other.id);
-        }
+        if (current) openSong(library.list().find((x) => x.id !== e.id).id);
         library.remove(e.id);
+        SongFiles.forget(e.id);
         renderSongList();
-        Announce.say(`Deleted ${e.title}`);
+        $("song-new").focus();
+        Announce.say(`Removed ${e.title}`);
       });
-      li.dataset.id = e.id;
-      li.append(openBtn, meta, del);
+      acts.append(dup, del);
+      li.append(openBtn, acts);
       list.append(li);
     }
   }
 
-  $("songs-btn").addEventListener("click", () => {
+  // --- Home: like a start screen, on every launch ---
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  function showHome() {
     if (saveTimer) writeNow();
     armedDelete = null;
     exportStatus.textContent = "";
+    $("songs-h").textContent = library.list().length > 1 || library.list()[0]?.file ? "Welcome back" : "Welcome to mpwav";
+    $("songs-close").textContent = `Back to ${song.title}`;
+    $("ios-note").hidden = !isIOS;
+    $("ios-install").hidden = installed;
+    $("ios-installed").hidden = !installed;
+    $("save-as").hidden = !SongFiles.canSaveInPlace;
+    $("export-file").textContent = SongFiles.canSaveInPlace ? "Save" : "Save song file";
+    $("home-save-note").textContent = SongFiles.canSaveInPlace
+      ? "Save puts a song in a .mpwav file wherever you choose (its sounds go inside), then saves to it in place. Your work is also kept in this browser as you go."
+      : isIOS ? "Save song file puts a .mpwav file in Files (its sounds go inside). Your work is also kept in this browser as you go."
+        : "Save song file downloads a .mpwav file (its sounds go inside). Your work is also kept in this browser as you go.";
     renderSongList();
-    songsDlg.showModal();
-  });
+    if (!songsDlg.open) songsDlg.showModal();
+  }
+
+  // Hands over a finished file: on iPhones and iPads a button opens the share
+  // sheet (Save to Files) with a fresh tap; elsewhere it downloads.
+  function deliver(blob, name, done) {
+    if (isIOS && SongFiles.canShare(blob, name)) {
+      exportStatus.textContent = `${name} is ready. `;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "share-btn";
+      b.textContent = `Save ${name} to Files…`;
+      b.addEventListener("click", async () => {
+        try { await SongFiles.share(blob, name); exportStatus.textContent = done; }
+        catch (e) { if (!e || e.name !== "AbortError") { SongFiles.download(blob, name); exportStatus.textContent = done; } }
+      });
+      exportStatus.append(b);
+      b.focus();
+      Announce.say(`${name} is ready: press Save to Files`);
+      return;
+    }
+    SongFiles.download(blob, name);
+    exportStatus.textContent = done;
+    Announce.say(done);
+  }
+
+  // Save: to the song's file (asked for the first time), or a download.
+  let saving = false;
+  async function saveSong(asNew) {
+    if (saving) return;
+    saving = true;
+    if (saveTimer) writeNow();
+    try {
+      const sounds = await Samples.exportAll(Song.soundIds(song));
+      const blob = SongFiles.pack(JSON.parse(JSON.stringify(song)), sounds);
+      const name = Wav.fileName(song.title, SongFiles.EXT);
+      if (!SongFiles.canSaveInPlace) {
+        library.markSaved(songId, name, false);
+        showSaved();
+        if (!songsDlg.open) showHome(); // the status (and the iPhone button) shows on Home
+        deliver(blob, name, `Saved a copy: ${name}. ${isIOS ? "Keep it in Files." : "Check your downloads."}`);
+        return;
+      }
+      const got = asNew ? await SongFiles.saveAs(songId, name, blob) : await SongFiles.save(songId, name, blob);
+      if (!got) { Announce.say("Not saved"); return; }
+      library.markSaved(songId, got.name, got.inPlace);
+      // Ask the browser to keep this site's storage (it may say no).
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+      const text = got.inPlace ? `Saved in ${got.name}` : `Saved a copy: ${got.name}. ${isIOS ? "Keep it in Files." : "Check your downloads."}`;
+      exportStatus.textContent = text;
+      Announce.say(text);
+      showSaved();
+      if (songsDlg.open) renderSongList();
+    } catch (e) {
+      const text = "Couldn't save: " + (e && e.message ? e.message : e);
+      exportStatus.textContent = text;
+      Announce.say(text);
+    } finally {
+      saving = false;
+    }
+  }
+  // The Save button says whether there's anything new to save.
+  function showSaved() {
+    const e = library.entry(songId);
+    const btn = $("save-btn");
+    const fresh = e && e.file && !e.dirty;
+    btn.textContent = fresh ? "Saved" : "Save";
+    btn.setAttribute("aria-label", fresh ? `Saved in ${e.file}` : e && e.file ? `Save: changed since saving ${e.file}` : "Save to a file");
+  }
+  $("save-btn").addEventListener("click", () => saveSong(false));
+  $("save-as").addEventListener("click", () => saveSong(true));
+
+  $("songs-btn").addEventListener("click", showHome);
   $("songs-close").addEventListener("click", () => songsDlg.close());
   songsDlg.addEventListener("click", (e) => { if (e.target === songsDlg) songsDlg.close(); });
   songsDlg.addEventListener("close", () => $("songs-btn").focus());
@@ -1877,16 +2050,19 @@
     const blank = Song.createSong();
     blank.title = `Untitled song ${library.list().length + 1}`;
     addAndOpen(blank, `New song: ${blank.title}`);
+    songsDlg.close();
   });
   $("song-demo").addEventListener("click", () => {
     const demo = Song.demoSong();
     demo.title = "Demo song";
     addAndOpen(demo, "New song from the demo");
+    songsDlg.close();
   });
   $("song-dup").addEventListener("click", () => {
     const copy = JSON.parse(JSON.stringify(song));
     copy.title = (song.title + " copy").slice(0, 80);
     addAndOpen(copy, `Opened ${copy.title}`);
+    songsDlg.close();
   });
 
   // Hands the browser a file to save.
@@ -1911,39 +2087,32 @@
         onProgress: (f) => { exportStatus.textContent = `Rendering the song… ${Math.round(f * 100)}%`; },
       });
       const name = Wav.fileName(song.title, ".wav");
-      download(new Blob([Wav.encode(buffer)], { type: "audio/wav" }), name);
-      exportStatus.textContent = `Saved ${name} (${Math.round(buffer.duration)} seconds). Check your downloads.`;
+      deliver(new Blob([Wav.encode(buffer)], { type: "audio/wav" }), name,
+        `Saved ${name} (${Math.round(buffer.duration)} seconds). ${isIOS ? "Keep it in Files." : "Check your downloads."}`);
     } catch (e) {
       exportStatus.textContent = "Couldn't export: " + (e && e.message ? e.message : e);
     }
     btn.disabled = false;
   });
 
-  $("export-file").addEventListener("click", async () => {
-    if (saveTimer) writeNow();
-    const name = Wav.fileName(song.title, ".mpwav.json");
-    // Uploaded sounds travel inside the file, so it opens anywhere.
-    const sounds = await Samples.exportAll(Song.soundIds(song));
-    const data = { app: "mpwav", format: 1, song: JSON.parse(JSON.stringify(song)), sounds };
-    download(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }), name);
-    exportStatus.textContent = `Saved ${name}. Import it here, in any browser, to keep working on it.`;
-  });
+  $("export-file").addEventListener("click", () => saveSong(false));
 
-  const importInput = $("import-input");
-  $("import-file").addEventListener("click", () => importInput.click());
-  importInput.addEventListener("change", async () => {
-    const file = importInput.files && importInput.files[0];
-    importInput.value = "";
-    if (!file) return;
+  // Open: a song file becomes a song here (with its sounds); on Chrome and
+  // Edge, Save goes back to that same file.
+  $("import-file").addEventListener("click", async () => {
     try {
-      const data = JSON.parse(await file.text());
-      const songData = data && data.song ? data.song : data;
-      if (!songData || !Array.isArray(songData.tracks)) throw new Error("that file isn't an mpwav song");
-      if (data.sounds) await Samples.importAll(data.sounds);
+      const got = await SongFiles.open();
+      if (!got) return;
+      const { song: songData, sounds } = SongFiles.unpack(got.text);
+      if (sounds) await Samples.importAll(sounds);
       addAndOpen(songData);
-      exportStatus.textContent = `Imported ${song.title}.`;
+      if (got.handle) await SongFiles.remember(songId, got.handle);
+      library.markSaved(songId, got.name, !!got.handle);
+      showSaved();
+      songsDlg.close();
+      Announce.say(`Opened ${song.title} from ${got.name}`);
     } catch (e) {
-      exportStatus.textContent = "Couldn't import: " + (e && e.message ? e.message : e);
+      exportStatus.textContent = "Couldn't open it: " + (e && e.message ? e.message : e);
     }
   });
 
@@ -2164,7 +2333,7 @@
   function applyLayout() {
     const w = window.innerWidth;
     const want = ui.layout === "desktop" ? "wide" : ui.layout === "phone" ? "compact"
-      : w >= 1100 ? "wide" : w <= 640 ? "compact" : "medium";
+      : w >= 1000 ? "wide" : w <= 640 ? "compact" : "medium";
     const fit = ui.fit && want === "wide" ? "on" : "off";
     if (document.documentElement.dataset.layout !== want || document.documentElement.dataset.fit !== fit) {
       document.documentElement.dataset.layout = want;
@@ -2267,6 +2436,17 @@
     if (ui.tips) document.documentElement.dataset.tips = "on";
     else delete document.documentElement.dataset.tips;
   };
+  // The guided tour (src/ui/tour.js): from Settings, and once on a first visit.
+  $("tour-btn").addEventListener("click", () => {
+    settings.close();
+    Tour.start();
+  });
+  // First visit: Home opens at launch and blocks the page while it's up, so
+  // the tour waits for Home to close (see first paint, below).
+  const autoTour = () => {
+    if (Tour.shouldAutoRun() && !Tour.active() && !document.querySelector("dialog[open]")) Tour.start();
+  };
+
   $("show-tips").addEventListener("change", (e) => {
     ui.tips = e.target.checked;
     showTips();
@@ -2372,6 +2552,16 @@
   // --- first paint ---
   if (!find(picked)) picked = null;
   loadSounds();
+  showSaved();
+  // Home opens on every launch (not when the page is a test frame's reload of the same visit).
+  let seen = false;
+  try { seen = !!sessionStorage.getItem("mpwav.seen"); sessionStorage.setItem("mpwav.seen", "1"); } catch (e) { /* blocked */ }
+  if (!seen) requestAnimationFrame(showHome);
+  // The first-visit tour follows Home when Home is opening, else starts on its own.
+  if (Tour.shouldAutoRun()) {
+    if (!seen) songsDlg.addEventListener("close", () => setTimeout(autoTour, 150), { once: true });
+    else setTimeout(autoTour, 700);
+  }
   history.commit(historyJson());
   applyLayout();
   selectTrack(song.selected, false);

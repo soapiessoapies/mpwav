@@ -220,3 +220,30 @@ The interface borrows Bezier's design language (the class's drawing app) while k
   - *All pixel:* also squares off buttons, fields, dialogs and clips, with a pressed-in shade on whatever is on.
 - **Motion:** a nod, not a show. Buttons dip when pressed, a new page or dialog settles into place, and the picked tab hops once. Settings › Motion turns it off; so does the system's reduce-motion setting.
 - **Contrast:** outlines on paper use the lighter edge gray, and tests/contrast.test.js checks text, quiet text, the accent and outlines on every paper in every background.
+
+## Song files, Home and the guided tour (v0.9.0)
+
+**Song files.**
+- A `.mpwav` file holds the song plus every sound it uses, so it opens
+  anywhere (`src/state/song-files.js`).
+- **Save** (Ctrl+S): in Chrome and Edge the first save asks where, and later
+  saves write straight to that file. Other browsers, and iPhone/iPad,
+  download a copy each time.
+- **Home** opens on every launch. It has New song, New from the demo,
+  Open a song file, Back to the studio, exports and the song list.
+
+**Guided tour** (`src/ui/tour.js`). Testers said mpwav is hard to grasp at
+first, so this is a short walk through the studio, in the same style as
+Critters' coach marks.
+- The screen dims, one real control is ringed, and a bubble explains it,
+  with Back / Next / Skip and "n of 10".
+- The steps: Play, the timeline, New clip, the clip editor, the keys,
+  Record, Note Edit, Tempo, Home, Settings. A step whose control isn't on
+  screen is skipped.
+- It runs once on a first visit, after Home closes. Settings > Tutorial >
+  Take the tour replays it.
+- Accessible:
+  - The bubble is a labelled dialog, and focus stays on its buttons.
+  - Esc ends the tour, and focus returns to where it was.
+  - Each step is announced.
+  - Space and letter keys don't play anything behind it.

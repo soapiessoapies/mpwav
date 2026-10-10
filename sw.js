@@ -37,6 +37,7 @@ const SHELL = [
   "src/state/history.js",
   "src/state/library.js",
   "src/state/samples.js",
+  "src/state/song-files.js",
   "src/ui/announce.js",
   "src/ui/controls.js",
   "src/ui/keyboard.js",
@@ -50,6 +51,7 @@ const SHELL = [
   "src/ui/morph-pad.js",
   "src/ui/arrange.js",
   "src/ui/install.js",
+  "src/ui/tour.js",
   "src/ui/app.js",
 ];
 
