@@ -38,7 +38,7 @@
     try {
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
-        metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, collapsed: ui.collapsed,
+        metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
         panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size,
         open: open, picked: picked, songId,
       }));
@@ -58,7 +58,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, midi: false, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", ...uiSaved };
   let arrange = null; // window edit mode (set up near the end)
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
@@ -453,6 +453,7 @@
 
   function panic() {
     kb.releaseAll();
+    chordPad.releaseAll();
     compHeld.clear();
     for (const m of holds.keys()) kb.setLit(m, false);
     holds.clear();
@@ -461,6 +462,10 @@
 
   // --- on-screen keyboard ---
   const kb = Keyboard.create($("keys"), { onOn: noteOn, onOff: noteOff });
+  // Chord buttons (src/ui/chords.js): the song key's chords, voiced around
+  // the keyboard (roots from its lowest C up an octave), through the same noteOn/noteOff as the keys.
+  const chordPad = Chords.create($("chords"), { getKey: () => song.key, around: () => kb.base + 6, onOn: noteOn, onOff: noteOff });
+  let chordKey = "";
   const compact = () => document.documentElement.dataset.layout === "compact";
 
   function setKeyboard(base, announce) {
@@ -1542,6 +1547,42 @@
     save();
   });
 
+  // --- MIDI keyboard (src/ui/midi.js): opt-in, since the browser asks first ---
+  const midiBox = $("midi-in"), midiStatus = $("midi-status");
+  let midiLink = null;
+  const midiWords = (names) => names.length
+    ? `Connected: ${names.join(", ")}. Its keys play the selected track.`
+    : "On, but no MIDI keyboard is plugged in yet. Plug one in and it connects by itself.";
+  async function setMidi(on, announce) {
+    if (midiLink) { midiLink.stop(); midiLink = null; }
+    ui.midi = on;
+    midiBox.checked = on;
+    if (!on) { midiStatus.textContent = "Off."; if (announce) Announce.say("MIDI keyboard off"); save(); return; }
+    if (!Midi.supported) {
+      ui.midi = false; midiBox.checked = false;
+      midiStatus.textContent = "This browser can't use MIDI keyboards. Chrome and Edge can.";
+      if (announce) Announce.say(midiStatus.textContent);
+      save();
+      return;
+    }
+    try {
+      midiLink = await Midi.connect({
+        onOn: (m) => noteOn(m),
+        onOff: (m) => noteOff(m),
+        onStatus: (names) => { midiStatus.textContent = midiWords(names); },
+      });
+      if (announce) Announce.say(midiWords(midiLink.inputs));
+    } catch (e) {
+      ui.midi = false; midiBox.checked = false;
+      midiStatus.textContent = "The browser didn't allow MIDI. You can allow it in the site settings, then try again.";
+      if (announce) Announce.say(midiStatus.textContent);
+    }
+    save();
+  }
+  midiBox.addEventListener("change", () => setMidi(midiBox.checked, true));
+  if (ui.midi) setMidi(true, false);
+  else midiBox.checked = false;
+
   // --- step input: play a key and it goes in at the piano roll's cursor ---
   const stepBtn = $("step-input");
   stepBtn.addEventListener("click", () => {
@@ -1787,6 +1828,8 @@
   for (const n of Song.SNAPS) snapSel.add(new Option(SNAP_NAMES[n], n));
 
   function renderSongPage() {
+    const ck = song.key.root + " " + song.key.scale;
+    if (ck !== chordKey) { chordKey = ck; chordPad.render(); }
     keyRoot.value = song.key.root;
     keyScale.value = song.key.scale;
     keyKeep.checked = song.key.keep;
@@ -2096,6 +2139,26 @@
   });
 
   $("export-file").addEventListener("click", () => saveSong(false));
+  // Share by link (src/state/share-link.js): the song rides in the #fragment.
+  $("share-link").addEventListener("click", async () => {
+    if (ShareLink.usesSounds(song)) {
+      exportStatus.textContent = "This song uses sound files, which are too big for a link. Use Save song file and send the file instead.";
+      Announce.say(exportStatus.textContent);
+      return;
+    }
+    const link = ShareLink.linkFor(await ShareLink.encode(song), location.href);
+    try {
+      await navigator.clipboard.writeText(link);
+      exportStatus.textContent = `Share link copied (${link.length.toLocaleString()} characters). Paste it anywhere: opening it adds a copy of ${song.title}.`;
+    } catch (e) {
+      exportStatus.textContent = "Copy the link below to share it.";
+      const box = Object.assign(document.createElement("input"), { type: "text", readOnly: true, value: link, className: "share-box" });
+      box.setAttribute("aria-label", "Share link");
+      exportStatus.after(box);
+      box.select();
+    }
+    Announce.say(exportStatus.textContent);
+  });
 
   // Open: a song file becomes a song here (with its sounds); on Chrome and
   // Edge, Save goes back to that same file.
@@ -2556,6 +2619,15 @@
   // Home opens on every launch (not when the page is a test frame's reload of the same visit).
   let seen = false;
   try { seen = !!sessionStorage.getItem("mpwav.seen"); sessionStorage.setItem("mpwav.seen", "1"); } catch (e) { /* blocked */ }
+  // A share link (#song=…) opens straight into a copy of that song, skipping Home.
+  const shared = ShareLink.fromHash(location.hash);
+  if (shared) {
+    seen = true;
+    window.history.replaceState(null, "", location.pathname + location.search);
+    ShareLink.decode(shared)
+      .then((data) => addAndOpen(data, `Opened a shared song: ${data.title || "untitled"}. It's saved in your songs.`))
+      .catch(() => { Announce.say("That share link is broken or cut short."); showHome(); });
+  }
   if (!seen) requestAnimationFrame(showHome);
   // The first-visit tour follows Home when Home is opening, else starts on its own.
   if (Tour.shouldAutoRun()) {

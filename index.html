@@ -402,7 +402,12 @@
           <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> … <kbd>K</kbd> (they work even with the keyboard hidden).
           <kbd>Z</kbd> and <kbd>X</kbd> change octave, <kbd>Esc</kbd> stops every note.
           On a focused key, arrows move and <kbd>Enter</kbd> plays.
+          The chord buttons play a whole chord of the song's key from one press, and record like keys.
         </p>
+        <div class="chord-row" role="group" aria-label="Chords in the song's key">
+          <span class="chord-label" aria-hidden="true">Chords</span>
+          <div id="chords" class="chords"></div>
+        </div>
         <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
              aria-label="Piano keyboard" aria-describedby="keys-help"></div>
       </div>
@@ -434,7 +439,9 @@
           <button type="button" id="save-as" hidden>Save as…</button>
           <button type="button" id="export-wav" aria-describedby="export-wav-help">Export WAV</button>
           <button type="button" id="song-dup">Duplicate</button>
+          <button type="button" id="share-link" aria-describedby="share-help">Copy share link</button>
         </div>
+        <p id="share-help" class="help">A link with the whole song inside: anyone who opens it gets their own copy. Songs that use sound files are shared as a song file instead.</p>
         <p id="export-wav-help" class="help tip">Export WAV renders the whole song, every track with its effects and mix, to a sound file you can play anywhere.</p>
         <p id="export-status" class="help" aria-live="polite"></p>
       </section>
@@ -575,6 +582,8 @@
     <label class="check"><input type="checkbox" id="single-keys"> Single-key shortcuts (number keys and Edit-mode letters)</label>
     <p class="help">Turn these off if you use speech input or tend to bump keys: then only Ctrl shortcuts work, and letters always play notes.</p>
     <button id="settings-shortcuts" type="button">Show all shortcuts</button>
+    <label class="check"><input type="checkbox" id="midi-in"> Play from a MIDI keyboard</label>
+    <p id="midi-status" class="help" role="status">Plug a MIDI keyboard in and turn this on: its keys play the selected track and record like the on-screen keys. The browser asks permission the first time.</p>
   </section>
 
   <section aria-labelledby="set-credits-h">
@@ -614,9 +623,12 @@
 <script src="src/state/library.js"></script>
 <script src="src/state/samples.js"></script>
 <script src="src/state/song-files.js"></script>
+<script src="src/state/share-link.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>
 <script src="src/ui/keyboard.js"></script>
+<script src="src/ui/chords.js"></script>
+<script src="src/ui/midi.js"></script>
 <script src="src/ui/meter.js"></script>
 <script src="src/ui/mixer-view.js"></script>
 <script src="src/ui/colors.js"></script>

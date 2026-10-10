@@ -247,3 +247,47 @@ Critters' coach marks.
   - Esc ends the tour, and focus returns to where it was.
   - Each step is announced.
   - Space and letter keys don't play anything behind it.
+
+## Borrowed from other music apps (v0.10.0)
+
+We looked at how beginner-friendly music apps get people making something
+fast, and compared that with what mpwav has.
+
+| App | Tool | In mpwav |
+| --- | --- | --- |
+| GarageBand | Chord strips: one touch plays a whole chord | **Added:** chord buttons |
+| Chrome Music Lab Song Maker | Share a song as a link; MIDI keyboard input | **Added:** share links and MIDI input |
+| Song Maker, BandLab | A drum lane or drum pads | Not yet (proposed) |
+| BandLab | Looper packs: genre loops to start from | Not yet (proposed) |
+| BandLab | Automation lanes (volume, effects over time) | Not yet (proposed) |
+| GarageBand Live Loops, Ableton Session | A grid of clips you launch live | Not yet (proposed, large) |
+| BandLab, Song Maker | Record from the microphone | Not yet (proposed) |
+| Ableton | Scale highlighting in the note editor | Already had: in-key shading, keep-in-key |
+
+**Built:**
+- **Chord buttons** (`src/ui/chords.js`).
+  - A row above the piano with the seven chords of the song's key, each
+    with its numeral (I ii iii IV V vi vii° in major).
+  - One press plays the whole chord through the same path as the keys, so
+    it records, step-inputs and sounds on the selected track.
+  - With no scale, or a 5- or 6-note scale, the chords come from the major
+    key on the song's root (blues uses the minor key's).
+  - Accessible: Enter holds a chord, and a screen reader's activate plays a
+    short one.
+- **MIDI keyboard** (`src/ui/midi.js`, Settings > Keyboard).
+  - Opt-in, because the browser asks permission.
+  - Keyboards plugged in later connect by themselves.
+  - Note-on with velocity 0 counts as a release.
+- **Share links** (`src/state/share-link.js`, Home > Copy share link).
+  - The song is compressed (deflate) into the link's #fragment, so nothing
+    is sent to a server. The demo song comes to about 1,400 characters.
+  - Opening a link adds a copy to the opener's songs and skips Home.
+  - Songs with sound files are too big, so those point to Save song file.
+
+**Proposed next, in order:**
+1. A drum track: kick, snare and hat on one grid, with a few starting
+   patterns.
+2. Starter loops by genre.
+3. Mic recording into an audio clip.
+4. Automation for volume and filter.
+5. A clip-launch grid.

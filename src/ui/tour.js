@@ -45,7 +45,7 @@
     {
       el: "#keys-section",
       title: "Play notes",
-      text: "Tap these keys or use your computer keys A W S E D … K. Z and X change octave. Esc stops every note.",
+      text: "Tap these keys or use your computer keys A W S E D … K. The chord buttons play a whole chord in the song's key. A MIDI keyboard works too (Settings).",
     },
     {
       el: "#record",

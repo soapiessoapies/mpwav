@@ -1159,3 +1159,13 @@ html[data-motion="off"] .tour-spot { transition: none; }
 .tour-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tour-count { color: var(--muted); margin-right: auto; }
 .tour-next { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* Chord buttons (src/ui/chords.js): one row above the piano keys. */
+.chord-row { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
+.chord-label { color: var(--muted); font-size: 0.85rem; }
+.chords { display: flex; gap: 6px; flex-wrap: wrap; }
+.chord { display: inline-flex; flex-direction: column; align-items: center; min-width: 52px; min-height: 44px; padding: 4px 8px; line-height: 1.1; touch-action: none; }
+.chord-roman { color: var(--muted); font-size: 0.75rem; }
+.chord.lit { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chord.lit .chord-roman { color: var(--accent-ink); }
+.share-box { width: 100%; margin-top: 6px; }
