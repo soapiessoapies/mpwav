@@ -23,6 +23,8 @@
 //                    audio track (`kind: "audio"`) holds audio clips: their
 //                    content has `audio` { sampleId, start, end, fadeIn,
 //                    fadeOut, reverse, gain, fit } and no notes.
+//   Drum tracks:     `kind: "drums"` plays the drum kit (src/audio/drums.js):
+//                    its notes are drum hits on General MIDI drum notes.
 //   song.loop        { on, start, end } in bars: the stretch Play repeats.
 //                    With the loop off, Play runs from the cursor to the
 //                    end of the song and stops.
@@ -140,7 +142,7 @@
   function createTrack({ id, name, preset, color, gridBase = 60, length = 1, kind = "synth" }) {
     return {
       id, name, preset, color,
-      kind,          // "synth" (notes) or "audio" (sound files)
+      kind,          // "synth" (notes), "drums" (drum hits) or "audio" (sound files)
       sampler: null, // a synth track playing a sound file instead of its oscillator
       params: Params.sanitize(Presets.find(preset).params),
       clips: [], // { id, contentId, start, length, offset } in bars, sorted by start, never overlapping
@@ -392,12 +394,14 @@
   const cleanName = (v, max = 24) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
   // A new track at the end, in the first color not in use. Returns it, or null at the limit.
+  const cleanKind = (k) => (k === "audio" || k === "drums" ? k : "synth");
   function addTrack(song, { name, preset = "chip-lead", color, kind = "synth" } = {}) {
     if (song.tracks.length >= MAX_TRACKS) return null;
     const used = new Set(song.tracks.map((t) => t.color));
+    kind = cleanKind(kind);
     const t = createTrack({
-      id: newId(song, "t"), kind: kind === "audio" ? "audio" : "synth",
-      name: cleanName(name) || (kind === "audio" ? `Audio ${song.tracks.length + 1}` : `Track ${song.tracks.length + 1}`),
+      id: newId(song, "t"), kind,
+      name: cleanName(name) || (kind === "audio" ? `Audio ${song.tracks.length + 1}` : kind === "drums" ? "Drums" : `Track ${song.tracks.length + 1}`),
       preset: Presets.find(preset) ? preset : "init",
       color: COLORS.includes(color) ? color : COLORS.find((c) => !used.has(c)) || COLORS[song.tracks.length % COLORS.length],
     });
@@ -807,7 +811,7 @@
         out.tracks = saved.map((x, i) => {
           const def = DEFAULT_TRACKS.find((d) => d.id === x.id) || {};
           return createTrack({
-            id: x.id, kind: x.kind === "audio" ? "audio" : "synth",
+            id: x.id, kind: cleanKind(x.kind),
             name: cleanName(x.name) || def.name || "Track",
             preset: Presets.find(x.preset) ? x.preset : def.preset || "init",
             color: COLORS.includes(x.color) ? x.color : def.color || COLORS[i % COLORS.length],

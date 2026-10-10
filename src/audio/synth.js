@@ -154,6 +154,8 @@
     lfo.start();
 
     let bpm = opts.bpm || 120;
+    let kit = false;              // a drum track: notes play the drum kit (src/audio/drums.js)
+    const drumVoices = new Set(); // drum hits still ringing, for panic
     let sample = null;            // { buffer, root, from, len, gain } when playing a sound file
     const clipVoices = new Set(); // audio clips playing: { src, g }
 
@@ -193,6 +195,12 @@
     // fx: the note's own sound (or null); length: seconds it's held, which
     // a pitch slide spreads over.
     function noteOn(midi, velocity = 1, when = ctx.currentTime, fx = null, length = 0) {
+      if (kit) {
+        // A drum hit: a one-shot through the volume and warp effects (no
+        // filter, envelope or voice to let go of).
+        root.Drums.hit(ctx, out, midi, velocity, Math.max(when, ctx.currentTime), noiseBuffer(ctx), drumVoices);
+        return null;
+      }
       const f = fx || {};
       const src = makeSource(midi);
       const filter = ctx.createBiquadFilter();
@@ -304,13 +312,14 @@
     }
 
     function noteOff(midi, when = ctx.currentTime) {
+      if (kit) return;
       const v = pool.release(midi);
       if (v) releaseVoice(v, when);
     }
 
     // Lets go of one voice that noteOn returned (used by the sequencer).
     function voiceOff(v, when = ctx.currentTime) {
-      if (pool.releaseVoice(v)) releaseVoice(v, when);
+      if (v && pool.releaseVoice(v)) releaseVoice(v, when);
     }
 
     // Plays a note from a clip: { midi, vel, len, fx } starting `at`, each
@@ -338,6 +347,12 @@
     function allOff() {
       for (const v of pool.all()) cutVoice(v);
       const now = ctx.currentTime;
+      for (const { src, g } of drumVoices) {
+        g.gain.cancelScheduledValues(now);
+        g.gain.setTargetAtTime(0, now, CUT_FADE);
+        try { src.stop(now + CUT_FADE * 6); } catch (e) { /* already stopping */ }
+      }
+      drumVoices.clear();
       for (const { src, g } of clipVoices) {
         g.gain.cancelScheduledValues(now);
         g.gain.setTargetAtTime(0, now, CUT_FADE);
@@ -442,6 +457,7 @@
 
     return {
       noteOn, noteOff, voiceOff, playNote, allOff, set, load, setTempo, dispose, setSample, playAudio,
+      setKit(on) { kit = !!on; },
       held: () => pool.held(),
       get params() { return { ...p }; },
       output: out,

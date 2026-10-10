@@ -1169,3 +1169,7 @@ html[data-motion="off"] .tour-spot { transition: none; }
 .chord.lit { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .chord.lit .chord-roman { color: var(--accent-ink); }
 .share-box { width: 100%; margin-top: 6px; }
+
+/* Drum tracks: the drum grid's named rows, and the key legend. */
+.roll-keys.named .roll-key { text-align: right; padding-right: 6px; font-size: 0.75rem; white-space: nowrap; overflow: hidden; }
+.drum-keys { margin: 0 0 8px; }

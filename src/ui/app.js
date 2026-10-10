@@ -91,6 +91,7 @@
       const channel = Mixer.createChannel(ctx, Engine.input);
       const synth = Synth.create(ctx, channel.input, live(t), { reverb: Engine.reverb, bpm: song.bpm });
       audio[t.id] = { synth, channel };
+      synth.setKit(t.kind === "drums");
       applySampler(t);
       // A brand-new track has no strip until the mixer is redrawn; rebuildMixer hooks its meter up then.
       const canvas = mixerView.meter(t.id);
@@ -398,7 +399,11 @@
   // --- live notes from the keyboards, played on the selected track. The
   // same note can be held by a finger and a computer key at once; it sounds
   // until the last one lets go. ---
-  const holds = new Map(); // midi -> { n, trackId }
+  const holds = new Map(); // midi -> { n, trackId, key }
+  // A drum track's notes are drums: whose content is this?
+  const drumContent = (c) => (song.tracks.find((t) => t.id === c.trackId) || {}).kind === "drums";
+  // On a drum track the keys play drums (src/audio/drums.js).
+  const liveNote = (m) => (sel().kind === "drums" ? Drums.fromKey(m, kb.base) : m);
   let lastSpoken = 0;
 
   let saidAudioOnly = 0;
@@ -411,14 +416,16 @@
       }
       return;
     }
+    const key = m;
+    m = liveNote(m);
     const h = holds.get(m);
     if (h) { h.n++; return; }
     const trackId = song.selected;
-    holds.set(m, { n: 1, trackId });
-    kb.setLit(m, true);
+    holds.set(m, { n: 1, trackId, key });
+    kb.setLit(key, true);
     if (ui.announceNotes && performance.now() - lastSpoken > 150) {
       lastSpoken = performance.now();
-      Announce.say(Notes.spokenName(m));
+      Announce.say(sel().kind === "drums" ? Drums.nameOf(m) : Notes.spokenName(m));
     }
     if (transport && Engine.running()) {
       audio[trackId].synth.noteOn(m);
@@ -430,11 +437,12 @@
   }
 
   function noteOff(m) {
+    m = liveNote(m);
     const h = holds.get(m);
     if (!h) return;
     if (--h.n > 0) return;
     holds.delete(m);
-    kb.setLit(m, false);
+    kb.setLit(h.key, false);
     recordRelease(m);
     stepNoteOff(m);
     if (audio[h.trackId]) audio[h.trackId].synth.noteOff(m);
@@ -455,7 +463,7 @@
     kb.releaseAll();
     chordPad.releaseAll();
     compHeld.clear();
-    for (const m of holds.keys()) kb.setLit(m, false);
+    for (const h of holds.values()) kb.setLit(h.key, false);
     holds.clear();
     for (const id in audio) audio[id].synth.allOff();
   }
@@ -625,7 +633,7 @@
       Announce.say(`${Notes.spokenName(n.midi)}, step ${n.step + 1}` + (selNotes.size > 1 ? `, ${selNotes.size} notes selected` : ""));
     },
     onNoteMove(c, n, step, midi) {
-      if (song.key.keep && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
+      if (song.key.keep && !drumContent(c) && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
       return Song.moveNote(c, n, step, midi);
     },
     onNoteResize: (c, n, len) => Song.resizeNote(c, n, len),
@@ -696,7 +704,7 @@
     onAdd(step, midi) {
       const o = find(open);
       if (!o) return null;
-      if (song.key.keep) midi = Song.nearestInKey(song, midi);
+      if (song.key.keep && o.t.kind !== "drums") midi = Song.nearestInKey(song, midi);
       const n = Song.addNote(o.c, step, midi, o.t.length);
       if (n) preview(o.t, midi);
       return n;
@@ -710,7 +718,7 @@
     },
     onMove(n, step, midi) {
       const o = find(open);
-      if (o && song.key.keep && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
+      if (o && song.key.keep && o.t.kind !== "drums" && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
       return !!o && Song.moveNote(o.c, n, step, midi);
     },
     onResize(n, len) {
@@ -859,6 +867,7 @@
     roll.render({
       c, color: t.color, name: c.name, steps: c.bars * Song.STEPS, selected: selNotes, snap: song.snap,
       inKey: (m) => Song.inKey(song, m), keySig: `${song.key.root}:${song.key.scale}`,
+      ...(t.kind === "drums" ? { rows: Drums.KIT.map((d) => d.midi), rowName: Drums.nameOf, inKey: null } : {}),
     });
     lengthSel.value = t.length;
     renderNotePage();
@@ -873,7 +882,8 @@
     const o = find(open);
     $("note-controls").hidden = !list.length;
     $("patterns").hidden = !o;
-    if (o) $("stamp-row").textContent = Notes.noteName(roll.cursor.midi);
+    if (o) $("stamp-row").textContent = o.t.kind === "drums" ? Drums.nameOf(roll.cursor.midi) : Notes.noteName(roll.cursor.midi);
+    $("beats-box").hidden = !o || o.t.kind !== "drums";
     $("repeat-go").disabled = !list.length;
     for (const b of $("arps").querySelectorAll("button")) b.disabled = list.length < 2;
     if (!o) {
@@ -1080,12 +1090,16 @@
   for (let m = Song.LOWEST; m <= Song.HIGHEST; m++) instRoot.add(new Option(Notes.noteName(m), m));
   function renderSoundPage() {
     const t = sel();
-    const isAudio = t.kind === "audio";
+    const isAudio = t.kind === "audio", isDrums = t.kind === "drums";
     $("audio-track-note").hidden = !isAudio;
-    $("instrument").hidden = isAudio;
-    document.querySelector("#p-sound .preset").hidden = isAudio;
-    document.querySelector("#p-sound .morph-box:not(#instrument)").hidden = isAudio;
-    if (isAudio) return;
+    $("drum-track-note").hidden = !isDrums;
+    $("instrument").hidden = isAudio || isDrums;
+    document.querySelector("#p-sound .preset").hidden = isAudio || isDrums;
+    document.querySelector("#p-sound .morph-box:not(#instrument)").hidden = isAudio || isDrums;
+    // The keyboard: chord buttons for notes, a key-to-drum legend for drums.
+    document.querySelector(".chord-row").hidden = isAudio || isDrums;
+    $("drum-keys").hidden = !isDrums;
+    if (isAudio || isDrums) return;
     const s = t.sampler, info = s && Samples.info(s.sampleId);
     $("inst-now").textContent = !s ? "The synth (pick a preset below)" : info ? `Sound file: ${info.name} (${info.duration.toFixed(2)} s)`
       : Samples.isMissing(s.sampleId) ? "Sound file (not in this browser: import the song file that has it)" : "Sound file (loading…)";
@@ -1767,7 +1781,7 @@
     $("track-up").disabled = i === 0;
     $("track-down").disabled = i === song.tracks.length - 1;
     $("track-remove").disabled = song.tracks.length <= 1;
-    $("track-add").disabled = $("track-add-audio").disabled = song.tracks.length >= Song.MAX_TRACKS;
+    $("track-add").disabled = $("track-add-audio").disabled = $("track-add-drums").disabled = song.tracks.length >= Song.MAX_TRACKS;
     $("track-count").textContent = `${song.tracks.length} of ${Song.MAX_TRACKS} tracks.`;
   }
 
@@ -1806,6 +1820,19 @@
     rebuildMixer();
     selectTrack(t.id, false);
     afterChange(`Added ${t.name}, an audio track. New clip or dropping a file on its row adds a sound.`);
+  });
+  // A drum track starts with a beat to build on: a 1-bar loop, repeated.
+  $("track-add-drums").addEventListener("click", () => {
+    const t = Song.addTrack(song, { kind: "drums", name: "Drums" });
+    if (!t) { Announce.say(`${Song.MAX_TRACKS} tracks is the most a song can have`); return; }
+    const beat = Drums.BEATS[0];
+    const c = Song.makeContent(song, t.id, beat.name, 1, Drums.beatNotes(beat, 1));
+    const loop = song.loop && song.loop.on;
+    Song.addClip(song, t, loop ? song.loop.start : 0, loop ? Math.max(1, song.loop.end - song.loop.start) : 4, c.id);
+    syncAudio();
+    rebuildMixer();
+    selectTrack(t.id, false);
+    afterChange(`Added a drum track with the ${beat.name} beat. Open its clip to change the hits or pick another beat.`);
   });
   $("track-add").addEventListener("click", () => {
     const t = Song.addTrack(song);
@@ -2198,6 +2225,23 @@
     b.addEventListener("click", () => stamp(kind));
     $("stamps").append(b);
   });
+  // Drum beats: starting patterns for a drum track's open clip, added over
+  // every bar of the loop (hits already there stay).
+  for (const beat of Drums.BEATS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = beat.name;
+    b.addEventListener("click", () => {
+      const o = find(open);
+      if (!o || o.t.kind !== "drums") return;
+      let added = 0;
+      for (const n of Drums.beatNotes(beat, o.c.bars)) if (Song.addNote(o.c, n.step, n.midi, n.len, n.vel)) added++;
+      renderEditor();
+      timeline.render();
+      afterChange(added ? `Added the ${beat.name} beat (${added} hits)` : `The ${beat.name} beat is already all there`);
+    });
+    $("beats").append(b);
+  }
   for (const [dir, words, key] of ARP_KEYS) {
     const b = document.createElement("button");
     b.type = "button";

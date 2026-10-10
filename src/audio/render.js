@@ -35,6 +35,7 @@
       channel.setVolume(track.volume, Song.FADER.min);
       channel.setPan(track.pan);
       const synth = Synth.create(ctx, channel.input, live(track), { reverb: bus.reverb, bpm: song.bpm });
+      synth.setKit(track.kind === "drums");
       const s = track.sampler;
       if (s) synth.setSample({ ...s, buffer: Samples.buffer(s.sampleId, s.reverse) });
       return { track, synth };

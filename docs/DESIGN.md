@@ -291,3 +291,32 @@ fast, and compared that with what mpwav has.
 3. Mic recording into an audio clip.
 4. Automation for volume and filter.
 5. A clip-launch grid.
+
+## Drum tracks (v0.11.0)
+
+The first proposal from "Borrowed from other music apps" is built: a drum
+track, like Song Maker's drum lane and BandLab's drum pads.
+
+**How it works:**
+- **Add a drum track** (Track page). It starts with a 1-bar Four on the
+  floor clip, repeated over the loop (4 bars when the loop is off).
+- **The kit:** eight synthesized drums, no sound files, each on its General
+  MIDI note: kick 36, snare 38, clap 39, closed hat 42, low tom 45, open
+  hat 46, crash 49, high tom 50.
+  - A MIDI drum pad plays the right drum.
+  - A closed hat chokes a ringing open hat.
+  - The drums play through the track's volume, Warp effects and Mix.
+- **The drum grid:** a drum track's clip editor shows one named row per
+  drum instead of every pitch. It reads as a "drum grid" to screen readers,
+  and arrows move between drums.
+- **Drum beats** (Note page): Four on the floor, Rock, Hip-hop, Half-time,
+  Breakbeat, Toms. Each is added over every bar of the open clip, and hits
+  already there stay.
+- **Keys play drums:**
+  - White keys from the keyboard's lowest C: C kick, D snare, E clap,
+    F closed hat, G open hat, A low tom, B high tom, the next C crash.
+  - Computer keys: A S D F G H J K.
+  - A legend replaces the chord buttons while a drum track is selected.
+  - Recording and step input work the same way.
+- **Level:** drum peaks are matched to a synth pad chord (about 0.12 vs
+  0.10 in a render).

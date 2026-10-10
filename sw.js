@@ -31,6 +31,7 @@ const SHELL = [
   "src/audio/transport.js",
   "src/audio/morph.js",
   "src/audio/wav.js",
+  "src/audio/drums.js",
   "src/audio/render.js",
   "src/state/presets.js",
   "src/state/song.js",

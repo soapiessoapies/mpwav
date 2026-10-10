@@ -17,15 +17,18 @@
   "use strict";
 
   const TOP = 108, BOTTOM = 24; // C8 down to C1
-  const ROWS = TOP - BOTTOM + 1;
-  const KEYS_W = 46;
+  const KEYS_W = 46;    // piano keys down the left
+  const NAMES_W = 92;   // named rows (a drum track's drums)
+  const DEFAULT_ROWS = [];
+  for (let m = TOP; m >= BOTTOM; m--) DEFAULT_ROWS.push(m);
   const GRIP = 10; // px at a note's right edge that stretch it
   const TAP_SLOP = 8;
 
   function create(el, h) {
     // h: { onAdd(step, midi), onRemove(notes), onMove(note, step, midi), onResize(note, len),
     //      onSelect(), onChanged(text), onPreview(midi), say(text) }
-    let view = null; // { c, color, name, steps, selected: Set, snap, inKey(midi), keySig }
+    let view = null; // { c, color, name, steps, selected: Set, snap, inKey(midi), keySig,
+                     //   rows?: midis top first, rowName?(midi) — a drum track's named rows }
     let cursor = { step: 0, midi: 60 };
     let builtFor = ""; // steps + sizes the background was built for
     let notesLayer = null, cursorEl = null, playheadEl = null;
@@ -38,14 +41,31 @@
     // Steps fill the width ("fitting") until zoomed by hand.
     let fitting = true;
     const stepW = () => sw;
-    const fitStepW = () => Math.max(minStepW(), Math.floor((el.clientWidth - KEYS_W - 2) / view.steps));
-    const yOf = (midi) => (TOP - midi) * rowH();
-    const xOf = (step) => KEYS_W + step * stepW();
+    const fitStepW = () => Math.max(minStepW(), Math.floor((el.clientWidth - keysW() - 2) / view.steps));
+    // Rows: every pitch, or (a drum track) only the drums, each named.
+    const keysW = () => (view && view.rows ? NAMES_W : KEYS_W);
+    const rowsOf = () => (view && view.rows) || DEFAULT_ROWS;
+    const rowIndex = (midi) => (view && view.rows ? view.rows.indexOf(midi) : TOP - midi);
+    const yOf = (midi) => Math.max(0, rowIndex(midi)) * rowH();
+    const nameOf = (m) => (view && view.rowName ? view.rowName(m) : Notes.noteName(m));
+    const spoken = (m) => (view && view.rowName ? view.rowName(m) : spoken(m));
+    const clampMidi = (m) => {
+      const rows = rowsOf();
+      if (!(view && view.rows)) return Math.max(BOTTOM, Math.min(TOP, m));
+      return rows.includes(m) ? m : rows.reduce((a, b) => (Math.abs(b - m) < Math.abs(a - m) ? b : a));
+    };
+    // The row `d` rows above (d > 0) or below this one.
+    const shiftRow = (m, d) => {
+      if (!(view && view.rows)) return m + d;
+      const rows = view.rows, i = Math.max(0, rows.indexOf(m));
+      return rows[Math.max(0, Math.min(rows.length - 1, i - d))];
+    };
+    const xOf = (step) => keysW() + step * stepW();
     const where = (s) => (view.steps > 16 ? `bar ${Math.floor(s / 16) + 1} step ${(s % 16) + 1}` : `step ${s + 1}`);
     const lenWords = (n) => `${n} step${n > 1 ? "s" : ""}`;
     const snapOf = () => view.snap || 1;
     const snapDown = (st) => Math.floor(st / snapOf()) * snapOf();
-    const sig = () => `${view.steps}:${rowH()}:${stepW()}:${view.keySig || ""}`;
+    const sig = () => `${view.steps}:${rowH()}:${stepW()}:${view.keySig || ""}:${view.rows ? view.rows.join(",") : ""}`;
 
     el.tabIndex = 0;
     el.setAttribute("role", "application");
@@ -57,7 +77,7 @@
       const inner = document.createElement("div");
       inner.className = "roll-inner";
       inner.style.width = xOf(view.steps) + "px";
-      inner.style.height = ROWS * rowH() + "px";
+      inner.style.height = rowsOf().length * rowH() + "px";
       inner.style.setProperty("--row-h", rowH() + "px");
       inner.style.setProperty("--step-w", stepW() + "px");
 
@@ -67,22 +87,26 @@
       const keys = document.createElement("div");
       keys.className = "roll-keys";
       keys.setAttribute("aria-hidden", "true");
-      for (let m = TOP; m >= BOTTOM; m--) {
-        const black = Notes.isBlack(m);
+      const named = !!view.rows;
+      if (named) keys.classList.add("named");
+      keys.style.width = keysW() + "px";
+      for (const m of rowsOf()) {
+        const black = !named && Notes.isBlack(m);
         const r = document.createElement("div");
-        const out = view.inKey && !view.inKey(m);
-        r.className = "roll-row" + (black ? " sharp" : "") + (Notes.pitchClass(m) === 0 ? " c" : "") + (out ? " out" : "");
+        const out = !named && view.inKey && !view.inKey(m);
+        r.className = "roll-row" + (black ? " sharp" : "") + (!named && Notes.pitchClass(m) === 0 ? " c" : "") + (out ? " out" : "");
         rows.append(r);
         const k = document.createElement("div");
         k.className = "roll-key" + (black ? " sharp" : "") + (out ? " out" : "");
         k.dataset.midi = m;
-        if (Notes.pitchClass(m) === 0) k.textContent = Notes.noteName(m);
+        if (named) k.textContent = nameOf(m);
+        else if (Notes.pitchClass(m) === 0) k.textContent = Notes.noteName(m);
         keys.append(k);
       }
       const lines = document.createElement("div");
       lines.className = "roll-lines";
       lines.setAttribute("aria-hidden", "true");
-      lines.style.left = KEYS_W + "px";
+      lines.style.left = keysW() + "px";
       lines.style.width = view.steps * stepW() + "px";
 
       notesLayer = document.createElement("div");
@@ -110,7 +134,7 @@
         d.style.height = rowH() - 2 + "px";
         d.style.background = Colors.noteColor(view.color, n.midi);
         d.style.color = Colors.noteInk(view.color, n.midi);
-        if (n.len * stepW() >= 34) d.textContent = Notes.noteName(n.midi);
+        if (n.len * stepW() >= 34 && !view.rows) d.textContent = nameOf(n.midi);
         const vel = document.createElement("span");
         vel.className = "note-vel";
         vel.style.width = Math.round(n.vel * 100) + "%";
@@ -133,6 +157,7 @@
       const first = !view || view.c !== v.c;
       view = v;
       if (cursor.step >= v.steps) cursor.step = 0;
+      cursor.midi = clampMidi(cursor.midi); // a drum track has only its drums' rows
       if (fitting) sw = fitStepW();
       if (builtFor !== sig()) {
         buildBackground();
@@ -143,14 +168,14 @@
           if (refit !== sw) { sw = refit; buildBackground(); }
         }
       }
-      el.setAttribute("aria-label", `${v.name} notes, piano roll`);
+      el.setAttribute("aria-label", v.rows ? `${v.name} drum hits, drum grid` : `${v.name} notes, piano roll`);
       drawNotes();
       if (first) centerOn(v.c.notes.length ? Math.round(v.c.notes.reduce((a, n) => a + n.midi, 0) / v.c.notes.length) : 60);
       if (h.onView) h.onView(); // the zoom bar follows the clip's length
     }
 
     function centerOn(midi) {
-      cursor.midi = Math.max(BOTTOM, Math.min(TOP, midi));
+      cursor.midi = clampMidi(midi);
       placeCursor();
       el.scrollTop = yOf(midi) - el.clientHeight / 2 + rowH() / 2;
     }
@@ -160,13 +185,13 @@
       const x = xOf(cursor.step), y = yOf(cursor.midi);
       if (y < el.scrollTop) el.scrollTop = y;
       else if (y + rowH() > el.scrollTop + el.clientHeight) el.scrollTop = y + rowH() - el.clientHeight;
-      if (x < el.scrollLeft + KEYS_W) el.scrollLeft = x - KEYS_W;
+      if (x < el.scrollLeft + keysW()) el.scrollLeft = x - keysW();
       else if (x + stepW() > el.scrollLeft + el.clientWidth) el.scrollLeft = x + stepW() - el.clientWidth;
     }
 
     function describe() {
       const n = Song.noteAt(view.c, cursor.step, cursor.midi);
-      let text = `${Notes.spokenName(cursor.midi)}, ${where(cursor.step)}, `;
+      let text = `${spoken(cursor.midi)}, ${where(cursor.step)}, `;
       if (!n) text += "empty";
       else text += `note, ${lenWords(n.len)} long` + (n.step !== cursor.step ? `, started at ${where(n.step)}` : "") +
         (n.fx ? ", with its own sound" : "") + (view.selected.has(n) ? ", selected" : "");
@@ -176,8 +201,9 @@
     // --- pointer ---
     const cellAt = (e) => {
       const r = el.querySelector(".roll-inner").getBoundingClientRect();
-      const x = e.clientX - r.left - KEYS_W, y = e.clientY - r.top;
-      return { x, step: Math.floor(x / stepW()), midi: TOP - Math.floor(y / rowH()) };
+      const x = e.clientX - r.left - keysW(), y = e.clientY - r.top;
+      const rows = rowsOf();
+      return { x, step: Math.floor(x / stepW()), midi: rows[Math.max(0, Math.min(rows.length - 1, Math.floor(y / rowH())))] };
     };
     const noteFrom = (target) => {
       const d = target.closest(".note");
@@ -202,7 +228,7 @@
           lastPress = { n: null, at: 0 };
           view.selected.delete(n);
           h.onRemove([n]);
-          h.say(`Deleted ${Notes.spokenName(n.midi)}`);
+          h.say(`Deleted ${spoken(n.midi)}`);
           return;
         }
         lastPress = { n, at: now };
@@ -271,12 +297,12 @@
           view.selected.clear();
           view.selected.add(added);
           cursor = { step: d.cell.step, midi: d.cell.midi };
-          h.onChanged(`Added ${Notes.spokenName(added.midi)}`);
+          h.onChanged(`Added ${spoken(added.midi)}`);
         }
         return;
       }
       if (!d.changed) return;
-      if (d.mode === "move") h.onChanged(`Moved to ${Notes.spokenName(d.n.midi)}, ${where(d.n.step)}`);
+      if (d.mode === "move") h.onChanged(`Moved to ${spoken(d.n.midi)}, ${where(d.n.step)}`);
       else h.onChanged(`${d.mode === "draw" ? "Added" : "Now"} ${lenWords(d.n.len)} long`);
     }
     el.addEventListener("pointerup", endDrag);
@@ -295,7 +321,7 @@
         // Move the note under the cursor; the cursor goes with it.
         const n = here();
         if (!n) { h.say("No note here to move"); e.preventDefault(); return; }
-        const ok = h.onMove(n, n.step + (step || 0) * snapOf(), n.midi + (pitch || 0));
+        const ok = h.onMove(n, n.step + (step || 0) * snapOf(), shiftRow(n.midi, pitch || 0));
         if (ok) { cursor = { step: n.step, midi: n.midi }; h.onChanged(); }
         else h.say("Can't move it there");
         moved = ok;
@@ -311,10 +337,11 @@
         cursor.step = Math.max(0, Math.min(view.steps - 1, snapDown(cursor.step) + step * snapOf() * (e.ctrlKey ? 4 : 1)));
         moved = true;
       } else if (pitch) {
-        cursor.midi = Math.max(BOTTOM, Math.min(TOP, cursor.midi + pitch));
+        cursor.midi = clampMidi(shiftRow(cursor.midi, pitch));
         moved = true;
       } else if (e.key === "PageUp" || e.key === "PageDown") {
-        cursor.midi = Math.max(BOTTOM, Math.min(TOP, cursor.midi + (e.key === "PageUp" ? 12 : -12)));
+        cursor.midi = view.rows ? view.rows[e.key === "PageUp" ? 0 : view.rows.length - 1]
+          : Math.max(BOTTOM, Math.min(TOP, cursor.midi + (e.key === "PageUp" ? 12 : -12)));
         moved = true;
       } else if (e.key === "Home" || e.key === "End") {
         cursor.step = e.key === "Home" ? 0 : view.steps - 1;
@@ -324,14 +351,14 @@
         if (n) {
           view.selected.delete(n);
           h.onRemove([n]);
-          h.say(`Removed ${Notes.spokenName(n.midi)}`);
+          h.say(`Removed ${spoken(n.midi)}`);
         } else {
           const added = h.onAdd(cursor.step, cursor.midi);
           if (added) {
             view.selected.clear();
             view.selected.add(added);
             h.onChanged();
-            h.say(`Added ${Notes.spokenName(added.midi)}, ${lenWords(added.len)} long`);
+            h.say(`Added ${spoken(added.midi)}, ${lenWords(added.len)} long`);
           }
         }
         e.preventDefault();
@@ -380,7 +407,7 @@
     });
 
     // --- zoom (time axis) ---
-    const roomW = () => Math.max(60, el.clientWidth - KEYS_W - 2);
+    const roomW = () => Math.max(60, el.clientWidth - keysW() - 2);
     function getView() {
       if (!view) return { start: 0, end: 1, total: 1 };
       const start = el.scrollLeft / sw;
@@ -420,7 +447,7 @@
       if (!view) return;
       cursor = {
         step: ((step % view.steps) + view.steps) % view.steps,
-        midi: Math.max(BOTTOM, Math.min(TOP, midi ?? cursor.midi)),
+        midi: clampMidi(midi ?? cursor.midi),
       };
       placeCursor();
       reveal();

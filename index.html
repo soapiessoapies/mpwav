@@ -283,6 +283,10 @@
             <label class="inline">Every <select id="repeat-every"></select></label>
             <button type="button" id="repeat-go" aria-keyshortcuts="Control+R">Repeat selected</button>
           </div>
+          <fieldset id="beats-box" class="choice" hidden>
+            <legend>Drum beats (added to this clip)</legend>
+            <div id="beats" class="stamp-grid"></div>
+          </fieldset>
           <fieldset class="choice">
             <legend>Stamp a rhythm on the cursor row (<span id="stamp-row">C4</span>)</legend>
             <div id="stamps" class="stamp-grid"></div>
@@ -315,6 +319,7 @@
         <div class="note-pitch">
           <button type="button" id="track-add">Add a synth track</button>
           <button type="button" id="track-add-audio">Add an audio track</button>
+          <button type="button" id="track-add-drums">Add a drum track</button>
         </div>
         <p class="help tip">Synth tracks play notes. Audio tracks play sound files (.wav, .mp3) as clips on the timeline: drop a file on a row, or press New clip on one.</p>
         <p id="track-count" class="help"></p>
@@ -337,6 +342,7 @@
         <p class="help tip">Swing plays every other sixteenth a little late, for a shuffled groove.</p>
       </div>
       <div id="p-sound" class="page" role="tabpanel" aria-labelledby="tab-p-sound" tabindex="0" hidden>
+        <p id="drum-track-note" class="loop-status" hidden>A drum track plays the drum kit: kick, snare, clap, closed and open hat, two toms and a crash. Warp and Mix shape it; open a clip to place hits, or pick a beat on the Note page.</p>
         <p id="audio-track-note" class="loop-status" hidden>An audio track plays sound files. Warp and Mix shape it; open one of its clips to trim, fade or reverse it.</p>
         <section id="instrument" class="morph-box" aria-labelledby="inst-h">
           <h3 id="inst-h">Instrument</h3>
@@ -404,6 +410,7 @@
           On a focused key, arrows move and <kbd>Enter</kbd> plays.
           The chord buttons play a whole chord of the song's key from one press, and record like keys.
         </p>
+        <p id="drum-keys" class="help drum-keys" hidden>Drum keys: <kbd>A</kbd> or C kick · <kbd>S</kbd> or D snare · <kbd>D</kbd> or E clap · <kbd>F</kbd> closed hat · <kbd>G</kbd> open hat · <kbd>H</kbd> or A low tom · <kbd>J</kbd> or B high tom · <kbd>K</kbd> or high C crash</p>
         <div class="chord-row" role="group" aria-label="Chords in the song's key">
           <span class="chord-label" aria-hidden="true">Chords</span>
           <div id="chords" class="chords"></div>
@@ -616,6 +623,7 @@
 <script src="src/audio/transport.js"></script>
 <script src="src/audio/morph.js"></script>
 <script src="src/audio/wav.js"></script>
+<script src="src/audio/drums.js"></script>
 <script src="src/audio/render.js"></script>
 <script src="src/state/presets.js"></script>
 <script src="src/state/song.js"></script>
