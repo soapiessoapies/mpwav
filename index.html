@@ -100,6 +100,7 @@
       <div class="panel-head">
         <h2 id="playbox-h">Playing box</h2>
         <button id="new-clip" type="button" class="quiet">New clip</button>
+        <button id="loops-btn" type="button" class="quiet" aria-haspopup="dialog">Loops</button>
         <div class="loop-range" role="group" aria-label="Loop">
           <label for="loop-start">Loop bars</label>
           <input id="loop-start" type="number" inputmode="numeric" min="1" step="1">
@@ -196,8 +197,10 @@
           then the cursor moves on by the new-note length. Hold several keys for a chord. It's always on while the piano roll has focus.
         </p>
         <p id="record-help" class="help tip">
-          Record: Play runs and whatever you play on the keyboard is added to the open clip (or a new one at the cursor),
-          snapped to the nearest step and as long as you held the key. Each pass adds on top; Undo take removes the last recording.
+          Record: the song keeps playing and whatever you play is added to the selected track at the bar that's playing
+          (a new clip appears there if the track has none), snapped to the nearest step and as long as you held the key.
+          Pick another track with <kbd>[</kbd> <kbd>]</kbd> or a click and keep playing to add to it too.
+          Each pass adds on top; Undo take removes the last recording on every track.
         </p>
         <div id="roll" class="roll notes-only" aria-describedby="roll-help"></div>
         <div id="roll-zoombar" class="notes-only"></div>
@@ -428,6 +431,7 @@
       <p class="home-logo" aria-hidden="true">mpwav</p>
       <button type="button" id="song-new" class="home-btn primary">+ New song</button>
       <button type="button" id="song-demo" class="home-btn">New from the demo</button>
+      <button type="button" id="song-loops" class="home-btn" aria-haspopup="dialog">New from a starter loop</button>
       <button type="button" id="import-file" class="home-btn">Open a song file…</button>
       <button type="button" id="songs-close" class="home-btn">Back to the studio</button>
       <p id="home-save-note" class="help home-note"></p>
@@ -458,6 +462,25 @@
   </div>
 </dialog>
 
+<dialog id="loops" class="settings loops" aria-labelledby="loops-h">
+  <div class="settings-head">
+    <h2 id="loops-h">Starter loops</h2>
+    <button id="loops-close" type="button" class="quiet">Close</button>
+  </div>
+  <p class="help">Pick a genre. Add its parts to this song (they land in the song's key, at the loop, and you can add them while it plays), or start a new song from it.</p>
+  <fieldset class="choice">
+    <legend>Genre</legend>
+    <div id="loop-genres" class="seg"></div>
+  </fieldset>
+  <p id="loop-blurb" class="help"></p>
+  <ul id="loop-parts" class="loop-parts" aria-label="Parts"></ul>
+  <div class="toolbar">
+    <button type="button" id="loop-add-all">Add all four parts</button>
+    <button type="button" id="loop-new-song">Start a new song from it</button>
+  </div>
+  <p id="loop-status" class="help" role="status"></p>
+</dialog>
+
 <dialog id="shortcuts" class="settings shortcuts" aria-labelledby="shortcuts-h">
   <div class="settings-head">
     <h2 id="shortcuts-h">Shortcuts</h2>
@@ -471,6 +494,7 @@
       <tr><th scope="row">Ctrl + E</th><td>Switch the computer keys between Play and Edit</td></tr>
       <tr><th scope="row">1 to 7</th><td>Stamp a rhythm on the piano roll's cursor row (beats, eighths, sixteenths, offbeats, backbeat, tresillo, clave)</td></tr>
       <tr><th scope="row">8 / 9 / 0</th><td>Arpeggio from the selected chord: up / down / up-and-down</td></tr>
+      <tr><th scope="row">[ / ]</th><td>Pick the track above / below (while recording, you keep adding as the song plays)</td></tr>
       <tr><th scope="row">Esc</th><td>Stop every note</td></tr>
       <tr><th scope="row">?</th><td>This list</td></tr>
       <tr><th scope="row">Ctrl + Shift + L</th><td>Arrange panels (move them between columns); Esc when done</td></tr>
@@ -632,6 +656,7 @@
 <script src="src/state/samples.js"></script>
 <script src="src/state/song-files.js"></script>
 <script src="src/state/share-link.js"></script>
+<script src="src/state/loops.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>
 <script src="src/ui/keyboard.js"></script>

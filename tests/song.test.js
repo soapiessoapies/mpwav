@@ -522,3 +522,15 @@ test("audio segments: which part of a sound plays at a step", () => {
   clip.length = 1; // the clip ends after a bar: the sound stops there
   assert.equal(at(0).length, 1);
 });
+
+test("a clip recorded live fills the free bars of the loop around the playhead", () => {
+  const song = S.createSong();
+  const t = song.tracks[0];
+  const loop = { on: true, start: 0, end: 8 };
+  assert.deepEqual(S.freeSpan(t, 2, loop), { start: 0, length: 8 });
+  S.addClip(song, t, 4, 2); // bars 5-6 taken
+  assert.deepEqual(S.freeSpan(t, 1, loop), { start: 0, length: 4 });
+  assert.deepEqual(S.freeSpan(t, 7, loop), { start: 6, length: 2 });
+  assert.equal(S.freeSpan(t, 4, loop), null); // a clip is already there
+  assert.deepEqual(S.freeSpan(t, 10, { on: false }), { start: 10, length: 4 });
+});

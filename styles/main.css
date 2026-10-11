@@ -1173,3 +1173,7 @@ html[data-motion="off"] .tour-spot { transition: none; }
 /* Drum tracks: the drum grid's named rows, and the key legend. */
 .roll-keys.named .roll-key { text-align: right; padding-right: 6px; font-size: 0.75rem; white-space: nowrap; overflow: hidden; }
 .drum-keys { margin: 0 0 8px; }
+
+/* Starter loops dialog (src/state/loops.js) */
+.loop-parts { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.loop-parts li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }

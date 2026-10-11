@@ -320,3 +320,42 @@ track, like Song Maker's drum lane and BandLab's drum pads.
   - Recording and step input work the same way.
 - **Level:** drum peaks are matched to a synth pad chord (about 0.12 vs
   0.10 in a render).
+
+## Starter loops and recording while the song plays (v0.12.0)
+
+**Starter loops** (`src/state/loops.js`, the Loops button by New clip, or
+Home > New from a starter loop). Five genres, each a matching set of 4-bar
+parts:
+
+| Genre | Tempo | Key | Drums | Bass | Chords | Lead |
+| --- | --- | --- | --- | --- | --- | --- |
+| Chiptune | 140 | A minor | 8th hats, backbeat | bouncing octaves (Chip Bass) | 16th arpeggio (Pluck) | Chip Lead |
+| Lo-fi | 78, swung | F major | lazy kick, backbeat | Sub Bass roots | seventh chords (Warm Pad) | Dreamy Bell |
+| House | 124 | G minor | four on the floor, open hats | offbeat Acid | offbeat stabs (Warm Pad) | Pluck riff |
+| Hip-hop | 90, swung | D minor | boom-bap | Sub Bass | Dreamy Bell keys | Crunchy Lead hook |
+| Synthwave | 100 | E minor | backbeat, crash | 16th pulses (Chip Bass) | Warm Pad | Crunchy Lead |
+
+- **Melodic parts are written in scale degrees,** so they land in the
+  song's key. A song with no 7-note scale takes the genre's scale on its
+  root.
+- **Add** puts a part at the loop, or at the cursor when the loop is off.
+  Drums go on the song's drum track; other parts get a track named after
+  the part, re-used if you add the part again.
+- **Add all four parts** adds the whole groove.
+- **Start a new song from it** sets the genre's tempo, key and swing, makes
+  four tracks, and loops the 4 bars.
+
+**Recording while the song plays.** Record no longer narrows the loop to
+one clip:
+- **Where notes go:** the song plays as it is, and live notes go into the
+  selected track at the bar that's playing.
+  - A track with no clip there gets one, covering the free bars of the
+    loop around the playhead (`Song.freeSpan`), so a phrase lands in one
+    clip.
+  - The clip being recorded into opens in the editor.
+- **Switching tracks:** [ and ] (or a click) pick the track above or below.
+  The take carries on there, and only the notes being held on the old
+  track let go.
+- **Undo take:** removes everything the take added, on every track.
+- **The tour:** now 11 steps, with Starter loops added and the Record step
+  rewritten.

@@ -40,6 +40,7 @@ const SHELL = [
   "src/state/samples.js",
   "src/state/song-files.js",
   "src/state/share-link.js",
+  "src/state/loops.js",
   "src/ui/announce.js",
   "src/ui/controls.js",
   "src/ui/keyboard.js",

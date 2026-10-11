@@ -290,41 +290,33 @@
       (r.repeat ? `Play loops bars ${r.start + 1} to ${r.end}.` : `Play runs from bar ${r.start + 1} to bar ${r.end}, then stops.`);
   }
 
-  // --- recording: while on, Play runs and live notes go into the open clip
-  // (or one at the cursor), snapped to the nearest step. A take is one
-  // stretch of recording; Undo take removes what it added. ---
-  let take = null;     // { contentId, trackId, notes } while recording
+  // --- recording: while on, the song plays as it is and live notes go into
+  // whichever track is selected, at the bar that's playing, snapped to the
+  // nearest step. Pick another track ([ / ] or click it) and keep playing:
+  // the take carries on there. A track with no clip under the playhead gets
+  // one, spanning the free bars of the loop. A take is one stretch of
+  // recording across any tracks; Undo take removes everything it added. ---
+  let take = null;     // { notes: [{ contentId, n }], held: Map(midi -> { n, contentId, from, pos }) } while recording
   let lastTake = null; // the finished take Undo take would remove
   const recBtn = $("record");
   const undoBtn = $("undo-take");
 
-  // The clip to record into: the open one if it's on the selected track,
-  // else the one at the cursor, else a new 1-bar clip at the first free bar.
-  function recordTarget() {
-    const t = sel();
-    const o = find(open);
-    if (o && o.t === t) return o;
-    let clip = Song.clipAt(t, song.cursor);
-    if (!clip) {
-      let bar = song.cursor;
-      while (!Song.fits(t, bar, 1)) bar++;
-      clip = Song.addClip(song, t, bar, 1);
-    }
-    openClip(t, clip, false);
-    return find(open);
+  // The clip on `t` under bar `bar`, making one if there's none: it covers
+  // the empty bars around `bar` inside the loop (or 4 bars from `bar` with
+  // the loop off), so a phrase recorded across bars lands in one clip.
+  function liveClip(t, bar) {
+    const span = Song.freeSpan(t, bar, song.loop);
+    return span ? Song.addClip(song, t, span.start, span.length) : Song.clipAt(t, bar);
   }
 
   async function startTake() {
-    if (sel().kind === "audio") { Announce.say("Recording plays notes into a synth track. Pick one first."); return; }
-    const target = recordTarget();
-    const { clip, c, t } = target;
-    // Loop the clip while recording into it.
-    setLoop(clip.start, Song.clipEnd(clip), false);
-    take = { contentId: c.id, trackId: t.id, notes: [], held: new Map() };
+    if (sel().kind === "audio") { Announce.say("Recording plays notes into a synth or drum track. Pick one first."); return; }
+    take = { notes: [], held: new Map() };
     recBtn.setAttribute("aria-pressed", "true");
-    const counting = (!transport || !transport.playing) && ui.countIn;
-    if (!transport || !transport.playing) await togglePlay(counting);
-    Announce.say(`${counting ? "Count-in, then recording" : "Recording"} into ${c.name}, looping bars ${clip.start + 1} to ${Song.clipEnd(clip)}`);
+    const playing = transport && transport.playing;
+    const counting = !playing && ui.countIn;
+    if (!playing) await togglePlay(counting);
+    Announce.say(`${counting ? "Count-in, then recording" : "Recording"} into ${sel().name}. Pick another track any time to add to it as the song plays.`);
   }
 
   function endTake() {
@@ -335,7 +327,8 @@
     if (done.notes.length) {
       lastTake = done;
       undoBtn.disabled = false;
-      Announce.say(`Recorded ${done.notes.length} note${done.notes.length > 1 ? "s" : ""}`);
+      const tracks = new Set(done.notes.map((x) => song.contents[x.contentId] && song.contents[x.contentId].trackId)).size;
+      Announce.say(`Recorded ${done.notes.length} note${done.notes.length > 1 ? "s" : ""}` + (tracks > 1 ? ` on ${tracks} tracks` : ""));
     }
   }
 
@@ -344,8 +337,10 @@
   undoBtn.addEventListener("click", () => {
     if (!lastTake) return;
     endTake();
-    const c = song.contents[lastTake.contentId];
-    if (c) Song.removeNotes(c, lastTake.notes);
+    for (const { contentId, n } of lastTake.notes) {
+      const c = song.contents[contentId];
+      if (c) Song.removeNotes(c, [n]);
+    }
     Announce.say(`Take undone: ${lastTake.notes.length} note${lastTake.notes.length > 1 ? "s" : ""} removed`);
     lastTake = null;
     undoBtn.disabled = true;
@@ -367,19 +362,23 @@
 
   function recordNote(m) {
     if (!take || !transport || !transport.playing) return;
-    const t = Song.track(song, take.trackId);
+    const t = sel();
+    if (t.kind === "audio") return;
     const at = nearestStep();
     if (!at) return;
-    const clip = Song.clipAt(t, Math.floor(at.pos / Song.STEPS));
-    if (!clip || clip.contentId !== take.contentId) return;
-    const local = Song.localStep(song, clip, at.pos);
-    const n = Song.addNote(song.contents[take.contentId], local, m, 1);
+    const clip = liveClip(t, Math.floor(at.pos / Song.STEPS));
+    if (!clip) return;
+    const c = song.contents[clip.contentId];
+    const n = Song.addNote(c, Song.localStep(song, clip, at.pos), m, 1);
     if (!n) return;
-    take.notes.push(n);
-    take.held.set(m, { n, from: Engine.ctx.currentTime, pos: at.pos });
+    take.notes.push({ contentId: c.id, n });
+    take.held.set(m, { n, contentId: c.id, from: Engine.ctx.currentTime, pos: at.pos });
     // You already heard it as you played it; don't play it again a moment later.
     if (at.upcoming) skipOnce.add(at.pos + ":" + m);
-    renderEditor();
+    // Show what's being recorded: the clip it went into opens in the editor.
+    const o = find(open);
+    if (!o || o.clip !== clip) openClip(t, clip, false);
+    else renderEditor();
     timeline.render();
     save();
   }
@@ -390,7 +389,8 @@
     if (!h) return;
     take.held.delete(m);
     const steps = (Engine.ctx.currentTime - h.from) / Song.stepSeconds(song, h.pos);
-    Song.resizeNote(song.contents[take.contentId], h.n, Math.max(1, Math.round(steps)));
+    const c = song.contents[h.contentId];
+    if (c) Song.resizeNote(c, h.n, Math.max(1, Math.round(steps)));
     renderEditor();
     timeline.render();
     save();
@@ -457,6 +457,20 @@
       const v = s.noteOn(midi, 0.8);
       s.voiceOff(v, Engine.ctx.currentTime + 0.25);
     });
+  }
+
+  // Lets go of the notes being played live, leaving the song playing.
+  function releaseLive() {
+    kb.releaseAll();
+    chordPad.releaseAll();
+    for (const m of [...compHeld.values()]) noteOff(m);
+    compHeld.clear();
+    for (const [m, h] of [...holds]) {
+      kb.setLit(h.key, false);
+      if (audio[h.trackId]) audio[h.trackId].synth.noteOff(m);
+      recordRelease(m);
+    }
+    holds.clear();
   }
 
   function panic() {
@@ -539,6 +553,11 @@
         if (e.code === "Backslash") { target.fit(); Announce.say(inRoll() ? "Whole clip in view" : "Whole song in view"); }
         else if (e.code === "Minus") target.zoomOut();
         else target.zoomIn();
+        return;
+      }
+      if (e.code === "BracketLeft" || e.code === "BracketRight") {
+        e.preventDefault();
+        stepTrack(e.code === "BracketRight" ? 1 : -1);
         return;
       }
       if (ui.keysMode === "edit") {
@@ -2128,6 +2147,104 @@
     addAndOpen(demo, "New song from the demo");
     songsDlg.close();
   });
+  // --- starter loops (src/state/loops.js): a genre's parts into this song,
+  // or a new song from them ---
+  const loopsDlg = $("loops");
+  let loopGenre = Loops.GENRES[0];
+  const loopPlace = () => {
+    const on = song.loop.on;
+    return { bar: on ? song.loop.start : song.cursor, length: on ? song.loop.end - song.loop.start : Loops.BARS };
+  };
+  // The track a part goes on: the song's drum track for drums; for the rest,
+  // a track of that name (added before) or a new one with the part's sound.
+  function loopTrack(g, part) {
+    if (part.kind === "drums") return song.tracks.find((t) => t.kind === "drums") || Song.addTrack(song, { kind: "drums", name: "Drums" });
+    const name = `${g.name} ${part.name}`.slice(0, 24);
+    return song.tracks.find((t) => t.kind === "synth" && t.name === name) || Song.addTrack(song, { name, preset: part.preset });
+  }
+  // Places one part; returns the track, or null if there's no room.
+  function addLoopPart(g, part) {
+    const t = loopTrack(g, part);
+    if (!t) return null;
+    const notes = Loops.partNotes(part, Loops.keyFor(song, g));
+    const c = Song.makeContent(song, t.id, `${g.name} ${part.name}`.slice(0, 40), Loops.BARS, notes);
+    const at = loopPlace();
+    let bar = at.bar;
+    while (!Song.fits(t, bar, at.length)) bar++;
+    if (!Song.addClip(song, t, bar, at.length, c.id)) return null;
+    return t;
+  }
+  function afterLoopAdd(words) {
+    syncAudio();
+    rebuildMixer();
+    timeline.render();
+    renderTrackPage();
+    afterChange(words);
+    $("loop-status").textContent = words;
+  }
+  function renderLoops() {
+    const genres = $("loop-genres");
+    genres.textContent = "";
+    for (const g of Loops.GENRES) {
+      const id = "loop-g-" + g.id;
+      const r = Object.assign(document.createElement("input"), { type: "radio", name: "loop-genre", id, value: g.id, checked: g === loopGenre });
+      r.addEventListener("change", () => { loopGenre = g; renderLoops(); });
+      const l = Object.assign(document.createElement("label"), { htmlFor: id, textContent: g.name });
+      genres.append(r, l);
+    }
+    $("loop-blurb").textContent = `${loopGenre.blurb} ${loopGenre.bpm} bpm.`;
+    const list = $("loop-parts");
+    list.textContent = "";
+    for (const part of loopGenre.parts) {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = part.name + (part.kind === "drums" ? " (drum track)" : "");
+      const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Add" });
+      b.setAttribute("aria-label", `Add ${loopGenre.name} ${part.name}`);
+      b.addEventListener("click", () => {
+        const had = song.tracks.length;
+        const t = addLoopPart(loopGenre, part);
+        afterLoopAdd(!t ? "No room: the song already has the most tracks it can"
+          : song.tracks.length > had ? `Added ${loopGenre.name} ${part.name} on a new track`
+          : `Added ${loopGenre.name} ${part.name} to ${t.name}`);
+      });
+      li.append(name, b);
+      list.append(li);
+    }
+  }
+  function openLoops() {
+    if (songsDlg.open) songsDlg.close();
+    $("loop-status").textContent = "";
+    renderLoops();
+    loopsDlg.showModal();
+  }
+  $("loops-btn").addEventListener("click", openLoops);
+  $("song-loops").addEventListener("click", openLoops);
+  $("loops-close").addEventListener("click", () => loopsDlg.close());
+  loopsDlg.addEventListener("click", (e) => { if (e.target === loopsDlg) loopsDlg.close(); });
+  $("loop-add-all").addEventListener("click", () => {
+    const added = loopGenre.parts.filter((p) => addLoopPart(loopGenre, p)).length;
+    afterLoopAdd(added ? `Added ${added} ${loopGenre.name} part${added > 1 ? "s" : ""}` : "No room for more tracks");
+  });
+  $("loop-new-song").addEventListener("click", () => {
+    const g = loopGenre;
+    const s = Song.createSong();
+    s.title = `${g.name} song`;
+    s.bpm = g.bpm;
+    s.key = { ...s.key, root: g.key.root, scale: g.key.scale };
+    s.swing = g.swing;
+    s.tracks = [];
+    for (const part of g.parts) {
+      const t = part.kind === "drums" ? Song.addTrack(s, { kind: "drums", name: "Drums" }) : Song.addTrack(s, { name: part.name, preset: part.preset });
+      const c = Song.makeContent(s, t.id, `${g.name} ${part.name}`.slice(0, 40), Loops.BARS, Loops.partNotes(part, g.key));
+      Song.addClip(s, t, 0, Loops.BARS, c.id);
+    }
+    s.selected = s.tracks[s.tracks.length - 1].id;
+    s.loop = { on: true, start: 0, end: Loops.BARS };
+    loopsDlg.close();
+    addAndOpen(s, `New ${g.name} song: ${g.parts.length} tracks, looping 4 bars. Press Space to play, then Record to add your own on any track.`);
+  });
+
   $("song-dup").addEventListener("click", () => {
     const copy = JSON.parse(JSON.stringify(song));
     copy.title = (song.title + " copy").slice(0, 80);
@@ -2386,11 +2503,17 @@
   }
   rebuildMixer();
 
+  // The track above (-1) or below (1) the selected one.
+  function stepTrack(dir) {
+    const i = song.tracks.findIndex((t) => t.id === song.selected);
+    const next = song.tracks[Math.max(0, Math.min(song.tracks.length - 1, i + dir))];
+    if (next && next.id !== song.selected) selectTrack(next.id, true);
+  }
+
   function selectTrack(id, announce = true) {
-    if (song.selected !== id) {
-      panic();
-      endTake();
-    }
+    // A recording carries on into the newly picked track; only the notes
+    // being held on the old one let go.
+    if (song.selected !== id) releaseLive();
     song.selected = id;
     const t = sel();
     const chip = $("note-edit-track");

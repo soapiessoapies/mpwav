@@ -38,6 +38,11 @@
       text: "New clip adds an empty clip to the selected track. Double-clicking an empty spot on the timeline does too.",
     },
     {
+      el: "#loops-btn",
+      title: "Starter loops",
+      text: "Ready-made drums, bass, chords and melodies in five genres. Add them to your song in its key, or start a new song from one.",
+    },
+    {
       el: "#clip-editor",
       title: "The clip editor",
       text: "An open clip's notes show here as blocks. Click to add a note, drag to move it, drag its end to make it longer.",
@@ -50,7 +55,7 @@
     {
       el: "#record",
       title: "Record",
-      text: "Press Record, then play: what you play goes into the clip, held notes keep their length. Undo take removes it again.",
+      text: "Press Record and play along: notes go into the selected track as the song keeps playing. Press [ or ] to switch tracks and keep adding.",
     },
     {
       el: "#note-edit",

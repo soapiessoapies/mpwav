@@ -242,6 +242,20 @@
   }
 
   // The first bar at or after `bar` where `length` bars are free on a track.
+  // The empty stretch of `t` around `bar` for a clip recorded live: inside
+  // the loop when `bar` is in it (else 4 bars from `bar`), cut short by the
+  // track's other clips. { start, length } in bars, or null if `bar` is taken.
+  function freeSpan(t, bar, loop) {
+    if (clipAt(t, bar)) return null;
+    const inLoop = loop && loop.on && bar >= loop.start && bar < loop.end;
+    let from = inLoop ? loop.start : bar, to = inLoop ? loop.end : bar + 4;
+    for (const c of t.clips) {
+      if (clipEnd(c) <= bar) from = Math.max(from, clipEnd(c));
+      else if (c.start > bar) to = Math.min(to, c.start);
+    }
+    return { start: from, length: Math.max(1, to - from) };
+  }
+
   function freeBar(t, bar, length) {
     while (!fits(t, bar, length)) bar++;
     return bar;
@@ -907,7 +921,7 @@
     AUDIO_BARS_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
-    addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName,
+    addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName, freeSpan,
     freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, insertBars, deleteBars, duplicateBars,
     copyNotes, pasteNotes, duplicateNotes, setTempo, removeTempo, bpmAt, stepSeconds,
     STAMPS, repeatNotes, stampNotes, arpeggiate,
