@@ -484,11 +484,10 @@ tone, noise, zeroNear, soundSpan), tested in `tests/wave-ops.test.js`.
 
 | Group | Not built yet |
 | --- | --- |
-| Delay effects | chorus, flanger |
-| Filters | graphic EQ, notch |
+| Filters | notch, an EQ with more bands |
 | Time and pitch | pitch bend |
 | Amplitude | volume envelope, invert |
-| Clean-up | noise reduction, click removal, delete silence |
+| Clean-up | click removal |
 | Selection | find beats |
 | Views | spectral view, cue list, a wide level meter and status bar |
 
@@ -517,3 +516,24 @@ How they work, in `src/audio/wave-ops.js`:
   the pitch** is a stretch followed by a speed change back to the same
   length. Voices and single instruments come out best; a stretch of 30
   seconds of stereo takes about two seconds to work out.
+
+## Tone, Clean up, Chorus and Flanger (v0.18.0)
+
+The menu bar is now Edit, Change, Effects, **Tone**, Time and pitch,
+Generate, **Clean up**, View, Clip.
+
+| Where | What | Settings | What it does |
+| --- | --- | --- | --- |
+| Tone | Equalize | Bass, Middle, Treble in dB | bass is below 200 Hz, treble above 4000 Hz, the middle around 1000 Hz |
+| Tone | Cut the highs / Cut the lows | Filter at N Hz | the two filters from v0.16.0, moved here |
+| Effects | Chorus | none | a copy drifting slightly late and back: thicker, like several playing |
+| Effects | Flanger | none | the same idea, much closer and fed back on itself: a slow swoosh |
+| Clean up | Reduce noise | Reduce by N % | two steps, as in Cool Edit: select a stretch that is only the hiss or hum and **Learn the noise**, then select what to clean and reduce |
+| Clean up | Delete silences | over N ms, silent is under N dB | cuts out the long gaps, leaving a fiftieth of a second beside each sound |
+
+- **Noise reduction** cuts the sound into short overlapping slices, turns
+  each into its pitches (an FFT, written out in `wave-ops.js`), turns every
+  pitch down by however much the learned noise explains, and puts it back.
+  The learned noise is kept while mpwav is open and works on any sound
+  with the same sample rate. Pressed hard it takes quiet detail too.
+- **Delete silences** moves the clip's trim points with each cut.

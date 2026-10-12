@@ -253,3 +253,72 @@ test("compress catches a sudden hit: it's listening a moment ahead", () => {
   assert.ok(touched);
   assert.ok(db > 3, "the hit was turned down, so the rest comes up " + db.toFixed(1) + " dB");
 });
+
+const steady = (chans, rate) => W.peak(chans, rate / 4, (rate * 3) / 4);
+
+test("eq: bass, mid and treble each move their own part of the sound", () => {
+  const rate = 16000;
+  const at = (hz, set) => steady(W.eq(W.tone(rate, 1, { hz, level: 0.25 }), 0, rate, rate, set), rate) / 0.25;
+  assert.ok(at(60, { bass: 12 }) > 3.5, "bass up 12 dB lifts 60 Hz about 4x");
+  assert.ok(Math.abs(at(5000, { bass: 12 }) - 1) < 0.1, "and leaves 5000 Hz alone");
+  assert.ok(at(7000, { treble: -12 }) < 0.3, "treble down 12 dB");
+  assert.ok(Math.abs(at(100, { treble: -12 }) - 1) < 0.1);
+  assert.ok(at(1000, { mid: 6 }) > 1.8 && at(1000, { mid: 6 }) < 2.2, "mid up 6 dB doubles 1000 Hz");
+  assert.ok(Math.abs(at(60, { mid: 6 }) - 1) < 0.15);
+  assert.ok(Math.abs(at(1000, {}) - 1) < 1e-6, "all at 0: unchanged");
+});
+
+test("chorus and flanger change the sound inside the stretch only, at a sane level", () => {
+  const rate = 8000, src = W.tone(rate, 1, { hz: 220, level: 0.5 });
+  for (const fx of [W.chorus, W.flanger]) {
+    const out = fx(src, 2000, 6000, rate);
+    assert.equal(out[0].length, rate);
+    assert.deepEqual(Array.from(out[0].slice(0, 2000)), Array.from(src[0].slice(0, 2000)));
+    assert.deepEqual(Array.from(out[0].slice(6000)), Array.from(src[0].slice(6000)));
+    let diff = 0;
+    for (let i = 2000; i < 6000; i++) diff = Math.max(diff, Math.abs(out[0][i] - src[0][i]));
+    assert.ok(diff > 0.05, "it did something");
+    assert.ok(W.peak(out, 2000, 6000) < 1, "and didn't blow up");
+  }
+});
+
+test("noise reduction: learns hiss from a quiet stretch, then takes it out and keeps the tone", () => {
+  const rate = 8000;
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const hiss = W.noise(rate, 2, 0.05, rand)[0], note = W.tone(rate, 1, { hz: 440, level: 0.5 })[0];
+  const d = Float32Array.from(hiss);
+  for (let i = 0; i < rate; i++) d[rate + i] += note[i]; // second 1: hiss alone; second 2: the tone in hiss
+  const rms = (x, from, to) => { let s = 0; for (let i = from; i < to; i++) s += x[i] * x[i]; return Math.sqrt(s / (to - from)); };
+  const profile = W.noiseProfile([d], 0, rate / 2, rate);
+  assert.ok(profile && profile.level.length === 513);
+  assert.equal(W.noiseProfile([d], 0, 500, rate), null, "too short a stretch to learn from");
+  const [out] = W.denoise([d], 0, d.length, profile, 0.8);
+  assert.equal(out.length, d.length);
+  assert.ok(rms(out, 4000, 7000) < rms(d, 4000, 7000) / 4, "the hiss alone drops by 12 dB or more");
+  const kept = rms(out, rate + 2000, rate + 6000) / rms(note, 2000, 6000);
+  assert.ok(kept > 0.9 && kept < 1.1, "the tone is as loud as it was, got " + kept.toFixed(2));
+});
+
+test("noise reduction at 0 changes almost nothing, and only inside the stretch", () => {
+  const rate = 8000, src = W.tone(rate, 1, { hz: 300, level: 0.5 });
+  const profile = W.noiseProfile(W.noise(rate, 0.5, 0.01, () => 0.7), 0, 4000, rate);
+  const [out] = W.denoise(src, 2000, 6000, { level: new Float32Array(513), rate }, 0.8);
+  let diff = 0;
+  for (let i = 0; i < rate; i++) diff = Math.max(diff, Math.abs(out[i] - src[0][i]));
+  assert.ok(diff < 1e-3, "an empty noise profile puts the sound back as it was, off by " + diff);
+  assert.ok(profile);
+});
+
+test("delete silence cuts out the long gaps and keeps the short ones", () => {
+  const rate = 1000, d = new Float32Array(3400);
+  d.fill(0.5, 200, 700);   // sound
+  d.fill(0.5, 800, 1200);  // after a short gap (100 ms): kept
+  d.fill(0.5, 2200, 2800); // after a long gap (1 s): cut
+  const { chans, cuts } = W.deleteSilence([d], 0, 3400, rate, { gap: 0.3 });
+  assert.deepEqual(cuts, [[1220, 2180], [2820, 3400]], "a fiftieth of a second is left beside each sound; the end goes whole");
+  assert.equal(chans[0].length, 3400 - 960 - 580);
+  assert.equal(chans[0][750], 0, "the short gap is still there");
+  assert.deepEqual(W.deleteSilence([d], 0, 3400, rate, { gap: 5 }).cuts, [], "nothing long enough");
+  assert.deepEqual(W.deleteSilence([new Float32Array(1000)], 0, 1000, rate, { gap: 0.3 }).cuts, [[0, 1000]], "all silence");
+});

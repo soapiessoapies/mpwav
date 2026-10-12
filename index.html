@@ -223,8 +223,10 @@
             <button type="button" class="menu-btn" popovertarget="wedit-menu">Edit</button>
             <button type="button" id="wave-target" class="menu-btn" popovertarget="op-menu">Change the whole sound</button>
             <button type="button" class="menu-btn" popovertarget="fx-menu">Effects</button>
+            <button type="button" class="menu-btn" popovertarget="tone-menu">Tone</button>
             <button type="button" class="menu-btn" popovertarget="tp-menu">Time and pitch</button>
             <button type="button" class="menu-btn" popovertarget="gen-menu">Generate</button>
+            <button type="button" class="menu-btn" popovertarget="clean-menu">Clean up</button>
             <button type="button" class="menu-btn" popovertarget="view-menu">View</button>
             <button type="button" class="menu-btn" popovertarget="clip-menu">Clip</button>
           </div>
@@ -266,13 +268,32 @@
             <label class="inline">Room size <input id="fx-room" type="number" inputmode="numeric" step="5" min="0" max="100" value="50"> %</label>
             <label class="inline">Room level <input id="fx-wet" type="number" inputmode="numeric" step="5" min="5" max="100" value="35"> %</label>
             <button type="button" id="fx-reverb">Reverb (a room around it)</button>
-            <label class="inline">Filter at <input id="fx-hz" type="number" inputmode="numeric" step="50" min="20" max="20000" value="1000"> Hz</label>
-            <button type="button" id="fx-low">Cut the highs (muffled)</button>
-            <button type="button" id="fx-high">Cut the lows (thin)</button>
+            <button type="button" id="fx-chorus">Chorus (thicker, like several playing)</button>
+            <button type="button" id="fx-flanger">Flanger (a slow swoosh)</button>
             <label class="inline">Squash above <input id="fx-thresh" type="number" inputmode="numeric" step="1" min="-60" max="0" value="-18"> dB</label>
             <label class="inline">Squash by <input id="fx-ratio" type="number" inputmode="decimal" step="0.5" min="1.5" max="20" value="4"> to 1</label>
             <button type="button" id="fx-compress" aria-describedby="fx-compress-help">Compress (even out the loudness)</button>
             <p id="fx-compress-help" class="menu-note">Turns the loud parts down, then everything back up, so quiet parts come forward. 20 to 1 is a limiter.</p>
+          </div>
+          <div id="tone-menu" class="menu" popover role="group" aria-label="Tone">
+            <p id="tone-scope" class="menu-note">These change the whole sound.</p>
+            <label class="inline">Bass <input id="eq-bass" type="number" inputmode="decimal" step="1" min="-18" max="18" value="0"> dB</label>
+            <label class="inline">Middle <input id="eq-mid" type="number" inputmode="decimal" step="1" min="-18" max="18" value="0"> dB</label>
+            <label class="inline">Treble <input id="eq-treble" type="number" inputmode="decimal" step="1" min="-18" max="18" value="0"> dB</label>
+            <button type="button" id="eq-go">Equalize (bass, middle, treble)</button>
+            <label class="inline">Filter at <input id="fx-hz" type="number" inputmode="numeric" step="50" min="20" max="20000" value="1000"> Hz</label>
+            <button type="button" id="fx-low">Cut the highs (muffled)</button>
+            <button type="button" id="fx-high">Cut the lows (thin)</button>
+          </div>
+          <div id="clean-menu" class="menu" popover role="group" aria-label="Clean up">
+            <p class="menu-note">To take out hiss or hum: select a stretch that is only the noise and learn it. Then select what to clean (or nothing, for the whole sound) and reduce.</p>
+            <button type="button" id="nr-learn" data-stay>Learn the noise from the selection</button>
+            <p id="nr-status" class="menu-note" role="status">No noise learned yet.</p>
+            <label class="inline">Reduce by <input id="nr-amount" type="number" inputmode="numeric" step="5" min="10" max="100" value="80"> %</label>
+            <button type="button" id="nr-go">Reduce noise</button>
+            <label class="inline">Silences over <input id="ds-gap" type="number" inputmode="numeric" step="50" min="50" max="10000" value="300"> ms</label>
+            <label class="inline">Silent is under <input id="ds-floor" type="number" inputmode="numeric" step="1" min="-80" max="-20" value="-48"> dB</label>
+            <button type="button" id="ds-go">Delete silences</button>
           </div>
           <div id="tp-menu" class="menu" popover role="group" aria-label="Time and pitch">
             <p id="tp-scope" class="menu-note">These change the whole sound.</p>
@@ -307,7 +328,7 @@
           <p id="wave-fit-help" class="help tip">Fit to tempo speeds the sound up or slows it down so it fills the clip's loop exactly. Like a record, its pitch moves with it.</p>
           <p class="help tip">
             Drag across the wave to select a stretch of the sound (or type its times). Then Change (Amplify, Normalize, Fade, Silence, Reverse, Delete)
-            Effects (Echo, Reverb, filters, Compress) and Time and pitch (stretch, pitch, speed) work on just that stretch; with nothing selected they change the whole sound, and Hear it plays the selection. Undo brings the sound back.
+            Effects (Echo, Reverb, Chorus, Flanger, Compress), Tone (Equalize, filters), Time and pitch (stretch, pitch, speed) and Clean up (noise, silences) work on just that stretch; with nothing selected they change the whole sound, and Hear it plays the selection. Undo brings the sound back.
             Click the wave to put the cursor there (or type Select from). Edit copies or cuts the selection, and pastes at the cursor or over the selection,
             in this sound or another clip's. Generate puts silence, a tone or noise in the same way.
             Drag the edges of the bright part to trim what the clip plays, and the small squares at its top corners to fade; the Clip menu has the same as numbers.

@@ -30,6 +30,14 @@
 //   compress(chans, from, to, rate, { threshold, ratio })  turns the loud parts
 //                                  down, then the whole stretch back up to where it
 //                                  peaked; returns { chans, db } (db: how far up)
+//   eq(chans, from, to, rate, { bass, mid, treble })  three tone controls, in dB
+//   chorus(chans, from, to, rate) / flanger(...)      a copy of the sound, drifting
+//                                  slightly late and back: thicker, or swooshing
+//   noiseProfile(chans, from, to, rate)   learns what a stretch of plain noise
+//                                  (hiss, hum) is made of; null if it's too short
+//   denoise(chans, from, to, profile, amount)   takes that noise out of the stretch
+//   deleteSilence(chans, from, to, rate, { floor, gap })   cuts out the silences
+//                                  longer than `gap` seconds; returns { chans, cuts }
 //   afterResize(t, from, to, len)  where time `t` ends up once from..to is `len` long
 //   tone(rate, secs, { shape, hz, level })   a new sound: sine, square, saw or triangle
 //   noise(rate, secs, level, random)         ...or hiss
@@ -47,10 +55,10 @@
     const a = Math.max(0, Math.min(n, Math.round(from)));
     return [a, Math.max(a, Math.min(n, Math.round(to)))];
   };
-  // Copies of the channels, with `fn(data, a, b)` run on each one's stretch.
+  // Copies of the channels, with `fn(data, a, b, channel)` run on each one's stretch.
   function each(chans, from, to, fn) {
     const [a, b] = span(chans, from, to);
-    return chans.map((d) => { const out = Float32Array.from(d); fn(out, a, b); return out; });
+    return chans.map((d, c) => { const out = Float32Array.from(d); fn(out, a, b, c); return out; });
   }
 
   const dbToGain = (db) => Math.pow(10, db / 20);
@@ -167,22 +175,177 @@
     });
   }
 
-  // A two-pole filter (the usual "biquad"), gentle and without a peak.
-  function filter(chans, from, to, rate, kind, hz) {
-    const w = (2 * Math.PI * Math.max(10, Math.min(rate * 0.45, hz))) / rate;
-    const cos = Math.cos(w), alpha = Math.sin(w) / (2 * Math.SQRT1_2);
-    const a0 = 1 + alpha, a1 = (-2 * cos) / a0, a2 = (1 - alpha) / a0;
+  // Two-pole filters (the usual "biquads"), from the well-known cookbook
+  // formulas. Each is [b0, b1, b2, a1, a2], already divided by a0.
+  const angle = (rate, hz) => (2 * Math.PI * Math.max(10, Math.min(rate * 0.45, hz))) / rate;
+  const scaled = (b0, b1, b2, a0, a1, a2) => [b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0];
+  function passCoefs(rate, kind, hz) { // gentle and without a peak
+    const w = angle(rate, hz), cos = Math.cos(w), alpha = Math.sin(w) / (2 * Math.SQRT1_2);
     const edge = kind === "high" ? (1 + cos) / 2 : (1 - cos) / 2;
-    const b0 = edge / a0, b1 = ((kind === "high" ? -2 : 2) * edge) / a0, b2 = b0;
+    return scaled(edge, (kind === "high" ? -2 : 2) * edge, edge, 1 + alpha, -2 * cos, 1 - alpha);
+  }
+  function shelfCoefs(rate, kind, hz, db) { // everything below (or above) hz, up or down
+    const w = angle(rate, hz), cos = Math.cos(w), A = Math.pow(10, db / 40);
+    const beta = 2 * Math.sqrt(A) * (Math.sin(w) / 2) * Math.SQRT2, s = kind === "high" ? -1 : 1;
+    return scaled(
+      A * ((A + 1) - s * (A - 1) * cos + beta), s * 2 * A * ((A - 1) - s * (A + 1) * cos), A * ((A + 1) - s * (A - 1) * cos - beta),
+      (A + 1) + s * (A - 1) * cos + beta, -s * 2 * ((A - 1) + s * (A + 1) * cos), (A + 1) + s * (A - 1) * cos - beta);
+  }
+  function bellCoefs(rate, hz, db, q = 0.7) { // a hump (or dip) around hz
+    const w = angle(rate, hz), cos = Math.cos(w), A = Math.pow(10, db / 40), alpha = Math.sin(w) / (2 * q);
+    return scaled(1 + alpha * A, -2 * cos, 1 - alpha * A, 1 + alpha / A, -2 * cos, 1 - alpha / A);
+  }
+  // Runs filters one after another over the stretch. Each starts as if the
+  // sound had always been at its first value, so there's no thump.
+  function runFilters(chans, from, to, list) {
     return each(chans, from, to, (d, a, b) => {
-      // Starts as if the sound had always been at its first value: no thump.
-      let x1 = d[a] || 0, x2 = x1, y1 = kind === "high" ? 0 : x1, y2 = y1;
-      for (let i = a; i < b; i++) {
-        const x = d[i], y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-        x2 = x1; x1 = x; y2 = y1; y1 = y;
-        d[i] = y;
+      for (const [b0, b1, b2, a1, a2] of list) {
+        const steady = (b0 + b1 + b2) / (1 + a1 + a2);
+        let x1 = d[a] || 0, x2 = x1, y1 = x1 * steady, y2 = y1;
+        for (let i = a; i < b; i++) {
+          const x = d[i], y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+          x2 = x1; x1 = x; y2 = y1; y1 = y;
+          d[i] = y;
+        }
       }
     });
+  }
+  const filter = (chans, from, to, rate, kind, hz) => runFilters(chans, from, to, [passCoefs(rate, kind, hz)]);
+  // Bass below 200 Hz, treble above 4000 Hz, and the middle around 1000 Hz.
+  function eq(chans, from, to, rate, { bass = 0, mid = 0, treble = 0 } = {}) {
+    const list = [];
+    if (bass) list.push(shelfCoefs(rate, "low", 200, bass));
+    if (mid) list.push(bellCoefs(rate, 1000, mid));
+    if (treble) list.push(shelfCoefs(rate, "high", 4000, treble));
+    return runFilters(chans, from, to, list);
+  }
+
+  // A copy of the stretch that drifts late and back (a slow wobble),
+  // mixed in under it. `feedback` sends the copy round again (the swoosh).
+  function sweep(chans, from, to, rate, { base, depth, hz, mix, feedback = 0, voices = 1 }) {
+    return each(chans, from, to, (d, a, b, c) => {
+      const dry = d.slice(a, b), n = b - a;
+      const fed = new Float32Array(n); // the dry sound plus what's been fed back
+      for (let i = 0; i < n; i++) {
+        let wet = 0;
+        for (let v = 0; v < voices; v++) {
+          const turn = 2 * Math.PI * ((hz * (1 + v * 0.13) * i) / rate + v / voices + c * 0.25); // each side a quarter-turn apart: wider
+          const late = (base + depth * (0.5 + 0.5 * Math.sin(turn))) * rate, at = i - late, k = Math.floor(at);
+          if (k >= 0) wet += fed[k] * (1 - (at - k)) + (k + 1 < n ? fed[k + 1] : 0) * (at - k);
+        }
+        wet /= voices;
+        fed[i] = dry[i] + wet * feedback;
+        d[a + i] = 0.8 * (dry[i] + wet * mix);
+      }
+    });
+  }
+  const chorus = (chans, from, to, rate) => sweep(chans, from, to, rate, { base: 0.018, depth: 0.006, hz: 0.7, mix: 0.6, voices: 2 });
+  const flanger = (chans, from, to, rate) => sweep(chans, from, to, rate, { base: 0.001, depth: 0.004, hz: 0.25, mix: 0.7, feedback: 0.5 });
+
+  // --- noise reduction: the sound is cut into short overlapping slices,
+  // each turned into its pitches (an FFT); every pitch is turned down by
+  // however much of it the learned noise explains; then it's put back. ---
+  const SLICE = 1024, STEP = SLICE / 4;
+  const HANN = Float32Array.from({ length: SLICE }, (_, j) => 0.5 - 0.5 * Math.cos((2 * Math.PI * j) / SLICE));
+  // In place, for a power-of-two length. `back` undoes it.
+  function fft(re, im, back) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const turn = ((back ? 2 : -2) * Math.PI) / len, wr = Math.cos(turn), wi = Math.sin(turn);
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const p = i + k, q = p + len / 2;
+          const xr = re[q] * cr - im[q] * ci, xi = re[q] * ci + im[q] * cr;
+          re[q] = re[p] - xr; im[q] = im[p] - xi;
+          re[p] += xr; im[p] += xi;
+          const next = cr * wr - ci * wi;
+          ci = cr * wi + ci * wr;
+          cr = next;
+        }
+      }
+    }
+    if (back) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  }
+  // How loud each pitch is, on average, across a stretch of plain noise.
+  function noiseProfile(chans, from, to, rate) {
+    const [a, b] = span(chans, from, to);
+    if (b - a < SLICE) return null;
+    const level = new Float32Array(SLICE / 2 + 1), re = new Float32Array(SLICE), im = new Float32Array(SLICE);
+    let slices = 0;
+    for (const d of chans) {
+      for (let at = a; at + SLICE <= b; at += STEP) {
+        for (let j = 0; j < SLICE; j++) { re[j] = d[at + j] * HANN[j]; im[j] = 0; }
+        fft(re, im);
+        for (let k = 0; k < level.length; k++) level[k] += Math.hypot(re[k], im[k]);
+        slices++;
+      }
+    }
+    for (let k = 0; k < level.length; k++) level[k] /= slices;
+    return { level, rate };
+  }
+  // amount 0..1: how hard to press. Higher takes more noise, and more of
+  // the sound's own quiet detail with it.
+  function denoise(chans, from, to, profile, amount = 0.8) {
+    const [a, b] = span(chans, from, to), press = 0.5 + 2 * amount, least = 0.02 + (1 - amount) * 0.5;
+    const half = SLICE / 2, re = new Float32Array(SLICE), im = new Float32Array(SLICE);
+    const gain = new Float32Array(half + 1), smooth = new Float32Array(half + 1);
+    return chans.map((d) => {
+      const out = Float32Array.from(d);
+      if (b <= a) return out;
+      const sum = new Float32Array(b - a);
+      const before = new Float32Array(half + 1);
+      for (let at = a - SLICE + STEP; at < b; at += STEP) {
+        for (let j = 0; j < SLICE; j++) { const i = at + j; re[j] = (i >= 0 && i < d.length ? d[i] : 0) * HANN[j]; im[j] = 0; }
+        fft(re, im);
+        for (let k = 0; k <= half; k++) {
+          const size = Math.hypot(re[k], im[k]);
+          gain[k] = size > 1e-9 ? Math.max(least, 1 - (press * profile.level[k]) / size) : least;
+        }
+        for (let k = 0; k <= half; k++) {
+          // Evened out across neighbouring pitches and from slice to slice, or it warbles.
+          const near = (gain[Math.max(0, k - 1)] + gain[k] + gain[Math.min(half, k + 1)]) / 3;
+          smooth[k] = Math.max(near, before[k] * 0.6);
+        }
+        before.set(smooth);
+        for (let k = 0; k <= half; k++) {
+          re[k] *= smooth[k]; im[k] *= smooth[k];
+          if (k > 0 && k < half) { re[SLICE - k] *= smooth[k]; im[SLICE - k] *= smooth[k]; }
+        }
+        fft(re, im, true);
+        for (let j = 0; j < SLICE; j++) { const i = at + j - a; if (i >= 0 && i < sum.length) sum[i] += re[j] * HANN[j]; }
+      }
+      for (let i = 0; i < sum.length; i++) out[a + i] = sum[i] / 1.5; // four overlapping slices add up to 1.5
+      return out;
+    });
+  }
+
+  // Cuts out every run of silence longer than `gap` seconds, leaving a
+  // fiftieth of a second of it on each side so no sound is clipped short.
+  // `cuts` lists what went, as [from, to) frames of the sound as it was.
+  function deleteSilence(chans, from, to, rate, { floor = 0.004, gap = 0.3 } = {}) {
+    const [a, b] = span(chans, from, to), keep = Math.round(rate * 0.02), least = Math.max(1, Math.round(gap * rate));
+    const cuts = [];
+    let run = a;
+    const quiet = (i) => chans.every((d) => Math.abs(d[i]) <= floor);
+    for (let i = a; i <= b; i++) {
+      if (i < b && quiet(i)) continue;
+      if (i - run >= least) {
+        // A silence at the very start or end of the stretch goes right to its edge.
+        const s = run === a ? a : run + keep, e = i === b ? b : i - keep;
+        if (e > s) cuts.push([s, e]);
+      }
+      run = i + 1;
+    }
+    let out = chans.map((d) => Float32Array.from(d));
+    for (let k = cuts.length - 1; k >= 0; k--) out = remove(out, cuts[k][0], cuts[k][1]);
+    return { chans: out, cuts };
   }
 
   function speed(chans, from, to, factor) {
@@ -373,7 +536,7 @@
 
   const api = {
     amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, echo, filter, speed, stretch, pitch,
-    reverb, compress, tone, noise,
+    reverb, compress, eq, chorus, flanger, noiseProfile, denoise, deleteSilence, tone, noise,
     zeroNear, soundSpan, peak, outline, afterCut, afterInsert, afterResize, dbToGain, gainToDb,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

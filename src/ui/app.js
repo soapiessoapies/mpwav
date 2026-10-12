@@ -1199,6 +1199,7 @@
   let waveZoom = null; // the zoom bar under the wave
   let waveCursor = 0;  // where a paste goes when nothing is selected: seconds in the sound
   let waveCopied = null; // the copied stretch: { chans, rate, secs } (kept while mpwav is open)
+  let waveNoise = null; // the noise learned for Reduce noise: { level, rate } (kept while mpwav is open)
   let waveActive = false; // the wave was the last thing clicked: Ctrl + C / X / V / A are its
   const clock = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(3).padStart(6, "0")}`;
   const openAudio = () => { const o = find(open); return o && o.c.audio ? o : null; };
@@ -1234,7 +1235,9 @@
     $("wave-hear").textContent = hearing ? "Stop" : waveSel ? "Hear the selection" : "Hear it";
     $("wave-target").textContent = waveSel ? "Change the selection" : "Change the whole sound";
     $("fx-scope").textContent = waveSel ? "Effects change the selection." : "Effects change the whole sound.";
-    $("tp-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
+    $("tp-scope").textContent = $("tone-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
+    $("nr-learn").disabled = !waveSel;
+    $("nr-go").disabled = !waveNoise;
     for (const id of ["op-delete", "op-trim", "wz-sel", "sel-none"]) $(id).disabled = !waveSel;
     $("wz-out").disabled = $("wz-fit").disabled = !waveView;
     $("wave-cut").disabled = !waveSel;
@@ -1597,6 +1600,64 @@
       const { chans: out, db, touched } = WaveOps.compress(chans, from, to, Samples.info(a.sampleId).rate, { threshold, ratio });
       if (!touched) { Announce.say(`Nothing here is louder than ${threshold} dB. Type a lower number in Squash above.`); return null; }
       return { chans: out, say: `Compressed: quiet parts are ${db.toFixed(1)} dB louder` };
+    });
+  });
+
+  for (const kind of ["chorus", "flanger"]) {
+    $("fx-" + kind).addEventListener("click", () => editSound((chans, from, to, a) =>
+      ({ chans: WaveOps[kind](chans, from, to, Samples.info(a.sampleId).rate), say: kind === "chorus" ? "Chorus" : "Flanger" })));
+  }
+  const signedDb = (v) => `${v > 0 ? "up" : "down"} ${Math.abs(v)} dB`;
+  $("eq-go").addEventListener("click", () => {
+    const set = { bass: field("eq-bass", -18, 18, 0), mid: field("eq-mid", -18, 18, 0), treble: field("eq-treble", -18, 18, 0) };
+    const words = [["bass", set.bass], ["middle", set.mid], ["treble", set.treble]].filter(([, v]) => v).map(([n, v]) => `${n} ${signedDb(v)}`);
+    if (!words.length) { Announce.say("Type how many decibels to turn the bass, middle or treble up. Minus turns it down."); return; }
+    editSound((chans, from, to, a) => {
+      const out = WaveOps.eq(chans, from, to, Samples.info(a.sampleId).rate, set);
+      return { chans: out, say: `Equalized, ${words.join(", ")}` + tooLoud(out, from, to) };
+    });
+  });
+
+  // --- Clean up: noise reduction (learn the noise, then take it out) and silences ---
+  $("nr-learn").addEventListener("click", () => {
+    const o = openAudio(), buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf || !waveSel) { Announce.say("Select a stretch that is only the noise first"); return; }
+    const rate = buf.sampleRate, profile = WaveOps.noiseProfile(Samples.channels(buf), waveSel.from * rate, waveSel.to * rate, rate);
+    if (!profile) { Announce.say(`That's too short to learn from. Select at least ${(1024 / rate).toFixed(2)} seconds of noise.`); return; }
+    waveNoise = profile;
+    $("nr-status").textContent = `Noise learned from ${selWords(waveSel)}. Now select what to clean and Reduce noise.`;
+    $("nr-go").disabled = false;
+    Announce.say($("nr-status").textContent);
+  });
+  $("nr-go").addEventListener("click", () => {
+    const profile = waveNoise, amount = field("nr-amount", 10, 100, 80) / 100;
+    if (!profile) { Announce.say("Learn the noise first: select a stretch that is only the noise."); return; }
+    editSound((chans, from, to, a) => {
+      if (Samples.info(a.sampleId).rate !== profile.rate) { Announce.say("That noise was learned from a different kind of sound file. Learn it again from this sound."); return null; }
+      return { chans: WaveOps.denoise(chans, from, to, profile, amount), say: `Noise reduced by ${Math.round(amount * 100)} %` };
+    });
+  });
+  $("ds-go").addEventListener("click", () => {
+    const gap = field("ds-gap", 50, 10000, 300) / 1000, floor = WaveOps.dbToGain(field("ds-floor", -80, -20, -48));
+    editSound((chans, from, to, a) => {
+      const rate = Samples.info(a.sampleId).rate, { chans: out, cuts } = WaveOps.deleteSilence(chans, from, to, rate, { floor, gap });
+      if (!cuts.length) { Announce.say(`No silences over ${Math.round(gap * 1000)} ms here`); return null; }
+      if (out[0].length < 64) { Announce.say("It's all silence: that would leave no sound."); return null; }
+      const gone = cuts.reduce((s, [x, y]) => s + y - x, 0) / rate;
+      waveSel = waveView = null;
+      waveCursor = from / rate;
+      return {
+        chans: out, say: `Deleted ${cuts.length} silence${cuts.length === 1 ? "" : "s"}, ${gone.toFixed(2)} seconds`,
+        then: (b) => {
+          const left = soundSecs(b.sampleId);
+          for (let k = cuts.length - 1; k >= 0; k--) {
+            const [x, y] = [cuts[k][0] / rate, cuts[k][1] / rate];
+            b.start = WaveOps.afterCut(b.start, x, y);
+            b.end = b.end == null ? null : WaveOps.afterCut(b.end, x, y);
+          }
+          if ((b.end == null ? left : b.end) - b.start < 0.01) { b.start = 0; b.end = null; }
+        },
+      };
     });
   });
 
