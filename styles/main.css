@@ -1044,6 +1044,15 @@ dialog .check { white-space: normal; align-items: flex-start; }
 .wave-editor > .zoombar { margin-top: 0; }
 [data-fit="on"] #clip-body > .wave-editor { flex: 1 1 0; min-height: 0; }
 [data-fit="on"] .wave-editor > .wave { flex: 1 1 0; height: auto; }
+/* Fitted to the window there's no spare line for the status: it lies along
+   the wave's top edge (as the ruler lies along its bottom), under the handles. */
+[data-fit="on"] .wave-status {
+  position: relative; z-index: 1; flex: none; align-self: flex-start; box-sizing: border-box;
+  height: 1.5em; max-width: calc(100% - 40px); margin: 1px 20px calc(-1.5em - 7px); padding: 0 6px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.5; pointer-events: none;
+  color: var(--text); font-size: 0.78rem; background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+}
+[data-fit="on"] .wave-edge, [data-fit="on"] .wave-knob { z-index: 2; }
 .inst-now { margin: 0 0 8px; font-weight: 600; }
 .inst-sample { display: grid; gap: 8px; margin-top: 8px; }
 #wave-reverse[aria-pressed="true"], #wave-fit[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

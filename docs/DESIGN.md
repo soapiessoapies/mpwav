@@ -395,7 +395,8 @@ whole sound", so the scope is always on screen):
 - **Zoom:** the View menu (Zoom in, Zoom out, Zoom to the selection, Show
   the whole sound) and a zoom bar under the wave, like the timeline's.
 - **The status line** adds the sample rate, mono or stereo, and the peak
-  level in dB.
+  level in dB. It sits above the wave; fitted to the window it lies along
+  the wave's top edge, so it's never squeezed off the panel (v0.15.1).
 - **Clip menu:** Play backwards (was "Reverse"), Fit to tempo, Loop the
   whole sound, Replace sound. The trim fields are now "Trim from / Trim to".
 
