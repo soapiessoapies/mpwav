@@ -39,7 +39,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, posterSeen: true,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -58,8 +58,11 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, midi: false, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", slide: "all", ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "poster", metronome: false, countIn: true, keysMode: "play", singleKeys: true, midi: false, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", slide: "all", ...uiSaved };
   let arrange = null; // window edit mode (set up near the end)
+  // The Poster look arrived after some people had already been using mpwav:
+  // they get it once too, and whatever they pick after that is kept.
+  if (!uiSaved.posterSeen) ui.theme = "poster";
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
   const live = (t) => Morph.apply(t.params, t.morph);
@@ -3309,7 +3312,7 @@
   $("settings-btn").addEventListener("click", () => {
     showStorage();
     $("layout-" + ui.layout).checked = true;
-    ($("theme-" + ui.theme) || $("theme-contrast")).checked = true;
+    ($("theme-" + ui.theme) || $("theme-poster")).checked = true;
     ($("look-" + ui.look) || $("look-pixel")).checked = true;
     $("motion").checked = ui.motion;
     $("fit-screen").checked = ui.fit;
@@ -3333,7 +3336,7 @@
   }
 
   // Background: high contrast unless another one was chosen and saved.
-  const THEME_NAMES = { contrast: "High contrast", midnight: "Midnight", plum: "Plum", forest: "Forest", ember: "Ember" };
+  const THEME_NAMES = { poster: "Poster", contrast: "High contrast", midnight: "Midnight", plum: "Plum", forest: "Forest", ember: "Ember" };
   for (const theme of Object.keys(THEME_NAMES)) {
     $("theme-" + theme).addEventListener("change", (e) => {
       if (!e.target.checked) return;

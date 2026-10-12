@@ -593,3 +593,32 @@ Settings stay put on every slide.
   reduction), 500 moments by 128 bands, drawn to a canvas and kept until
   the sound or the view changes. It is a picture only: a screen reader is
   told when it's on, and the status line still gives length and peak.
+
+## The Poster look (v0.21.0)
+
+Phie's mpwav poster (`Desktop/homework/CreativeTech/mpwav/Mpwav_poster.png`)
+sets the look: periwinkle sweeping into violet, cream hand lettering,
+rounded wave bars and flowing curves.
+
+- **Settings > Background > Poster**, and it's where everyone starts.
+  People who were already using mpwav are switched to it once; whatever
+  they pick after that is kept. High contrast and the four tints are
+  still there.
+- **Colors** are sampled from the poster and deepened, because cream text
+  on the poster's own mid blues is about 2.7:1 and AA needs 4.5:1.
+
+| Part | Poster | In mpwav |
+| --- | --- | --- |
+| Violet | #995bff, #7e47ff | the corners of the background sweep, deepened |
+| Periwinkle and sky | #6f88ff, #78b2ff | panels (#27277a, #32349a), outlines (#9aa6ff) |
+| Cream lettering | #fff2e5 | the accent: pressed buttons, the song title, white keys |
+
+- **Behind the panels:** the violet-to-blue sweep with the poster's
+  rounded wave bars and two curves drawn faintly over it (an inline SVG
+  tile). It shows in the gaps between panels and across Home.
+- **Home** carries the poster's own lettering ("Mpwav, sfx & songs, phie
+  cassin") cropped from the artwork, in every background.
+- **Checked:** the same contrast test as every other background (text
+  4.5:1, control edges and focus rings 3:1) covers Poster's full set of
+  colors. The pixel details and paper tabs are unchanged.
+- **Still to come from Phie:** the vision board and mockup plan.

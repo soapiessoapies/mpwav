@@ -13,6 +13,7 @@ const SHELL = [
   "assets/fonts/nunito-latin.woff2",
   "assets/fonts/pixelify-sans-latin.woff2",
   "assets/fonts/caveat-brush-latin.woff2",
+  "assets/art/mpwav-poster-title.jpg",
   "assets/icons/icon.svg",
   "assets/icons/favicon-32.png",
   "assets/icons/apple-touch-icon.png",

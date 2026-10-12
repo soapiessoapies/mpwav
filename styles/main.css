@@ -625,7 +625,8 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 [data-layout="compact"] .roll { height: 300px; }
 
 /* ---------- backgrounds (Settings > Background) ----------
-   High contrast (the :root colors above) is the default. The others tint
+   Poster (further down) is where everyone starts. High contrast is the
+   :root colors above. Midnight, Plum, Forest and Ember tint
    the dark backgrounds only; every text and control color stays the same,
    and tests/contrast.test.js checks each theme against WCAG AA. */
 :root[data-theme="midnight"] {
@@ -644,6 +645,27 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   --bg: #1c1410; --panel: #271c16; --panel-2: #33251d;
   --cell: #3f2f25; --cell-beat: #4b382c; --bar-line: #574131; --meter-bg: #33251d;
 }
+/* Poster: the colors of Phie's mpwav poster (periwinkle into violet, cream
+   lettering), deepened so cream text passes AA on them. Unlike the tints
+   above it sets the text and control colors too; the same test checks it. */
+:root[data-theme="poster"] {
+  --bg: #1d1b55; --panel: #27277a; --panel-2: #32349a;
+  --line: #9aa6ff; --text: #f4f2ff; --muted: #cfd8ff;
+  --accent: #fff2e5; --accent-ink: #1d1b55;
+  --cell: #3a3da6; --cell-beat: #4447b8; --cell-edge: #a9b3ff; --bar-line: #4a4fc0; --playhead: #ffffff;
+  --focus: #fff2a8;
+  --white-key: #fff2e5; --white-key-ink: #1d1b55; --black-key: #1a1848; --black-key-edge: #9aa6ff;
+  --meter-bg: #32349a; --meter-hold: #fff2e5;
+}
+/* Behind the panels: the poster's sweep of violet into blue, with its
+   rounded wave bars and flowing curves drawn faintly over it. */
+:root[data-theme="poster"] body {
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22720%22 height=%22520%22 fill=%22none%22 stroke=%22%23fff%22%3E%3Cg stroke-opacity=%22.13%22 stroke-width=%225%22%3E%3Crect x=%2220%22 y=%2275%22 width=%2230%22 height=%2290%22 rx=%2215%22 transform=%22rotate%284 35 120%29%22/%3E%3Crect x=%2278%22 y=%2296%22 width=%2230%22 height=%22100%22 rx=%2215%22 transform=%22rotate%284 93 146%29%22/%3E%3Crect x=%22136%22 y=%22113%22 width=%2230%22 height=%2280%22 rx=%2215%22 transform=%22rotate%284 151 153%29%22/%3E%3Crect x=%22194%22 y=%2274%22 width=%2230%22 height=%22120%22 rx=%2215%22 transform=%22rotate%284 209 134%29%22/%3E%3Crect x=%22252%22 y=%2249%22 width=%2230%22 height=%22110%22 rx=%2215%22 transform=%22rotate%284 267 104%29%22/%3E%3Crect x=%22310%22 y=%2211%22 width=%2230%22 height=%22150%22 rx=%2215%22 transform=%22rotate%284 325 86%29%22/%3E%3Crect x=%22368%22 y=%2263%22 width=%2230%22 height=%2260%22 rx=%2215%22 transform=%22rotate%284 383 93%29%22/%3E%3Crect x=%22426%22 y=%2255%22 width=%2230%22 height=%22130%22 rx=%2215%22 transform=%22rotate%284 441 120%29%22/%3E%3Crect x=%22484%22 y=%2256%22 width=%2230%22 height=%22180%22 rx=%2215%22 transform=%22rotate%284 499 146%29%22/%3E%3Crect x=%22542%22 y=%2272%22 width=%2230%22 height=%22160%22 rx=%2215%22 transform=%22rotate%284 557 152%29%22/%3E%3Crect x=%22600%22 y=%2299%22 width=%2230%22 height=%2270%22 rx=%2215%22 transform=%22rotate%284 615 134%29%22/%3E%3Crect x=%22658%22 y=%2234%22 width=%2230%22 height=%22140%22 rx=%2215%22 transform=%22rotate%284 673 104%29%22/%3E%3Crect x=%2237%22 y=%22350%22 width=%2230%22 height=%22120%22 rx=%2215%22 transform=%22rotate%284 52 410%29%22/%3E%3Crect x=%2295%22 y=%22333%22 width=%2230%22 height=%22110%22 rx=%2215%22 transform=%22rotate%284 110 388%29%22/%3E%3Crect x=%22153%22 y=%22284%22 width=%2230%22 height=%22150%22 rx=%2215%22 transform=%22rotate%284 168 359%29%22/%3E%3Crect x=%22211%22 y=%22316%22 width=%2230%22 height=%2260%22 rx=%2215%22 transform=%22rotate%284 226 346%29%22/%3E%3Crect x=%22269%22 y=%22293%22 width=%2230%22 height=%22130%22 rx=%2215%22 transform=%22rotate%284 284 358%29%22/%3E%3Crect x=%22327%22 y=%22297%22 width=%2230%22 height=%22180%22 rx=%2215%22 transform=%22rotate%284 342 387%29%22/%3E%3Crect x=%22385%22 y=%22330%22 width=%2230%22 height=%22160%22 rx=%2215%22 transform=%22rotate%284 400 410%29%22/%3E%3Crect x=%22443%22 y=%22375%22 width=%2230%22 height=%2270%22 rx=%2215%22 transform=%22rotate%284 458 410%29%22/%3E%3Crect x=%22501%22 y=%22317%22 width=%2230%22 height=%22140%22 rx=%2215%22 transform=%22rotate%284 516 387%29%22/%3E%3Crect x=%22559%22 y=%22313%22 width=%2230%22 height=%2290%22 rx=%2215%22 transform=%22rotate%284 574 358%29%22/%3E%3Crect x=%22617%22 y=%22296%22 width=%2230%22 height=%22100%22 rx=%2215%22 transform=%22rotate%284 632 346%29%22/%3E%3Crect x=%22675%22 y=%22318%22 width=%2230%22 height=%2280%22 rx=%2215%22 transform=%22rotate%284 690 358%29%22/%3E%3C/g%3E%3Cg stroke-opacity=%22.17%22 stroke-width=%229%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M0 150 C 180 220%2C 300 90%2C 480 140 S 640 210%2C 720 150%22/%3E%3Cpath d=%22M0 400 C 180 470%2C 300 340%2C 480 390 S 640 460%2C 720 400%22/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(118deg, #4a2aa8 0%, #2b2c8c 26%, #24388f 62%, #4326a0 100%);
+  background-size: 720px 520px, cover;
+  background-attachment: fixed;
+}
+:root[data-theme="poster"] .home { background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22720%22 height=%22520%22 fill=%22none%22 stroke=%22%23fff%22%3E%3Cg stroke-opacity=%22.13%22 stroke-width=%225%22%3E%3Crect x=%2220%22 y=%2275%22 width=%2230%22 height=%2290%22 rx=%2215%22 transform=%22rotate%284 35 120%29%22/%3E%3Crect x=%2278%22 y=%2296%22 width=%2230%22 height=%22100%22 rx=%2215%22 transform=%22rotate%284 93 146%29%22/%3E%3Crect x=%22136%22 y=%22113%22 width=%2230%22 height=%2280%22 rx=%2215%22 transform=%22rotate%284 151 153%29%22/%3E%3Crect x=%22194%22 y=%2274%22 width=%2230%22 height=%22120%22 rx=%2215%22 transform=%22rotate%284 209 134%29%22/%3E%3Crect x=%22252%22 y=%2249%22 width=%2230%22 height=%22110%22 rx=%2215%22 transform=%22rotate%284 267 104%29%22/%3E%3Crect x=%22310%22 y=%2211%22 width=%2230%22 height=%22150%22 rx=%2215%22 transform=%22rotate%284 325 86%29%22/%3E%3Crect x=%22368%22 y=%2263%22 width=%2230%22 height=%2260%22 rx=%2215%22 transform=%22rotate%284 383 93%29%22/%3E%3Crect x=%22426%22 y=%2255%22 width=%2230%22 height=%22130%22 rx=%2215%22 transform=%22rotate%284 441 120%29%22/%3E%3Crect x=%22484%22 y=%2256%22 width=%2230%22 height=%22180%22 rx=%2215%22 transform=%22rotate%284 499 146%29%22/%3E%3Crect x=%22542%22 y=%2272%22 width=%2230%22 height=%22160%22 rx=%2215%22 transform=%22rotate%284 557 152%29%22/%3E%3Crect x=%22600%22 y=%2299%22 width=%2230%22 height=%2270%22 rx=%2215%22 transform=%22rotate%284 615 134%29%22/%3E%3Crect x=%22658%22 y=%2234%22 width=%2230%22 height=%22140%22 rx=%2215%22 transform=%22rotate%284 673 104%29%22/%3E%3Crect x=%2237%22 y=%22350%22 width=%2230%22 height=%22120%22 rx=%2215%22 transform=%22rotate%284 52 410%29%22/%3E%3Crect x=%2295%22 y=%22333%22 width=%2230%22 height=%22110%22 rx=%2215%22 transform=%22rotate%284 110 388%29%22/%3E%3Crect x=%22153%22 y=%22284%22 width=%2230%22 height=%22150%22 rx=%2215%22 transform=%22rotate%284 168 359%29%22/%3E%3Crect x=%22211%22 y=%22316%22 width=%2230%22 height=%2260%22 rx=%2215%22 transform=%22rotate%284 226 346%29%22/%3E%3Crect x=%22269%22 y=%22293%22 width=%2230%22 height=%22130%22 rx=%2215%22 transform=%22rotate%284 284 358%29%22/%3E%3Crect x=%22327%22 y=%22297%22 width=%2230%22 height=%22180%22 rx=%2215%22 transform=%22rotate%284 342 387%29%22/%3E%3Crect x=%22385%22 y=%22330%22 width=%2230%22 height=%22160%22 rx=%2215%22 transform=%22rotate%284 400 410%29%22/%3E%3Crect x=%22443%22 y=%22375%22 width=%2230%22 height=%2270%22 rx=%2215%22 transform=%22rotate%284 458 410%29%22/%3E%3Crect x=%22501%22 y=%22317%22 width=%2230%22 height=%22140%22 rx=%2215%22 transform=%22rotate%284 516 387%29%22/%3E%3Crect x=%22559%22 y=%22313%22 width=%2230%22 height=%2290%22 rx=%2215%22 transform=%22rotate%284 574 358%29%22/%3E%3Crect x=%22617%22 y=%22296%22 width=%2230%22 height=%22100%22 rx=%2215%22 transform=%22rotate%284 632 346%29%22/%3E%3Crect x=%22675%22 y=%22318%22 width=%2230%22 height=%2280%22 rx=%2215%22 transform=%22rotate%284 690 358%29%22/%3E%3C/g%3E%3Cg stroke-opacity=%22.17%22 stroke-width=%229%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M0 150 C 180 220%2C 300 90%2C 480 140 S 640 210%2C 720 150%22/%3E%3Cpath d=%22M0 400 C 180 470%2C 300 340%2C 480 390 S 640 460%2C 720 400%22/%3E%3C/g%3E%3C/svg%3E"), linear-gradient(118deg, #4a2aa8 0%, #2b2c8c 30%, #24388f 70%, #4326a0 100%); background-size: 720px 520px, cover; }
 .theme-swatch {
   display: inline-block; width: 14px; height: 14px; margin-right: 6px; border-radius: 3px;
   border: 1px solid var(--cell-edge); vertical-align: -2px;
@@ -1000,7 +1022,7 @@ dialog .check { white-space: normal; align-items: flex-start; }
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
 }
 .wave svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.wave-shape { fill: var(--track, var(--accent)); opacity: 0.3; }
+.wave-shape { fill: var(--track, var(--accent)); opacity: 0.55; }
 .wave-part {
   position: absolute; top: 0; bottom: 0; overflow: visible;
   background: color-mix(in srgb, var(--track, var(--accent)) 22%, transparent);
@@ -1115,7 +1137,9 @@ dialog .check, .tempo-list .check { border: 0; background: transparent; padding:
   display: flex; flex-direction: column; gap: 10px; padding: 28px 20px;
   background: var(--panel); border-right: 1px solid var(--soft-edge); overflow-y: auto;
 }
-.home-logo { margin: 0 0 14px; font: 400 2.4rem/1 var(--brush-font, cursive); color: var(--accent); }
+/* The title, as lettered on the poster. */
+.home-art { display: block; width: 100%; height: auto; margin: 0 0 14px; border-radius: var(--radius); border: 1px solid var(--line); }
+.home-logo { display: none; margin: 0 0 14px; font: 400 2.4rem/1 var(--brush-font, cursive); color: var(--accent); }
 .home-btn { width: 100%; text-align: left; font-weight: 600; }
 .home-btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .home-note { margin-top: auto; font-size: 0.9rem; }
@@ -1163,6 +1187,7 @@ dialog .check, .tempo-list .check { border: 0; background: transparent; padding:
   .home-wrap { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .home-nav { padding: 16px; flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--soft-edge); }
   .home-logo { width: 100%; margin: 0 0 4px; font-size: 1.8rem; }
+  .home-art { max-width: 320px; margin: 0 auto 4px; }
   .home-btn { width: auto; flex: 1 1 45%; }
   .home-note { margin-top: 0; width: 100%; }
   .home-main { padding: 16px 16px max(28px, env(safe-area-inset-bottom)); }
