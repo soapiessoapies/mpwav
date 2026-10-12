@@ -12,6 +12,12 @@
 //                    see src/audio/wave-ops.js) and returns the copy's id
 //   outline(id, rev, from, to, n)  a waveform outline of seconds from..to
 //   peak(id)         the sound's loudest sample, 0..1
+//   usage(keep)      what's stored: { count, bytes, unused, unusedBytes },
+//                    where unused means not in `keep` (a Set of ids)
+//   tidy(keep, all)  removes every stored sound not in `keep`; returns
+//                    { removed, bytes }. Sounds added in the last few
+//                    seconds are left alone (a song may be about to use
+//                    them) unless `all` is true.
 //   exportAll(ids)   { id: { name, type, data (base64) } } for a song file
 //   importAll(map)   stores sounds from a song file
 // Without IndexedDB (some private windows) sounds stay in memory for the visit.
@@ -27,6 +33,8 @@
   const names = new Map();     // id -> name
   const loudest = new Map();   // id -> peak, worked out when asked
   const pending = new Map();   // id -> Promise while decoding
+  const fresh = new Map();     // id -> when it was added in this visit
+  const FRESH_MS = 15000;
   const missing = new Set();   // ids looked for and not found (or not decodable)
 
   let dbp = null;
@@ -103,6 +111,7 @@
     const buf = await decode(bytes); // fails here for files that aren't sound
     const id = "snd-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const rec = { name: (file.name || "Sound").replace(/\.[a-z0-9]+$/i, "").slice(0, 40), type: file.type || "", bytes };
+    fresh.set(id, Date.now());
     await put(id, rec);
     remember(id, rec, buf);
     return id;
@@ -156,9 +165,56 @@
     chans.forEach((d, c) => buf.getChannelData(c).set(d.map((v) => Math.max(-1, Math.min(1, v)))));
     const next = "snd-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const rec = { name: names.get(id), type: "audio/wav", bytes: Wav.encode(buf) };
+    fresh.set(next, Date.now());
     remember(next, rec, buf);
     put(next, rec);
     return next;
+  }
+
+  // --- what's stored, and clearing what no song uses ---
+  // Every stored sound as [id, bytes], read one at a time.
+  async function stored() {
+    const out = new Map([...mem].map(([id, rec]) => [id, rec.bytes.byteLength]));
+    const d = await db();
+    if (!d) return out;
+    const keys = await new Promise((resolve) => {
+      const req = d.transaction(STORE).objectStore(STORE).getAllKeys();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+    for (const id of keys) {
+      const rec = await get(id);
+      if (rec && rec.bytes) out.set(id, rec.bytes.byteLength);
+    }
+    return out;
+  }
+  async function usage(keep) {
+    const out = { count: 0, bytes: 0, unused: 0, unusedBytes: 0 };
+    for (const [id, bytes] of await stored()) {
+      out.count++;
+      out.bytes += bytes;
+      if (!keep.has(id)) { out.unused++; out.unusedBytes += bytes; }
+    }
+    return out;
+  }
+  async function tidy(keep, all) {
+    const out = { removed: 0, bytes: 0 }, now = Date.now();
+    const gone = [...await stored()].filter(([id]) => !keep.has(id) && (all || !(now - (fresh.get(id) || 0) < FRESH_MS)));
+    if (!gone.length) return out;
+    const d = await db();
+    if (d) {
+      await new Promise((resolve) => {
+        const tx = d.transaction(STORE, "readwrite");
+        for (const [id] of gone) tx.objectStore(STORE).delete(id);
+        tx.oncomplete = tx.onerror = tx.onabort = resolve;
+      });
+    }
+    for (const [id, bytes] of gone) {
+      for (const m of [mem, decoded, reversed, outlines, names, loudest, fresh]) m.delete(id);
+      out.removed++;
+      out.bytes += bytes;
+    }
+    return out;
   }
 
   // The outline of part of a sound (seconds), as it shows when zoomed in.
@@ -203,5 +259,5 @@
     }
   }
 
-  root.Samples = { add, addEdited, load, buffer, peaks, outline: outlineOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
+  root.Samples = { add, addEdited, usage, tidy, load, buffer, peaks, outline: outlineOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
 })(window);

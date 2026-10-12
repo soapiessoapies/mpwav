@@ -117,6 +117,37 @@
   }
   // Decodes the song's sounds (from this browser's storage), then redraws
   // what shows them.
+  // Every sound a saved song uses (and, with `withUndo`, every one an undo
+  // or redo step could bring back). Anything else in storage is a leftover.
+  function soundsInUse(withUndo) {
+    const keep = new Set();
+    const scan = (text) => { for (const m of String(text).matchAll(/snd-[a-z0-9]{1,24}/g)) keep.add(m[0]); };
+    scan(JSON.stringify(song));
+    for (const e of library.list()) if (e.id !== songId) scan(JSON.stringify(library.load(e.id)));
+    if (withUndo) for (const json of history.all()) scan(json);
+    return keep;
+  }
+  const megabytes = (bytes) => (bytes < 1e5 ? "under 0.1 MB" : (bytes / 1e6).toFixed(1) + " MB");
+  // Settings > Storage: what's kept, and how much of it no song uses.
+  function showStorage() {
+    return Samples.usage(soundsInUse(false)).then((u) => {
+      const sounds = (n) => `${n} sound${n === 1 ? "" : "s"}`;
+      $("storage-status").textContent = !u.count ? "No sounds are kept in this browser."
+        : `${sounds(u.count)} kept in this browser (${megabytes(u.bytes)}). ` +
+          (u.unused ? `${u.unused} of them (${megabytes(u.unusedBytes)}) ${u.unused === 1 ? "isn't" : "aren't"} used by any song.` : u.count === 1 ? "A song uses it." : "Every one is used by a song.");
+      $("storage-clear").disabled = !u.unused;
+    });
+  }
+  $("storage-clear").addEventListener("click", () => {
+    if (saveTimer) writeNow();
+    Samples.tidy(soundsInUse(false), true).then((r) => {
+      history.reset(historyJson()); // steps back would need the sounds just cleared
+      showUndo();
+      showStorage();
+      Announce.say(r.removed ? `Cleared ${r.removed} unused sound${r.removed === 1 ? "" : "s"}, ${megabytes(r.bytes)}. Undo starts fresh from here.` : "Nothing to clear");
+    });
+  });
+
   function loadSounds() {
     return Samples.load(Song.soundIds(song)).then(() => {
       for (const t of song.tracks) applySampler(t);
@@ -1777,6 +1808,23 @@
   $("clip-paste").addEventListener("click", () => { if (!clipPaste()) Announce.say("Copy a clip first"); });
   $("clip-dup").addEventListener("click", () => clipDuplicate(false));
   $("clip-link").addEventListener("click", () => clipDuplicate(true));
+  // Split: the selected clip, at the play cursor (clips sit on bar lines,
+  // so that's where they cut). Each half is its own clip from then on.
+  function clipSplit() {
+    const p = pickedClip();
+    if (!p) { Announce.say("Select a clip first"); return; }
+    const bar = song.cursor, end = Song.clipEnd(p.clip);
+    if (bar <= p.clip.start || bar >= end) {
+      Announce.say(p.clip.length < 2 ? `${p.c.name} is one bar long, and clips split on a bar line. Stretch it first.`
+        : `Put the play cursor inside ${p.c.name} first: click the ruler at bar ${p.clip.start + 2}${end - p.clip.start > 2 ? ` to ${end}` : ""}.`);
+      return;
+    }
+    const right = Song.splitApart(song, p.t, p.clip, bar, soundSecs, Song.stepSeconds(song, bar * Song.STEPS));
+    picked = { trackId: p.t.id, clipId: right.id };
+    afterChange(`Split ${p.c.name} at bar ${bar + 1}. The second half is its own clip now: ${Song.content(song, right).name}`);
+    timeline.focusClip(right);
+  }
+  $("clip-split").addEventListener("click", clipSplit);
   $("clip-delete").addEventListener("click", () => {
     const p = pickedClip();
     if (p) deleteClip(p.t, p.clip, `Deleted ${p.c.name}`);
@@ -1810,7 +1858,7 @@
   // Which buttons can do something right now
   function showActions() {
     const p = pickedClip();
-    for (const id of ["clip-copy", "clip-cut", "clip-dup", "clip-link", "clip-delete"]) $(id).disabled = !p;
+    for (const id of ["clip-copy", "clip-cut", "clip-dup", "clip-link", "clip-split", "clip-delete"]) $(id).disabled = !p;
     $("clip-paste").disabled = !(clipboard && clipboard.kind === "clip");
     const o = find(open);
     $("notes-all").disabled = !o || !o.c.notes.length;
@@ -2355,6 +2403,7 @@
         if (current) openSong(library.list().find((x) => x.id !== e.id).id);
         library.remove(e.id);
         SongFiles.forget(e.id);
+        Samples.tidy(soundsInUse(true)); // its sounds go with it, unless another song (or Undo) uses them
         renderSongList();
         $("song-new").focus();
         Announce.say(`Removed ${e.title}`);
@@ -2904,6 +2953,7 @@
   $("version").textContent = "v" + window.STUDIO_VERSION;
   Install.init({ button: $("install-btn"), help: $("install-help"), status: $("offline-status") }, (t) => Announce.say(t));
   $("settings-btn").addEventListener("click", () => {
+    showStorage();
     $("layout-" + ui.layout).checked = true;
     ($("theme-" + ui.theme) || $("theme-contrast")).checked = true;
     ($("look-" + ui.look) || $("look-pixel")).checked = true;
@@ -3108,6 +3158,8 @@
   // --- first paint ---
   if (!find(picked)) picked = null;
   loadSounds();
+  // Sound versions left over from earlier edits: nothing can undo back to them now.
+  Samples.tidy(soundsInUse(true));
   showSaved();
   // Home opens on every launch (not when the page is a test frame's reload of the same visit).
   let seen = false;

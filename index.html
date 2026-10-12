@@ -117,7 +117,7 @@
       <p id="playbox-help" class="help tip">
         Drag a clip to move it and its right edge to stretch it (the loop repeats). Double-click or double-tap
         a clip to edit its notes, or an empty spot to make a new clip. Click the ruler to choose where Play starts;
-        drag along it to set the loop. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
+        drag along it to set the loop. Split cuts the selected clip in two at the play cursor. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
         <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
       </p>
       <div class="tool-row">
@@ -128,6 +128,7 @@
         <button type="button" id="clip-paste" aria-keyshortcuts="Control+V">Paste</button>
         <button type="button" id="clip-dup" aria-keyshortcuts="Control+D">Duplicate</button>
         <button type="button" id="clip-link" aria-keyshortcuts="Control+Shift+D">Linked copy</button>
+        <button type="button" id="clip-split" aria-describedby="clip-split-help">Split</button>
         <button type="button" id="clip-delete" aria-keyshortcuts="Delete">Delete</button>
       </div>
       <div class="toolbar">
@@ -135,6 +136,7 @@
         <button type="button" class="menu-btn" popovertarget="tempo-menu">Tempo</button>
       </div>
       </div>
+      <p id="clip-split-help" class="sr-only">Cuts the selected clip in two at the play cursor, on a bar line. Each half becomes its own clip.</p>
       <div id="sec-menu" class="menu" popover role="group" aria-label="Section (the loop range, every track)">
         <button type="button" id="sec-dup">Duplicate section</button>
         <button type="button" id="sec-insert">Insert bar at cursor</button>
@@ -656,6 +658,16 @@
     <button id="install-btn" type="button" hidden>Install mpwav</button>
     <p id="install-help" class="help"></p>
     <p id="offline-status" class="help" role="status"></p>
+  </section>
+
+  <section aria-labelledby="set-storage-h">
+    <h3 id="set-storage-h">Storage</h3>
+    <p id="storage-status" class="help" role="status">Counting the sounds kept in this browser…</p>
+    <button id="storage-clear" type="button" disabled>Clear unused sounds</button>
+    <p class="help">
+      Every edit to a sound keeps the version before it, so Undo can bring it back. mpwav clears versions no song uses each time it opens, and when you remove a song.
+      Clearing them now also clears Undo, because the steps back need those versions.
+    </p>
   </section>
 
   <section aria-labelledby="set-keys-h">

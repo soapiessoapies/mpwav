@@ -230,6 +230,43 @@ test("splitting a clip keeps the music where it was", () => {
   assert.deepEqual(S.notesAtPos(s, lead(s), 48 + 4).map((n) => n.midi), [64], "and bar 4 too");
 });
 
+test("splitting a clip apart: the halves play as before but no longer share notes", () => {
+  const s = S.createSong();
+  const a = S.addClip(s, lead(s), 0, 4, S.makeContent(s, "lead", "Two-bar", 2, [{ step: 20, midi: 64, len: 1, vel: 1 }]).id);
+  const right = S.splitApart(s, lead(s), a, 1);
+  assert.deepEqual([a.length, right.start, right.length, right.offset], [1, 1, 3, 1]);
+  assert.notEqual(right.contentId, a.contentId, "the right half has its own notes");
+  assert.equal(S.content(s, right).name, "Two-bar 2");
+  assert.deepEqual(S.notesAtPos(s, lead(s), 16 + 4).map((n) => n.midi), [64], "bar 2 still plays the second bar");
+  S.content(s, right).notes[0].midi = 70;
+  assert.equal(S.content(s, a).notes[0].midi, 64, "changing one half leaves the other alone");
+  assert.equal(S.splitApart(s, lead(s), a, 0), null, "no split at a clip's own start");
+});
+
+test("splitting an audio clip apart: the right half starts its sound at the cut", () => {
+  const s = S.createSong();
+  const t = S.addTrack(s, { kind: "audio" });
+  const stepSecs = 0.125, bar = 16 * stepSecs; // 2-second bars
+  const dur = () => 7;
+  const clip = S.addAudioClip(s, t, 0, "snd-abc", "Take", 7);
+  S.resizeClip(t, clip, 4);
+  S.content(s, clip).bars = 4;
+  const right = S.splitApart(s, t, clip, 1, dur, stepSecs);
+  const c = S.content(s, right);
+  assert.deepEqual([right.offset, c.bars, c.audio.start], [0, 3, bar], "one bar of sound is skipped");
+  assert.equal(S.content(s, clip).audio.start, 0, "the left half is as it was");
+  const seg = S.audioSegment(s, t, 16, 0, dur, stepSecs);
+  assert.ok(seg && Math.abs(seg.offset - bar) < 1e-9, "at the cut, the sound carries on from where it was");
+
+  // Played backwards, the cut comes off the end of the trim instead.
+  const back = S.addAudioClip(s, t, 8, "snd-abc", "Back", 7);
+  S.resizeClip(t, back, 4);
+  Object.assign(S.content(s, back), { bars: 4 });
+  S.content(s, back).audio.reverse = true;
+  const r2 = S.splitApart(s, t, back, 9, dur, stepSecs);
+  assert.deepEqual([S.content(s, r2).audio.start, S.content(s, r2).audio.end], [0, 7 - bar]);
+});
+
 test("insert bars: everything from there on moves right; a clip across it is split", () => {
   const s = S.createSong();
   S.addClip(s, lead(s), 0, 4);

@@ -419,9 +419,34 @@ Other clips that use the original sound keep it. The maths is in
 `src/audio/wave-ops.js` (pure functions, tested in
 `tests/wave-ops.test.js`).
 
-**Known gap:** old copies are never cleaned out of the browser's storage,
-so heavy editing of long sounds uses space. A tidy-up needs to check every
-saved song first.
+**Clearing old versions (v0.15.0).** Edited copies pile up, so mpwav
+clears the ones nothing needs:
+- **When it opens:** any stored sound that no saved song uses is removed.
+  There's no undo history yet, so nothing can miss them.
+- **When a song is removed** from Home: its sounds go too, unless another
+  song or an undo step still uses them.
+- **Settings > Storage** shows how many sounds are kept, how big they are,
+  and how many no song uses, with **Clear unused sounds**. Clearing by hand
+  also clears Undo, because the steps back need those versions.
+- A sound added in the last few seconds is never cleared automatically (a
+  song may be about to use it). `Samples.usage` / `Samples.tidy`, and
+  `soundsInUse` in app.js, which reads every saved song.
 
 **Not built yet, from the same reference:** generating silence, tones or noise, a noise-reduction pass, and a wide
 level meter with a status bar across the app.
+
+## Split a clip (v0.15.0)
+
+**Split** (the Clip toolbar, by Linked copy) cuts the selected clip in two
+at the play cursor. Each half becomes its own clip, so its notes can be
+changed, moved or deleted without touching the other half.
+- **Where it cuts:** on a bar line, because clips sit on bar lines. Click
+  the ruler inside the clip to put the cursor there. A one-bar clip has to
+  be stretched first.
+- **Note clips:** the second half gets its own copy of the notes, named
+  after the first with a 2 ("Lead riff 2"), and carries on from the same
+  point in the loop, so the song sounds the same until you change it.
+- **Audio clips:** the second half is trimmed to start its sound where the
+  cut is (`Song.splitApart`).
+- **Not built yet:** splitting between bar lines, and a shortcut (Ctrl + E
+  is taken by Keys edit).

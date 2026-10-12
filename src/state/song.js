@@ -308,6 +308,35 @@
     return right;
   }
 
+  // Cuts a clip in two at `bar` so each half can be changed on its own: the
+  // right half gets its own copy of the notes (or of the sound's settings).
+  // An audio clip only starts its sound at the top of its loop, so its right
+  // half is trimmed to start where the cut is. `durationOf(id)` gives a
+  // sound's length in seconds and `stepSecs` a step's length at the cut
+  // (both only matter for audio). Returns the right half.
+  function splitApart(song, t, clip, bar, durationOf, stepSecs) {
+    const c = content(song, clip);
+    const right = splitClip(song, t, clip, bar);
+    if (!right) return null;
+    const own = cloneContent(song, c, c.name + " 2");
+    right.contentId = own.id;
+    const a = own.audio;
+    if (a && right.offset) {
+      const duration = (durationOf && durationOf(a.sampleId)) || 0;
+      const end = Math.min(duration, a.end == null ? duration : a.end), trimmed = end - a.start;
+      // Seconds of the sound that go by in a bar (fitted, it's spread over the loop).
+      const skip = right.offset * (a.fit ? trimmed / c.bars : STEPS * (stepSecs || 0));
+      if (skip > 0 && skip < trimmed - 0.01) {
+        if (a.reverse) a.end = end - skip;
+        else a.start += skip;
+        a.fadeIn = 0;
+        own.bars = c.bars - right.offset;
+        right.offset = 0;
+      }
+    }
+    return right;
+  }
+
   // --- sections: bars across every track ---
   // Inserts `n` empty bars at `bar`, splitting any clip that crosses it.
   function insertBars(song, bar, n) {
@@ -922,7 +951,7 @@
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName, freeSpan,
-    freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, insertBars, deleteBars, duplicateBars,
+    freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, splitApart, insertBars, deleteBars, duplicateBars,
     copyNotes, pasteNotes, duplicateNotes, setTempo, removeTempo, bpmAt, stepSeconds,
     STAMPS, repeatNotes, stampNotes, arpeggiate,
     noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,

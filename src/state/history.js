@@ -47,8 +47,11 @@
       present = json;
     }
 
+    // Every version it holds (to see which sounds undo could still need).
+    const all = () => [...past, ...(present === null ? [] : [present]), ...future];
+
     return {
-      commit, undo, redo, sync, reset,
+      commit, undo, redo, sync, reset, all,
       get canUndo() { return past.length > 0; },
       get canRedo() { return future.length > 0; },
     };
