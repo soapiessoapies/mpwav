@@ -564,7 +564,12 @@ Settings stay put on every slide.
 - **Opening a clip from Arrange or Mix** (double-click, Enter) goes to
   Make, or to Sound for an audio clip.
 - **The slide is remembered**, and each one opens Note Edit on the page
-  that fits it. Arranging panels and the tour both switch to All.
+  that fits it. Arranging panels switches to All; the tour runs on All
+  and then goes back to the slide you were on.
+- **New songs start on Make** (v0.19.1): New song, New from the demo and
+  New from a starter loop all open on Make with a clip in the editor. An
+  empty song gets its first one-bar clip made for it. Songs you open,
+  duplicate or import stay on the slide you were on.
 - **How it works:** `src/ui/slides.js` lists the slides; the layout of
   each is CSS on `<html data-slide>` (and `data-sound`, audio or synth,
   for the Sound slide). A test checks the stylesheet hides exactly the

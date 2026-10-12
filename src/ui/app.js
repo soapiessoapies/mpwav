@@ -2511,10 +2511,20 @@
     Announce.say(`Opened ${song.title}`);
   }
 
-  function addAndOpen(data, words) {
+  // `fresh`: a song just started (not one opened or copied) begins on the
+  // Make slide with a clip open, ready to play into. An empty song gets
+  // its first clip made for it.
+  function addAndOpen(data, words, fresh) {
     if (saveTimer) writeNow();
     const id = library.add(Song.sanitize(data));
     openSong(id);
+    if (fresh) {
+      const t = sel();
+      if (!t.clips.length && t.kind !== "audio") Song.addClip(song, t, 0, 1);
+      if (t.clips.length) openClip(t, t.clips[0], false);
+      history.reset(historyJson()); // that first clip isn't a step to undo
+      setSlide("make", false);
+    }
     if (words) Announce.say(words);
   }
 
@@ -2736,13 +2746,13 @@
   $("song-new").addEventListener("click", () => {
     const blank = Song.createSong();
     blank.title = `Untitled song ${library.list().length + 1}`;
-    addAndOpen(blank, `New song: ${blank.title}`);
+    addAndOpen(blank, `New song: ${blank.title}. You're on the Make slide, with an empty clip open on ${blank.tracks[0].name}.`, true);
     songsDlg.close();
   });
   $("song-demo").addEventListener("click", () => {
     const demo = Song.demoSong();
     demo.title = "Demo song";
-    addAndOpen(demo, "New song from the demo");
+    addAndOpen(demo, "New song from the demo, on the Make slide", true);
     songsDlg.close();
   });
   // --- starter loops (src/state/loops.js): a genre's parts into this song,
@@ -2840,7 +2850,7 @@
     s.selected = s.tracks[s.tracks.length - 1].id;
     s.loop = { on: true, start: 0, end: Loops.BARS };
     loopsDlg.close();
-    addAndOpen(s, `New ${g.name} song: ${g.parts.length} tracks, looping 4 bars. Press Space to play, then Record to add your own on any track.`);
+    addAndOpen(s, `New ${g.name} song: ${g.parts.length} tracks, looping 4 bars. Press Space to play, then Record to add your own on any track.`, true);
   });
 
   $("song-dup").addEventListener("click", () => {
@@ -3270,14 +3280,20 @@
     else delete document.documentElement.dataset.tips;
   };
   // The guided tour (src/ui/tour.js): from Settings, and once on a first visit.
+  // It points at every panel, so it runs on the All slide and then goes back.
+  const runTour = () => {
+    const back = ui.slide;
+    setSlide("all", false);
+    Tour.start({ onEnd: () => setSlide(back, false) });
+  };
   $("tour-btn").addEventListener("click", () => {
     settings.close();
-    (setSlide("all", false), Tour.start());
+    runTour();
   });
   // First visit: Home opens at launch and blocks the page while it's up, so
   // the tour waits for Home to close (see first paint, below).
   const autoTour = () => {
-    if (Tour.shouldAutoRun() && !Tour.active() && !document.querySelector("dialog[open]")) (setSlide("all", false), Tour.start());
+    if (Tour.shouldAutoRun() && !Tour.active() && !document.querySelector("dialog[open]")) runTour();
   };
 
   $("show-tips").addEventListener("change", (e) => {
