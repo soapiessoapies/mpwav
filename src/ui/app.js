@@ -1166,6 +1166,9 @@
   let waveFor = null;  // the clip content those two belong to
   let hearing = null;  // Hear it, while it plays: { at, from, length, rate, synth }
   let waveZoom = null; // the zoom bar under the wave
+  let waveCursor = 0;  // where a paste goes when nothing is selected: seconds in the sound
+  let waveCopied = null; // the copied stretch: { chans, rate, secs } (kept while mpwav is open)
+  let waveActive = false; // the wave was the last thing clicked: Ctrl + C / X / V / A are its
   const clock = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(3).padStart(6, "0")}`;
   const openAudio = () => { const o = find(open); return o && o.c.audio ? o : null; };
   // The picture reads in playing order, so played backwards it's mirrored.
@@ -1176,7 +1179,8 @@
   function renderWave(o) {
     const a = o.c.audio, info = Samples.info(a.sampleId);
     const dur = info ? info.duration : 0;
-    if (waveFor !== o.c.id) { waveFor = o.c.id; waveSel = waveView = null; }
+    if (waveFor !== o.c.id) { waveFor = o.c.id; waveSel = waveView = null; waveCursor = 0; }
+    waveCursor = Math.max(0, Math.min(dur || waveCursor, waveCursor));
     // An undo can bring back a shorter sound.
     if (waveSel && dur) {
       waveSel = { from: Math.min(waveSel.from, dur), to: Math.min(waveSel.to, dur) };
@@ -1190,7 +1194,7 @@
     keep("wave-fadein", Math.round(a.fadeIn * 1000));
     keep("wave-fadeout", Math.round(a.fadeOut * 1000));
     keep("wave-gain", a.gain);
-    keep("sel-from", waveSel ? +waveSel.from.toFixed(3) : "");
+    keep("sel-from", +(waveSel ? waveSel.from : waveCursor).toFixed(3));
     keep("sel-to", waveSel ? +waveSel.to.toFixed(3) : "");
     keep("sel-len", waveSel ? +(waveSel.to - waveSel.from).toFixed(3) : "");
     for (const id of ["wave-start", "wave-end", "sel-from", "sel-to", "sel-len"]) $(id).max = +dur.toFixed(3);
@@ -1200,6 +1204,8 @@
     $("wave-target").textContent = waveSel ? "Change the selection" : "Change the whole sound";
     for (const id of ["op-delete", "op-trim", "wz-sel", "sel-none"]) $(id).disabled = !waveSel;
     $("wz-out").disabled = $("wz-fit").disabled = !waveView;
+    $("wave-cut").disabled = !waveSel;
+    $("wave-paste").disabled = $("wave-paste-mix").disabled = !waveCopied;
     const loopSecs = o.c.bars * Song.STEPS * Song.stepSeconds(song, o.clip.start * Song.STEPS);
     const trimmed = Math.max(0, end - a.start);
     const peak = info ? Samples.peak(a.sampleId) : 0;
@@ -1216,7 +1222,7 @@
   }
   // The big time: where the selection starts, or the pointer, or the playhead.
   function showWaveTime(t) {
-    $("wave-time").textContent = clock(t == null ? (waveSel ? waveSel.from : 0) : t);
+    $("wave-time").textContent = clock(t == null ? (waveSel ? waveSel.from : waveCursor) : t);
   }
   // The part of the sound in view, dimmed, with the trimmed part bright,
   // fades as slopes, the selection, and handles to drag: the trim edges
@@ -1271,6 +1277,11 @@
       sel.className = "wave-sel";
       place(sel, waveSel.from, waveSel.to);
       waveEl.append(sel);
+    } else {
+      const cur = document.createElement("div");
+      cur.className = "wave-cursor";
+      cur.style.left = pct(mirror(a, dur, waveCursor)) + "%";
+      waveEl.append(cur);
     }
     if (hearing) {
       const head = document.createElement("div");
@@ -1343,23 +1354,25 @@
     if (!dur) return;
     const a = Math.max(0, Math.min(dur, Math.min(from, to))), b = Math.max(0, Math.min(dur, Math.max(from, to)));
     waveSel = b - a < 0.001 ? null : { from: a, to: b };
+    waveCursor = a; // an empty selection is the cursor
     renderWave(o);
-    if (say) Announce.say(waveSel ? `Selected ${selWords(waveSel)}` : "Nothing selected");
+    if (say) Announce.say(waveSel ? `Selected ${selWords(waveSel)}` : `Nothing selected. Cursor at ${a.toFixed(2)} seconds`);
   }
+  // With nothing selected, Select from is the cursor: type To or Length to select from there.
   $("sel-from").addEventListener("change", (e) => {
-    const o = openAudio(), v = Number(e.target.value) || 0;
-    if (o) setWaveSel(v, waveSel && waveSel.to > v ? waveSel.to : soundSecs(o.c.audio.sampleId), true);
+    const v = Number(e.target.value) || 0;
+    setWaveSel(v, waveSel && waveSel.to > v ? waveSel.to : v, true);
   });
   $("sel-to").addEventListener("change", (e) => {
-    const v = Number(e.target.value) || 0;
-    setWaveSel(waveSel && waveSel.from < v ? waveSel.from : 0, v, true);
+    const v = Number(e.target.value) || 0, from = waveSel ? waveSel.from : waveCursor;
+    setWaveSel(from < v ? from : 0, v, true);
   });
   $("sel-len").addEventListener("change", (e) => {
-    const from = waveSel ? waveSel.from : 0;
+    const from = waveSel ? waveSel.from : waveCursor;
     setWaveSel(from, from + (Number(e.target.value) || 0), true);
   });
   $("sel-all").addEventListener("click", () => setWaveSel(0, Infinity, true));
-  $("sel-none").addEventListener("click", () => setWaveSel(0, 0, true));
+  $("sel-none").addEventListener("click", () => setWaveSel(waveCursor, waveCursor, true));
   $("sel-trim").addEventListener("click", () => {
     const o = openAudio();
     if (o) setWaveSel(o.c.audio.start, o.c.audio.end == null ? Infinity : o.c.audio.end, true);
@@ -1415,8 +1428,73 @@
     a.sampleId = id;
     if (done.then) done.then(a);
     o.c.audio = Song.cleanAudio(a) || a;
-    afterChange(`${done.say}: ${sel ? selWords(sel) : "the whole sound"}`);
+    afterChange(done.where === "" ? done.say : `${done.say}: ${sel ? selWords(sel) : "the whole sound"}`);
   }
+
+  // --- copy, cut and paste a stretch (in this sound, or into another clip's) ---
+  function waveCopy(cut) {
+    const o = openAudio();
+    const buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf) return;
+    if (cut && !waveSel) { Announce.say("Select the stretch to cut first"); return; }
+    const sel = waveSel || { from: 0, to: buf.duration }, rate = buf.sampleRate;
+    waveCopied = { chans: WaveOps.slice(Samples.channels(buf), sel.from * rate, sel.to * rate), rate, secs: sel.to - sel.from };
+    if (cut) { cutWaveSel("Cut"); return; }
+    renderWave(o);
+    Announce.say(`Copied ${waveSel ? selWords(sel) : "the whole sound"}`);
+  }
+  // Cuts the selection out of the sound; the trim points move with it.
+  function cutWaveSel(say) {
+    const sel = waveSel;
+    if (!sel) return;
+    editSound((chans, from, to) => {
+      const out = WaveOps.remove(chans, from, to);
+      if (out[0].length < 64) { Announce.say("That would leave no sound. Select a part of it."); return null; }
+      waveSel = waveView = null;
+      waveCursor = sel.from;
+      return {
+        chans: out, say,
+        then: (a) => {
+          const left = soundSecs(a.sampleId);
+          a.start = WaveOps.afterCut(a.start, sel.from, sel.to);
+          a.end = a.end == null ? null : WaveOps.afterCut(a.end, sel.from, sel.to);
+          if ((a.end == null ? left : a.end) - a.start < 0.01) { a.start = 0; a.end = null; }
+        },
+      };
+    });
+  }
+  // Paste goes in at the cursor, or takes the selection's place; mixed in,
+  // it lays on top from there and nothing moves.
+  function wavePaste(mixed) {
+    const o = openAudio(), copied = waveCopied;
+    if (!o) return;
+    if (!copied) { Announce.say("Nothing copied yet. Select a stretch and Copy it first."); return; }
+    const sel = waveSel, at = sel ? sel.from : waveCursor;
+    editSound((chans, from, to, a) => {
+      const rate = Samples.info(a.sampleId).rate;
+      const piece = WaveOps.fit(copied.chans, copied.rate, rate, chans.length);
+      const secs = piece[0].length / rate, frame = Math.round(at * rate);
+      const out = mixed ? WaveOps.mix(chans, frame, piece) : WaveOps.insert(sel ? WaveOps.remove(chans, from, to) : chans, frame, piece);
+      waveSel = { from: at, to: at + secs };
+      waveView = null;
+      return {
+        chans: out, where: "",
+        say: `${mixed ? "Mixed in" : "Pasted"} ${secs.toFixed(2)} seconds at ${at.toFixed(2)}` + (mixed && WaveOps.peak(out, frame, frame + piece[0].length) > 1 ? ", and too loud now (the tops are cut flat)" : ""),
+        then: (b) => {
+          if (mixed) return;
+          const move = (t) => WaveOps.afterInsert(sel ? WaveOps.afterCut(t, sel.from, sel.to) : t, at, secs);
+          b.start = move(b.start);
+          b.end = b.end == null ? null : move(b.end);
+        },
+      };
+    });
+  }
+  $("wave-copy").addEventListener("click", () => waveCopy(false));
+  $("wave-cut").addEventListener("click", () => waveCopy(true));
+  $("wave-paste").addEventListener("click", () => wavePaste(false));
+  $("wave-paste-mix").addEventListener("click", () => wavePaste(true));
+  // The wave has the keys once it's clicked, until something outside the wave editor is.
+  document.addEventListener("pointerdown", (e) => { waveActive = !!(e.target.closest && e.target.closest("#wave-editor")); }, true);
   $("op-amplify").addEventListener("click", () => {
     const db = Math.max(-48, Math.min(48, Number($("op-db").value) || 0));
     if (!db) { Announce.say("Type how many decibels to amplify by. Minus makes it quieter."); return; }
@@ -1437,24 +1515,7 @@
   }
   $("op-silence").addEventListener("click", () => editSound((chans, from, to) => ({ chans: WaveOps.silence(chans, from, to), say: "Silenced" })));
   $("op-reverse").addEventListener("click", () => editSound((chans, from, to) => ({ chans: WaveOps.reverse(chans, from, to), say: "Reversed" })));
-  $("op-delete").addEventListener("click", () => {
-    const sel = waveSel;
-    if (!sel) return;
-    editSound((chans, from, to) => {
-      const out = WaveOps.remove(chans, from, to);
-      if (out[0].length < 64) { Announce.say("That would delete the whole sound. Select a part of it."); return null; }
-      waveSel = waveView = null;
-      return {
-        chans: out, say: "Deleted",
-        then: (a) => {
-          const left = soundSecs(a.sampleId);
-          a.start = WaveOps.afterCut(a.start, sel.from, sel.to);
-          a.end = a.end == null ? null : WaveOps.afterCut(a.end, sel.from, sel.to);
-          if ((a.end == null ? left : a.end) - a.start < 0.01) { a.start = 0; a.end = null; }
-        },
-      };
-    });
-  });
+  $("op-delete").addEventListener("click", () => cutWaveSel("Deleted"));
   $("op-trim").addEventListener("click", () => {
     const sel = waveSel;
     if (sel) editAudio((a) => { a.start = sel.from; a.end = sel.to; }, `The clip now plays only ${selWords(sel)}`);
@@ -1533,7 +1594,7 @@
     const up = () => {
       waveEl.removeEventListener("pointermove", move);
       if (what === "select") {
-        if (!moved) waveSel = null; // a plain click lets go of the selection
+        if (!moved) { waveSel = null; waveCursor = anchor; } // a plain click lets go of the selection and puts the cursor there
         renderWave(o);
         if (moved && waveSel) Announce.say(`Selected ${selWords(waveSel)}`);
         return;
@@ -1769,9 +1830,16 @@
     return editAction(k, e.shiftKey);
   }
 
-  // Copy / cut / paste / duplicate / select all: notes when the piano roll
-  // has focus, clips otherwise. Shared by the Ctrl shortcuts and Edit mode.
+  // Copy / cut / paste / duplicate / select all: the sound's selection when
+  // the wave was clicked last, notes when the piano roll has focus, clips otherwise. Shared by the Ctrl shortcuts and Edit mode.
   function editAction(k, shift) {
+    if (waveActive && openAudio()) {
+      if (k === "a") { setWaveSel(0, Infinity, true); return true; }
+      if (k === "c") { waveCopy(false); return true; }
+      if (k === "x") { waveCopy(true); return true; }
+      if (k === "v") { wavePaste(false); return true; }
+      return false;
+    }
     if (inRoll()) {
       if (k === "a") { notesSelectAll(); return true; }
       if (k === "c") { notesCopy(false); return true; }

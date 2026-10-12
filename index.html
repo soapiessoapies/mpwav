@@ -217,6 +217,7 @@
             </div>
             <button type="button" class="menu-btn" popovertarget="sel-menu">Select</button>
             <button type="button" class="menu-btn" popovertarget="view-menu">View</button>
+            <button type="button" class="menu-btn" popovertarget="wedit-menu">Edit</button>
           </div>
           <div class="tool-row wave-select">
             <button type="button" id="wave-target" class="menu-btn" popovertarget="op-menu">Change the whole sound</button>
@@ -240,6 +241,12 @@
             <button type="button" id="wz-sel">Zoom to the selection</button>
             <button type="button" id="wz-fit">Show the whole sound</button>
           </div>
+          <div id="wedit-menu" class="menu" popover role="group" aria-label="Edit">
+            <button type="button" id="wave-copy" aria-keyshortcuts="Control+C">Copy</button>
+            <button type="button" id="wave-cut" aria-keyshortcuts="Control+X">Cut</button>
+            <button type="button" id="wave-paste" aria-keyshortcuts="Control+V">Paste</button>
+            <button type="button" id="wave-paste-mix">Paste mixed in (on top)</button>
+          </div>
           <div id="op-menu" class="menu" popover role="group" aria-label="Change the sound">
             <label class="inline">Amplify by <input id="op-db" type="number" inputmode="decimal" step="0.5" min="-48" max="48" value="3"> dB</label>
             <button type="button" id="op-amplify">Amplify</button>
@@ -261,6 +268,8 @@
           <p class="help tip">
             Drag across the wave to select a stretch of the sound (or type its times). Then the Change menu (Amplify, Normalize, Fade, Silence, Reverse, Delete) changes just that stretch;
             with nothing selected it changes the whole sound, and Hear it plays the selection. Undo brings the sound back.
+            Click the wave to put the cursor there (or type Select from). The Edit menu copies or cuts the selection, and pastes at the cursor or over the selection,
+            in this sound or another clip's; Paste mixed in lays the copy on top of what's there.
             Drag the edges of the bright part to trim what the clip plays, and the small squares at its top corners to fade.
           </p>
           <div id="wave" class="wave" aria-hidden="true"></div>
@@ -543,7 +552,7 @@
     </table>
     <h3>Copy and paste (Ctrl works in both modes; the letter alone in Edit mode)</h3>
     <table class="keys-table">
-      <tr><th scope="row">Ctrl + C / X / V</th><td>Copy / cut / paste: notes when the piano roll has focus, clips otherwise</td></tr>
+      <tr><th scope="row">Ctrl + C / X / V</th><td>Copy / cut / paste: a stretch of sound when the wave was clicked last, notes when the piano roll has focus, clips otherwise</td></tr>
       <tr><th scope="row">Ctrl + D</th><td>Duplicate (Ctrl + Shift + D: a linked copy of a clip)</td></tr>
       <tr><th scope="row">Ctrl + A</th><td>Select every note in the clip</td></tr>
       <tr><th scope="row">Ctrl + R</th><td>Repeat the selected notes</td></tr>

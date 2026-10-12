@@ -399,6 +399,19 @@ whole sound", so the scope is always on screen):
 - **Clip menu:** Play backwards (was "Reverse"), Fit to tempo, Loop the
   whole sound, Replace sound. The trim fields are now "Trim from / Trim to".
 
+**Copy, cut and paste (v0.14.0).** The **Edit** menu, or Ctrl + C / X / V
+(and Ctrl + A) once the wave has been clicked:
+- **The cursor:** a plain click on the wave puts a cursor there (a dashed
+  line). With nothing selected, **Select from** is the cursor, so it can be
+  typed; To or Length then select from it.
+- **Copy** takes the selection (or the whole sound); **Cut** also removes it.
+- **Paste** goes in at the cursor and the sound gets longer, or takes the
+  selection's place. What was pasted ends up selected.
+- **Paste mixed in** lays the copy on top from there, so nothing moves.
+- The copy is kept while mpwav is open and pastes into any audio clip's
+  sound. Mono and stereo, and different sample rates, are matched to the
+  sound it lands in.
+
 **How edits are stored.** An edit never changes a sound: it makes an edited
 copy (`Samples.addEdited`, a 16-bit WAV in IndexedDB) with a new id and
 points the clip at it. Undo puts the old id back, so the old sound returns.
@@ -410,6 +423,5 @@ Other clips that use the original sound keep it. The maths is in
 so heavy editing of long sounds uses space. A tidy-up needs to check every
 saved song first.
 
-**Not built yet, from the same reference:** copy and paste of a stretch,
-generating silence, tones or noise, a noise-reduction pass, and a wide
+**Not built yet, from the same reference:** generating silence, tones or noise, a noise-reduction pass, and a wide
 level meter with a status bar across the app.

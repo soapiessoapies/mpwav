@@ -11,9 +11,15 @@
 //   silence(chans, from, to)
 //   reverse(chans, from, to)
 //   remove(chans, from, to)        cuts the stretch out; the sound gets shorter
+//   slice(chans, from, to)         a copy of just the stretch (for the clipboard)
+//   insert(chans, at, piece)       puts `piece` in at frame `at`; the sound gets longer
+//   mix(chans, at, piece)          lays `piece` on top from `at` (longer if it runs past the end)
+//   fit(piece, rate, toRate, n)    a copied piece made to match another sound:
+//                                  its sample rate and its number of channels
 //   peak(chans, from, to)          the loudest sample, 0..1 (or more, if clipped)
 //   outline(chans, from, to, n)    a waveform outline: n [min, max] pairs
 //   afterCut(t, from, to)          where time `t` ends up once from..to is cut
+//   afterInsert(t, at, len)        ...and once `len` is put in at `at`
 (function (root) {
   "use strict";
 
@@ -69,6 +75,57 @@
 
   // A point inside the cut lands where the cut was; a later one moves earlier.
   const afterCut = (t, from, to) => (t <= from ? t : t >= to ? t - (to - from) : from);
+  // A point after the new part moves later (one exactly at it stays put).
+  const afterInsert = (t, at, len) => (t > at ? t + len : t);
+
+  function slice(chans, from, to) {
+    const [a, b] = span(chans, from, to);
+    return chans.map((d) => d.slice(a, b));
+  }
+
+  function insert(chans, at, piece) {
+    const [a] = span(chans, at, at), n = piece[0] ? piece[0].length : 0;
+    return chans.map((d, c) => {
+      const out = new Float32Array(d.length + n);
+      out.set(d.subarray(0, a));
+      out.set(piece[c % piece.length], a);
+      out.set(d.subarray(a), a + n);
+      return out;
+    });
+  }
+
+  function mix(chans, at, piece) {
+    const [a] = span(chans, at, at), n = piece[0] ? piece[0].length : 0;
+    return chans.map((d, c) => {
+      const out = new Float32Array(Math.max(d.length, a + n));
+      out.set(d);
+      const p = piece[c % piece.length];
+      for (let i = 0; i < n; i++) out[a + i] += p[i];
+      return out;
+    });
+  }
+
+  // Mono into stereo plays on both sides; stereo into mono is the two
+  // averaged. A different sample rate is stretched to fit (straight lines
+  // between samples), so the piece keeps its pitch and length.
+  function fit(piece, rate, toRate, n) {
+    let out = piece;
+    if (out.length !== n) {
+      out = n === 1
+        ? [out[0].map((v, i) => out.reduce((sum, d) => sum + d[i], 0) / out.length)]
+        : Array.from({ length: n }, (_, c) => out[c % out.length]);
+    }
+    if (rate === toRate || !out[0].length) return out.map((d) => Float32Array.from(d));
+    const len = Math.max(1, Math.round((out[0].length * toRate) / rate)), step = rate / toRate;
+    return out.map((d) => {
+      const res = new Float32Array(len);
+      for (let i = 0; i < len; i++) {
+        const x = i * step, k = Math.floor(x), next = Math.min(d.length - 1, k + 1);
+        res[i] = d[Math.min(k, d.length - 1)] * (1 - (x - k)) + d[next] * (x - k);
+      }
+      return res;
+    });
+  }
 
   // Long stretches are sampled (up to 64 looks per point), which is plenty
   // for a picture.
@@ -88,7 +145,7 @@
     return out;
   }
 
-  const api = { amplify, normalize, fade, silence, reverse, remove, peak, outline, afterCut, dbToGain, gainToDb };
+  const api = { amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, peak, outline, afterCut, afterInsert, dbToGain, gainToDb };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.WaveOps = api;
 })(typeof window !== "undefined" ? window : globalThis);

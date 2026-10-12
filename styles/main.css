@@ -1021,6 +1021,7 @@ dialog .check { white-space: normal; align-items: flex-start; }
   background: color-mix(in srgb, var(--text) 28%, transparent);
   border-left: 2px dashed var(--text); border-right: 2px dashed var(--text);
 }
+.wave-cursor { position: absolute; top: 0; bottom: 0; width: 0; margin-left: -1px; border-left: 2px dashed var(--text); pointer-events: none; }
 .wave-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--playhead); pointer-events: none; }
 .wave-select { gap: 6px 12px; }
 .wave-select > button { min-height: 36px; padding: 0 10px; font-size: 0.9rem; }

@@ -56,6 +56,39 @@ test("afterCut moves trim points with a cut", () => {
   assert.equal(W.afterCut(3, 1, 2), 2, "after it: moves earlier by the cut's length");
 });
 
+test("slice copies just the stretch", () => {
+  assert.deepEqual(list(W.slice(sound([1, 2, 3, 4], [5, 6, 7, 8]), 1, 3)), [[2, 3], [6, 7]]);
+});
+
+test("insert puts a piece in and makes the sound longer", () => {
+  assert.deepEqual(list(W.insert(sound([1, 2, 3]), 1, sound([8, 9]))), [[1, 8, 9, 2, 3]]);
+  assert.deepEqual(list(W.insert(sound([1, 2, 3]), 3, sound([8]))), [[1, 2, 3, 8]], "at the end");
+  assert.deepEqual(list(W.insert(sound([1, 2], [3, 4]), 0, sound([9]))), [[9, 1, 2], [9, 3, 4]], "a mono piece goes on both sides");
+});
+
+test("mix lays a piece on top, and runs past the end if it has to", () => {
+  assert.deepEqual(list(W.mix(sound([0.1, 0.1, 0.1]), 1, sound([0.2, 0.2]))), [[0.1, 0.3, 0.3]]);
+  assert.deepEqual(list(W.mix(sound([0.1, 0.1]), 1, sound([0.2, 0.2, 0.2]))), [[0.1, 0.3, 0.2, 0.2]]);
+});
+
+test("fit matches a copied piece to another sound's channels", () => {
+  assert.deepEqual(list(W.fit(sound([1, 2]), 100, 100, 2)), [[1, 2], [1, 2]], "mono to stereo");
+  assert.deepEqual(list(W.fit(sound([1, 0], [0, 1]), 100, 100, 1)), [[0.5, 0.5]], "stereo to mono");
+});
+
+test("fit stretches a piece to another sample rate, keeping its length in time", () => {
+  const up = W.fit(sound([0, 1, 0, -1]), 100, 200, 1);
+  assert.equal(up[0].length, 8);
+  assert.deepEqual(list(up)[0].slice(0, 5), [0, 0.5, 1, 0.5, 0]);
+  assert.equal(W.fit(sound([0, 1, 0, -1, 0, 1, 0, -1]), 200, 100, 1)[0].length, 4);
+});
+
+test("afterInsert moves later points along, and leaves one at the paste alone", () => {
+  assert.equal(W.afterInsert(1, 2, 0.5), 1);
+  assert.equal(W.afterInsert(2, 2, 0.5), 2);
+  assert.equal(W.afterInsert(3, 2, 0.5), 3.5);
+});
+
 test("peak finds the loudest sample of any channel in the stretch", () => {
   assert.ok(Math.abs(W.peak(sound([0.1, -0.7, 0.2], [0.3, 0.1, 0.9]), 0, 2) - 0.7) < 1e-6);
 });
