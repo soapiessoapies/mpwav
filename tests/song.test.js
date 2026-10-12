@@ -267,6 +267,14 @@ test("splitting an audio clip apart: the right half starts its sound at the cut"
   assert.deepEqual([S.content(s, r2).audio.start, S.content(s, r2).audio.end], [0, 7 - bar]);
 });
 
+test("markers on an audio clip are kept in order, cleaned, and capped", () => {
+  const a = S.cleanAudio({ sampleId: "snd-abc", cues: [{ t: 2, name: "Chorus" }, { t: 0.5 }, { t: -1, name: "bad" }, { t: "x" }, null] });
+  assert.deepEqual(a.cues, [{ t: 0.5, name: "Marker" }, { t: 2, name: "Chorus" }]);
+  assert.equal(S.cleanAudio({ sampleId: "snd-abc" }).cues, undefined, "none: no list at all");
+  const many = S.cleanAudio({ sampleId: "snd-abc", cues: Array.from({ length: 50 }, (_, i) => ({ t: i })) });
+  assert.equal(many.cues.length, S.CUES_MAX);
+});
+
 test("insert bars: everything from there on moves right; a clip across it is split", () => {
   const s = S.createSong();
   S.addClip(s, lead(s), 0, 4);

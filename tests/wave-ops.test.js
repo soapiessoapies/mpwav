@@ -322,3 +322,41 @@ test("delete silence cuts out the long gaps and keeps the short ones", () => {
   assert.deepEqual(W.deleteSilence([d], 0, 3400, rate, { gap: 5 }).cuts, [], "nothing long enough");
   assert.deepEqual(W.deleteSilence([new Float32Array(1000)], 0, 1000, rate, { gap: 0.3 }).cuts, [[0, 1000]], "all silence");
 });
+
+test("ramp slides the loudness in decibels across the stretch", () => {
+  const [d] = W.ramp(sound([1, 1, 1, 1, 1, 1]), 1, 4, 0, -12);
+  assert.deepEqual([d[0], d[1], d[4], d[5]], [1, 1, 1, 1], "the first sample starts at 0 dB; outside is untouched");
+  assert.ok(Math.abs(d[2] - Math.pow(10, -6 / 20)) < 1e-6, "halfway is 6 dB down");
+  assert.ok(Math.abs(d[3] - Math.pow(10, -12 / 20)) < 1e-6, "the last is 12 dB down");
+});
+
+test("declick mends clicks and leaves the wave around them alone", () => {
+  const rate = 8000, clean = W.tone(rate, 1, { hz: 200, level: 0.5 })[0], d = Float32Array.from(clean);
+  d[1000] += 0.8; d[3000] -= 0.9; d[3001] -= 0.7; d[6000] += 0.6;
+  const { chans, count } = W.declick([d], 0, rate);
+  assert.equal(count, 3);
+  let worst = 0;
+  for (let i = 0; i < rate; i++) worst = Math.max(worst, Math.abs(chans[0][i] - clean[i]));
+  assert.ok(worst < 0.05, "back to within 0.05 of the clean tone, off by " + worst.toFixed(3));
+  assert.equal(W.declick([clean], 0, rate).count, 0, "a clean tone has nothing to mend");
+});
+
+test("declick leaves a square wave's edges alone", () => {
+  const rate = 8000, sq = W.tone(rate, 0.5, { shape: "square", hz: 100, level: 0.5 });
+  const { chans, count } = W.declick(sq, 0, 4000);
+  assert.equal(count, 0);
+  assert.deepEqual(Array.from(chans[0]), Array.from(sq[0]));
+});
+
+test("spectrum: a tone lights up the row its pitch is in, and silence is dark", () => {
+  const rate = 8000, rows = 64, cols = 10;
+  const pic = W.spectrum(W.tone(rate, 1, { hz: 1000, level: 1 }), 0, rate, cols, rows, rate);
+  assert.equal(pic.length, cols * rows);
+  const col = Array.from(pic.slice(5 * rows, 6 * rows)), top = col.indexOf(Math.max(...col));
+  assert.ok(W.spectrumHz(top, rows, rate) <= 1000 && W.spectrumHz(top + 1, rows, rate) >= 1000, "the brightest row holds 1000 Hz");
+  assert.ok(col[top] > 235, "and is near full brightness, got " + col[top]);
+  assert.ok(col[2] < 60, "low pitches are dark");
+  assert.equal(Math.max(...W.spectrum([new Float32Array(rate)], 0, rate, 4, 16, rate)), 0);
+  assert.equal(W.spectrumHz(0, rows, rate), 50);
+  assert.equal(Math.round(W.spectrumHz(rows, rows, rate)), 4000);
+});

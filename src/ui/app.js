@@ -1248,6 +1248,8 @@
   let waveZoom = null; // the zoom bar under the wave
   let waveCursor = 0;  // where a paste goes when nothing is selected: seconds in the sound
   let waveCopied = null; // the copied stretch: { chans, rate, secs } (kept while mpwav is open)
+  let waveSpectral = false; // View > Spectral view: the pitches over time instead of the wave's outline
+  let spectralPic = null;   // the last spectral picture drawn: { key, canvas }
   let waveNoise = null; // the noise learned for Reduce noise: { level, rate } (kept while mpwav is open)
   let waveActive = false; // the wave was the last thing clicked: Ctrl + C / X / V / A are its
   const clock = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(3).padStart(6, "0")}`;
@@ -1287,6 +1289,8 @@
     $("op-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
     $("tp-scope").textContent = $("tone-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
     $("nr-learn").disabled = !waveSel;
+    $("wz-spec").setAttribute("aria-pressed", String(waveSpectral));
+    renderCues(a);
     $("nr-go").disabled = !waveNoise;
     for (const id of ["op-delete", "op-trim", "wz-sel", "sel-none"]) $(id).disabled = !waveSel;
     $("wz-out").disabled = $("wz-fit").disabled = !waveView;
@@ -1320,23 +1324,28 @@
     if (!dur) return;
     const view = viewOf(dur);
     const W = 1000, H = 100, n = 1000;
-    const peaks = Samples.outline(a.sampleId, a.reverse, view.start, view.end, n);
-    if (!peaks) return;
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    svg.setAttribute("preserveAspectRatio", "none");
-    let top = "", bottom = "";
-    for (let i = 0; i < n; i++) {
-      const x = (i / (n - 1)) * W;
-      top += `${x.toFixed(1)},${(H / 2 - peaks[i * 2 + 1] * H / 2).toFixed(1)} `;
-      bottom = `${x.toFixed(1)},${(H / 2 - peaks[i * 2] * H / 2).toFixed(1)} ` + bottom;
+    waveEl.classList.toggle("spectral", waveSpectral);
+    if (waveSpectral) {
+      if (!drawSpectral(a, view)) return;
+    } else {
+      const peaks = Samples.outline(a.sampleId, a.reverse, view.start, view.end, n);
+      if (!peaks) return;
+      const ns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("preserveAspectRatio", "none");
+      let top = "", bottom = "";
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * W;
+        top += `${x.toFixed(1)},${(H / 2 - peaks[i * 2 + 1] * H / 2).toFixed(1)} `;
+        bottom = `${x.toFixed(1)},${(H / 2 - peaks[i * 2] * H / 2).toFixed(1)} ` + bottom;
+      }
+      const shape = document.createElementNS(ns, "polygon");
+      shape.setAttribute("points", top + bottom);
+      shape.setAttribute("class", "wave-shape");
+      svg.append(shape);
+      waveEl.append(svg);
     }
-    const shape = document.createElementNS(ns, "polygon");
-    shape.setAttribute("points", top + bottom);
-    shape.setAttribute("class", "wave-shape");
-    svg.append(shape);
-    waveEl.append(svg);
     const pct = (q) => ((q - view.start) / (view.end - view.start)) * 100;
     // Puts a box over seconds from..to of the sound, wherever that shows.
     const place = (el, from, to) => {
@@ -1369,12 +1378,58 @@
       cur.style.left = pct(mirror(a, dur, waveCursor)) + "%";
       waveEl.append(cur);
     }
+    for (const q of a.cues || []) {
+      const cue = document.createElement("div"), name = document.createElement("span");
+      cue.className = "wave-cue";
+      cue.style.left = pct(mirror(a, dur, q.t)) + "%";
+      name.textContent = q.name;
+      cue.append(name);
+      waveEl.append(cue);
+    }
     if (hearing) {
       const head = document.createElement("div");
       head.className = "wave-head";
       head.style.left = pct(hearing.pos == null ? hearing.from : hearing.pos) + "%";
       waveEl.append(head);
     }
+  }
+  // The spectral view: a picture of the pitches over time (dark = silent,
+  // through purple and orange to pale yellow = loud). It's kept until the
+  // sound or the view changes, so dragging a selection doesn't redo it.
+  const SPEC_COLS = 500, SPEC_ROWS = 128;
+  const SPEC_COLORS = [[0, 8, 8, 20], [80, 70, 20, 110], [160, 220, 90, 60], [220, 255, 200, 80], [255, 255, 255, 235]];
+  function drawSpectral(a, view) {
+    const key = [a.sampleId, a.reverse, view.start, view.end].join("|");
+    if (!spectralPic || spectralPic.key !== key) {
+      const pic = Samples.spectrum(a.sampleId, a.reverse, view.start, view.end, SPEC_COLS, SPEC_ROWS);
+      if (!pic) return false;
+      const canvas = document.createElement("canvas");
+      canvas.width = SPEC_COLS;
+      canvas.height = SPEC_ROWS;
+      const g = canvas.getContext("2d"), img = g.createImageData(SPEC_COLS, SPEC_ROWS);
+      for (let c = 0; c < SPEC_COLS; c++) {
+        for (let r = 0; r < SPEC_ROWS; r++) {
+          const v = pic[c * SPEC_ROWS + r], hi = SPEC_COLORS.findIndex((s) => s[0] >= v), lo = Math.max(0, hi - 1);
+          const [v0, ...c0] = SPEC_COLORS[lo], [v1, ...c1] = SPEC_COLORS[hi], f = v1 === v0 ? 0 : (v - v0) / (v1 - v0);
+          const at = ((SPEC_ROWS - 1 - r) * SPEC_COLS + c) * 4; // low pitches at the bottom
+          for (let k = 0; k < 3; k++) img.data[at + k] = c0[k] + (c1[k] - c0[k]) * f;
+          img.data[at + 3] = 255;
+        }
+      }
+      g.putImageData(img, 0, 0);
+      spectralPic = { key, canvas };
+    }
+    waveEl.append(spectralPic.canvas);
+    const rate = Samples.info(a.sampleId).rate;
+    for (const hz of [100, 1000, 10000]) {
+      if (hz >= rate / 2) continue;
+      const label = document.createElement("span");
+      label.className = "wave-hz";
+      label.style.bottom = (Math.log(hz / 50) / Math.log(rate / 2 / 50)) * 100 + "%";
+      label.textContent = hz >= 1000 ? hz / 1000 + " kHz" : hz + " Hz";
+      waveEl.append(label);
+    }
+    return true;
   }
   // Times under the wave, about eight of them however far in the view is.
   function drawRuler(view) {
@@ -1459,6 +1514,68 @@
   });
   $("sel-all").addEventListener("click", () => setWaveSel(0, Infinity, true));
   $("sel-none").addEventListener("click", () => setWaveSel(waveCursor, waveCursor, true));
+  // --- markers: named points in the sound, to jump to and select between ---
+  const cueList = $("cue-list");
+  const cursorTime = () => (waveSel ? waveSel.from : waveCursor);
+  function renderCues(a) {
+    const cues = a.cues || [], sig = JSON.stringify(cues);
+    $("cue-between").disabled = !cues.length;
+    $("cue-name").placeholder = `Marker ${cues.length + 1}`;
+    if (cueList.dataset.sig === sig) return; // unchanged: keep the focus where it is
+    cueList.dataset.sig = sig;
+    cueList.textContent = "";
+    cues.forEach((q, i) => {
+      const li = document.createElement("li"), go = document.createElement("button"), del = document.createElement("button");
+      go.type = del.type = "button";
+      go.className = "cue-go";
+      go.dataset.go = i;
+      go.textContent = `${q.name}, ${clock(q.t)}`;
+      del.className = "cue-del";
+      del.dataset.del = i;
+      del.textContent = "Remove";
+      del.setAttribute("aria-label", `Remove marker ${q.name}`);
+      li.append(go, del);
+      cueList.append(li);
+    });
+  }
+  $("cue-add").addEventListener("click", () => {
+    const o = openAudio();
+    if (!o) return;
+    const cues = o.c.audio.cues || [], t = cursorTime();
+    if (cues.length >= Song.CUES_MAX) { Announce.say(`A sound holds ${Song.CUES_MAX} markers at most. Remove one first.`); return; }
+    const name = $("cue-name").value.trim() || `Marker ${cues.length + 1}`;
+    $("cue-name").value = "";
+    editAudio((a) => { a.cues = [...cues, { t, name }]; }, `Marker ${name} at ${t.toFixed(2)} seconds`);
+  });
+  cueList.addEventListener("click", (e) => {
+    const o = openAudio(), b = e.target.closest("button");
+    if (!o || !b) return;
+    const cues = o.c.audio.cues || [], q = cues[Number(b.dataset.go ?? b.dataset.del)];
+    if (!q) return;
+    if (b.dataset.del != null) {
+      editAudio((a) => { a.cues = cues.filter((x) => x !== q); }, `Removed marker ${q.name}`);
+      (cueList.querySelector("button") || $("cue-add")).focus();
+      return;
+    }
+    // Go: the cursor moves there, and the view follows if it's out of sight.
+    const dur = soundSecs(o.c.audio.sampleId), v = viewOf(dur), at = mirror(o.c.audio, dur, q.t);
+    if (at < v.start || at > v.end) { const half = (v.end - v.start) / 2; waveView = { start: Math.max(0, at - half), end: Math.max(0, at - half) + half * 2 }; }
+    setWaveSel(q.t, q.t, false);
+    Announce.say(`Cursor at marker ${q.name}, ${q.t.toFixed(2)} seconds`);
+  });
+  $("cue-between").addEventListener("click", () => {
+    const o = openAudio();
+    if (!o) return;
+    const times = (o.c.audio.cues || []).map((q) => q.t), c = cursorTime();
+    const from = Math.max(0, ...times.filter((t) => t <= c)), to = Math.min(soundSecs(o.c.audio.sampleId), ...times.filter((t) => t > c));
+    setWaveSel(from, to, true);
+  });
+  $("wz-spec").addEventListener("click", () => {
+    waveSpectral = !waveSpectral;
+    redrawWave();
+    Announce.say(waveSpectral ? "Spectral view: the pitches over time" : "Wave view");
+  });
+
   // The sound without the silence before and after it.
   $("sel-sound").addEventListener("click", () => {
     const o = openAudio(), buf = o && Samples.buffer(o.c.audio.sampleId);
@@ -1530,7 +1647,14 @@
     const id = Samples.addEdited(a.sampleId, done.chans);
     if (!id) return;
     a.sampleId = id;
-    if (done.then) done.then(a);
+    // An edit that changed the sound's length says where each moment went:
+    // the trim points and the markers follow.
+    if (done.move) {
+      a.start = done.move(a.start);
+      a.end = a.end == null ? null : done.move(a.end);
+      if ((a.end == null ? soundSecs(id) : a.end) - a.start < 0.01) { a.start = 0; a.end = null; }
+      if (a.cues) a.cues = a.cues.map((q) => ({ ...q, t: done.move(q.t) }));
+    }
     o.c.audio = Song.cleanAudio(a) || a;
     afterChange(done.where === "" ? done.say : `${done.say}: ${sel ? selWords(sel) : "the whole sound"}`);
   }
@@ -1558,12 +1682,7 @@
       waveCursor = sel.from;
       return {
         chans: out, say,
-        then: (a) => {
-          const left = soundSecs(a.sampleId);
-          a.start = WaveOps.afterCut(a.start, sel.from, sel.to);
-          a.end = a.end == null ? null : WaveOps.afterCut(a.end, sel.from, sel.to);
-          if ((a.end == null ? left : a.end) - a.start < 0.01) { a.start = 0; a.end = null; }
-        },
+        move: (t) => WaveOps.afterCut(t, sel.from, sel.to),
       };
     });
   }
@@ -1589,12 +1708,7 @@
       return {
         chans: out, where: "",
         say: `${verb} ${secs.toFixed(2)} seconds at ${at.toFixed(2)}` + (mixed && WaveOps.peak(out, frame, frame + piece[0].length) > 1 ? ", and too loud now (the tops are cut flat)" : ""),
-        then: (b) => {
-          if (mixed) return;
-          const move = (t) => WaveOps.afterInsert(sel ? WaveOps.afterCut(t, sel.from, sel.to) : t, at, secs);
-          b.start = move(b.start);
-          b.end = b.end == null ? null : move(b.end);
-        },
+        move: mixed ? null : (t) => WaveOps.afterInsert(sel ? WaveOps.afterCut(t, sel.from, sel.to) : t, at, secs),
       };
     });
   }
@@ -1687,6 +1801,11 @@
       return { chans: WaveOps.denoise(chans, from, to, profile, amount), say: `Noise reduced by ${Math.round(amount * 100)} %` };
     });
   });
+  $("dc-go").addEventListener("click", () => editSound((chans, from, to) => {
+    const { chans: out, count } = WaveOps.declick(chans, from, to);
+    if (!count) { Announce.say("No clicks found here"); return null; }
+    return { chans: out, say: `Mended ${count} click${count === 1 ? "" : "s"}` };
+  }));
   $("ds-go").addEventListener("click", () => {
     const gap = field("ds-gap", 50, 10000, 300) / 1000, floor = WaveOps.dbToGain(field("ds-floor", -80, -20, -48));
     editSound((chans, from, to, a) => {
@@ -1698,15 +1817,7 @@
       waveCursor = from / rate;
       return {
         chans: out, say: `Deleted ${cuts.length} silence${cuts.length === 1 ? "" : "s"}, ${gone.toFixed(2)} seconds`,
-        then: (b) => {
-          const left = soundSecs(b.sampleId);
-          for (let k = cuts.length - 1; k >= 0; k--) {
-            const [x, y] = [cuts[k][0] / rate, cuts[k][1] / rate];
-            b.start = WaveOps.afterCut(b.start, x, y);
-            b.end = b.end == null ? null : WaveOps.afterCut(b.end, x, y);
-          }
-          if ((b.end == null ? left : b.end) - b.start < 0.01) { b.start = 0; b.end = null; }
-        },
+        move: (t) => cuts.reduceRight((at, [x, y]) => WaveOps.afterCut(at, x / rate, y / rate), t),
       };
     });
   });
@@ -1721,10 +1832,7 @@
       waveView = null;
       return {
         chans: out, say,
-        then: (b) => {
-          b.start = WaveOps.afterResize(b.start, t0, t1, len);
-          b.end = b.end == null ? null : WaveOps.afterResize(b.end, t0, t1, len);
-        },
+        move: (t) => WaveOps.afterResize(t, t0, t1, len),
       };
     });
   }
@@ -1762,6 +1870,15 @@
     if (Math.abs(db) < 0.05) { Announce.say(WaveOps.peak(chans, from, to) > 0.5 ? "Already as loud as it goes" : "Nothing to normalize: it's silent"); return null; }
     return { chans: out, say: `Normalized, ${db > 0 ? "up" : "down"} ${Math.abs(db).toFixed(1)} dB` };
   }));
+  $("op-ramp").addEventListener("click", () => {
+    const db0 = field("ramp-from", -60, 24, 0), db1 = field("ramp-to", -60, 24, -12);
+    if (db0 === db1) { Announce.say("Type two different levels to slide between. For one level, use Amplify."); return; }
+    // Played backwards, the picture is mirrored: ramp the way it looks and sounds.
+    editSound((chans, from, to, a) => {
+      const out = a.reverse ? WaveOps.ramp(chans, from, to, db1, db0) : WaveOps.ramp(chans, from, to, db0, db1);
+      return { chans: out, say: `Volume ramp from ${db0} to ${db1} dB` + tooLoud(out, from, to) };
+    });
+  });
   // Played backwards, the picture is mirrored: fade the way it looks and sounds.
   for (const dir of ["in", "out"]) {
     $("op-fade" + dir).addEventListener("click", () => editSound((chans, from, to, a) =>

@@ -222,6 +222,11 @@
     const buf = buffer(id, rev);
     return buf ? WaveOps.outline(channels(buf), from * buf.sampleRate, to * buf.sampleRate, n) : null;
   }
+  // The spectral view of part of a sound (seconds): see WaveOps.spectrum.
+  function spectrumOf(id, rev, from, to, cols, rows) {
+    const buf = buffer(id, rev);
+    return buf ? WaveOps.spectrum(channels(buf), from * buf.sampleRate, to * buf.sampleRate, cols, rows, buf.sampleRate) : null;
+  }
   function peak(id) {
     const buf = decoded.get(id);
     if (!buf) return 0;
@@ -259,5 +264,5 @@
     }
   }
 
-  root.Samples = { add, addEdited, usage, tidy, load, buffer, peaks, outline: outlineOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
+  root.Samples = { add, addEdited, usage, tidy, load, buffer, peaks, outline: outlineOf, spectrum: spectrumOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
 })(window);

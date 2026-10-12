@@ -486,10 +486,11 @@ tone, noise, zeroNear, soundSpan), tested in `tests/wave-ops.test.js`.
 | --- | --- |
 | Filters | notch, an EQ with more bands |
 | Time and pitch | pitch bend |
-| Amplitude | volume envelope, invert |
+| Selection | find beats |
+| Amplitude | a drawn volume envelope (v0.20.0 has a straight ramp), invert |
 | Clean-up | click removal |
 | Selection | find beats |
-| Views | spectral view, cue list, a wide level meter and status bar |
+| Views | a wide level meter and status bar |
 
 ## Reverb, Compress, and Time and pitch (v0.17.0)
 
@@ -577,3 +578,20 @@ Settings stay put on every slide.
   rows may be.
 - **Waiting on the user's poster and vision board** for the look. Nothing
   here is restyled; the slides only move and resize what was there.
+
+## Spectral view, markers, volume ramp, click removal (v0.20.0)
+
+| Where | What | What it does |
+| --- | --- | --- |
+| View | Spectral view | the pitches over time in place of the wave's outline: low at the bottom, brighter where louder, with 100 Hz / 1 kHz / 10 kHz marked. Hiss shows as a haze and a hum as a line, which makes it easy to see what Reduce noise and the filters did. Selecting, trimming and markers all still work on it |
+| Select | Markers | **Add a marker at the cursor** (with a name, or "Marker 1", "Marker 2"...), a list to jump the cursor to one or remove it, and **Select between the markers around the cursor**. Flags show them on the wave. Up to 32 a sound, saved with the clip |
+| Change | Volume ramp | the loudness slides from one dB level to another across the stretch |
+| Clean up | Remove clicks and pops | finds short jumps that come straight back and draws a straight line across each; a jump that stays (a square wave's edge, a drum hit) is left alone |
+
+- **Markers follow edits.** Every edit that changes the sound's length
+  (cut, paste, stretch, speed, delete silences) now hands back one
+  time-map, `move(t)`, and the trim points and markers all go through it.
+- **The spectral picture** is `WaveOps.spectrum` (the same FFT as noise
+  reduction), 500 moments by 128 bands, drawn to a canvas and kept until
+  the sound or the view changes. It is a picture only: a screen reader is
+  told when it's on, and the status line still gives length and peak.

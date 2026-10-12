@@ -85,7 +85,7 @@
   const FX_BY_ID = Object.fromEntries(NOTE_FX.map((d) => [d.id, d]));
 
   // Sounds: an audio clip loops up to this many bars, and sound ids look like this.
-  const AUDIO_BARS_MAX = 64;
+  const AUDIO_BARS_MAX = 64, CUES_MAX = 32;
   const SOUND_RE = /^snd-[a-z0-9]{1,24}$/;
   const SAMPLER_DEF = { sampleId: null, root: 60, start: 0, end: null, reverse: false, gain: 0 };
   const AUDIO_DEF = { sampleId: null, start: 0, end: null, fadeIn: 0, fadeOut: 0, reverse: false, gain: 0, fit: false };
@@ -136,6 +136,12 @@
     out.fadeIn = clamp(num(x.fadeIn, 0), 0, 10);
     out.fadeOut = clamp(num(x.fadeOut, 0), 0, 10);
     out.fit = x.fit === true;
+    // Markers: named points in the sound (seconds), in order, 32 at most.
+    const cues = (Array.isArray(x.cues) ? x.cues : [])
+      .filter((q) => q && typeof q.t === "number" && Number.isFinite(q.t) && q.t >= 0)
+      .slice(0, CUES_MAX).map((q) => ({ t: q.t, name: String(q.name || "Marker").slice(0, 24) }))
+      .sort((p, q) => p.t - q.t);
+    if (cues.length) out.cues = cues;
     return out;
   }
 
@@ -947,7 +953,7 @@
   const api = {
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
     MAX_TRACKS, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
-    AUDIO_BARS_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
+    AUDIO_BARS_MAX, CUES_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName, freeSpan,

@@ -1026,6 +1026,20 @@ dialog .check { white-space: normal; align-items: flex-start; }
   border-left: 2px dashed var(--text); border-right: 2px dashed var(--text);
 }
 .wave-cursor { position: absolute; top: 0; bottom: 0; width: 0; margin-left: -1px; border-left: 2px dashed var(--text); pointer-events: none; }
+.wave.spectral .wave-part { background: transparent; } /* the picture's own colors show true */
+.wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.wave-hz { position: absolute; left: 2px; padding: 0 4px; transform: translateY(50%); pointer-events: none; font-size: 0.72rem; color: #fff; background: rgba(0, 0, 0, 0.55); }
+.wave-cue { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); pointer-events: none; }
+.wave-cue span {
+  position: absolute; top: 26px; left: 0; padding: 0 5px; white-space: nowrap; font-size: 0.75rem; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent);
+}
+.cue-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.cue-list:empty { display: none; }
+.cue-list li { display: flex; gap: 4px; }
+.cue-list .cue-go { flex: 1 1 auto; min-height: 36px; text-align: left; }
+.cue-list .cue-del { min-height: 36px; }
+#wz-spec[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .wave-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--playhead); pointer-events: none; }
 .wave-select { gap: 6px 12px; }
 .wave-select > button { min-height: 36px; padding: 0 10px; font-size: 0.9rem; }

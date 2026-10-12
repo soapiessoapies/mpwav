@@ -38,6 +38,11 @@
 //   denoise(chans, from, to, profile, amount)   takes that noise out of the stretch
 //   deleteSilence(chans, from, to, rate, { floor, gap })   cuts out the silences
 //                                  longer than `gap` seconds; returns { chans, cuts }
+//   ramp(chans, from, to, db0, db1)   loudness sliding from db0 to db1 across the stretch
+//   declick(chans, from, to)       mends clicks and pops; returns { chans, count }
+//   spectrum(chans, from, to, cols, rows, rate)   a picture of the pitches over
+//                                  time: cols x rows of 0..255, low pitches first
+//   spectrumHz(row, rows, rate)    the pitch a row of that picture starts at
 //   afterResize(t, from, to, len)  where time `t` ends up once from..to is `len` long
 //   tone(rate, secs, { shape, hz, level })   a new sound: sine, square, saw or triangle
 //   noise(rate, secs, level, random)         ...or hiss
@@ -326,6 +331,83 @@
     });
   }
 
+  // A straight slide in decibels, which is how loudness is heard.
+  function ramp(chans, from, to, db0, db1) {
+    return each(chans, from, to, (d, a, b) => {
+      const n = Math.max(1, b - a - 1);
+      for (let i = a; i < b; i++) d[i] *= dbToGain(db0 + ((db1 - db0) * (i - a)) / n);
+    });
+  }
+
+  // A click is a few samples that jump away from the wave and come straight
+  // back. Each one found is replaced by a straight line across it. A jump
+  // that stays where it lands (the edge of a square wave, a drum hit) is
+  // left alone.
+  function declick(chans, from, to) {
+    const [a, b] = span(chans, from, to), WIDEST = 24;
+    let count = 0;
+    const out = chans.map((x) => {
+      const d = Float32Array.from(x);
+      if (b - a < 8) return d;
+      // How sharply the wave bends at each sample, and what's usual for this sound.
+      const bend = (i) => Math.abs(d[i - 1] - 2 * d[i] + d[i + 1]);
+      let usual = 0;
+      for (let i = a + 1; i < b - 1; i++) usual += bend(i);
+      usual /= b - a - 2;
+      const limit = Math.max(usual * 12, 0.02);
+      for (let i = a + 1; i < b - 1; i++) {
+        if (bend(i) <= limit) continue;
+        let end = i;
+        while (end + 1 < b - 1 && end - i < WIDEST && bend(end + 1) > limit) end++;
+        const s = Math.max(a, i - 2), e = Math.min(b - 1, end + 2);
+        // How far it strays from a straight line across the gap, and how far
+        // the far side is from where the wave was heading anyway.
+        const line = (j) => d[s] + ((d[e] - d[s]) * (j - s)) / (e - s);
+        let height = 0;
+        for (let j = s; j <= e; j++) height = Math.max(height, Math.abs(d[j] - line(j)));
+        const heading = ((s > 0 ? d[s] - d[s - 1] : 0) + (e + 1 < d.length ? d[e + 1] - d[e] : 0)) / 2;
+        if (Math.abs(d[e] - d[s] - heading * (e - s)) < height * 0.5) { // it came back: a click
+          for (let j = s + 1; j < e; j++) d[j] = d[s] + ((d[e] - d[s]) * (j - s)) / (e - s);
+          count++;
+        }
+        i = e;
+      }
+      return d;
+    });
+    return { chans: out, count };
+  }
+
+  // The pitches over time, for the spectral view: `cols` moments across the
+  // stretch, each split into `rows` bands from 50 Hz up to the highest
+  // pitch the sound can hold, evenly spaced as the ear hears them. 255 is
+  // a full-volume tone; 0 is 80 dB below that, or quieter.
+  const LOWEST_HZ = 50;
+  const spectrumHz = (row, rows, rate) => LOWEST_HZ * Math.pow(rate / 2 / LOWEST_HZ, row / rows);
+  function spectrum(chans, from, to, cols, rows, rate) {
+    const [a, b] = span(chans, from, to), out = new Uint8Array(cols * rows);
+    const re = new Float32Array(SLICE), im = new Float32Array(SLICE), n = chans[0] ? chans[0].length : 0;
+    const edges = Array.from({ length: rows + 1 }, (_, r) => (spectrumHz(r, rows, rate) * SLICE) / rate);
+    for (let c = 0; c < cols; c++) {
+      const mid = a + Math.round(((c + 0.5) * (b - a)) / cols) - SLICE / 2;
+      for (let j = 0; j < SLICE; j++) {
+        const i = mid + j;
+        let v = 0;
+        if (i >= 0 && i < n) for (const d of chans) v += d[i];
+        re[j] = (v / chans.length) * HANN[j];
+        im[j] = 0;
+      }
+      fft(re, im);
+      for (let r = 0; r < rows; r++) {
+        const lo = Math.max(1, Math.round(edges[r])), hi = Math.min(SLICE / 2, Math.max(lo + 1, Math.round(edges[r + 1])));
+        let size = 0;
+        for (let k = lo; k < hi; k++) size = Math.max(size, Math.hypot(re[k], im[k]));
+        const db = gainToDb(Math.max(size / (SLICE / 4), 1e-9));
+        out[c * rows + r] = Math.max(0, Math.min(255, Math.round(((db + 80) / 80) * 255)));
+      }
+    }
+    return out;
+  }
+
   // Cuts out every run of silence longer than `gap` seconds, leaving a
   // fiftieth of a second of it on each side so no sound is clipped short.
   // `cuts` lists what went, as [from, to) frames of the sound as it was.
@@ -536,7 +618,8 @@
 
   const api = {
     amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, echo, filter, speed, stretch, pitch,
-    reverb, compress, eq, chorus, flanger, noiseProfile, denoise, deleteSilence, tone, noise,
+    reverb, compress, eq, chorus, flanger, noiseProfile, denoise, deleteSilence, ramp, declick, spectrum, spectrumHz,
+    tone, noise,
     zeroNear, soundSpan, peak, outline, afterCut, afterInsert, afterResize, dbToGain, gainToDb,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -247,6 +247,10 @@
             <button type="button" id="sel-sound">All but the silent ends</button>
             <button type="button" id="sel-zero">Snap to quiet points (no clicks)</button>
             <button type="button" id="sel-none">Nothing</button>
+            <label class="inline">Marker name <input id="cue-name" type="text" maxlength="24" autocomplete="off"></label>
+            <button type="button" id="cue-add" data-stay>Add a marker at the cursor</button>
+            <button type="button" id="cue-between">Select between the markers around the cursor</button>
+            <ul id="cue-list" class="cue-list" aria-label="Markers"></ul>
           </div>
           <div id="view-menu" class="menu" popover role="group" aria-label="View">
             <h3 class="menu-title">View</h3>
@@ -254,6 +258,8 @@
             <button type="button" id="wz-out" data-stay>Zoom out</button>
             <button type="button" id="wz-sel">Zoom to the selection</button>
             <button type="button" id="wz-fit">Show the whole sound</button>
+            <button type="button" id="wz-spec" aria-pressed="false" aria-describedby="wz-spec-help">Spectral view</button>
+            <p id="wz-spec-help" class="menu-note">Shows the pitches over time, low at the bottom, brighter where louder. Hiss is a haze, a hum is a line.</p>
           </div>
           <div id="wedit-menu" class="menu" popover role="group" aria-label="Edit">
             <h3 class="menu-title">Edit</h3>
@@ -268,6 +274,9 @@
             <label class="inline">Amplify by <input id="op-db" type="number" inputmode="decimal" step="0.5" min="-48" max="48" value="3"> dB</label>
             <button type="button" id="op-amplify">Amplify</button>
             <button type="button" id="op-normalize">Normalize (as loud as it goes)</button>
+            <label class="inline">Ramp from <input id="ramp-from" type="number" inputmode="decimal" step="1" min="-60" max="24" value="0"> dB</label>
+            <label class="inline">to <input id="ramp-to" type="number" inputmode="decimal" step="1" min="-60" max="24" value="-12"> dB</label>
+            <button type="button" id="op-ramp">Volume ramp (slide the loudness)</button>
             <button type="button" id="op-fadein">Fade in</button>
             <button type="button" id="op-fadeout">Fade out</button>
             <button type="button" id="op-silence">Silence</button>
@@ -312,6 +321,7 @@
             <label class="inline">Silences over <input id="ds-gap" type="number" inputmode="numeric" step="50" min="50" max="10000" value="300"> ms</label>
             <label class="inline">Silent is under <input id="ds-floor" type="number" inputmode="numeric" step="1" min="-80" max="-20" value="-48"> dB</label>
             <button type="button" id="ds-go">Delete silences</button>
+            <button type="button" id="dc-go">Remove clicks and pops</button>
           </div>
           <div id="tp-menu" class="menu" popover role="group" aria-label="Time and pitch">
             <h3 class="menu-title">Time and pitch</h3>
@@ -352,6 +362,7 @@
             Effects (Echo, Reverb, Chorus, Flanger, Compress), Tone (Equalize, filters), Time and pitch (stretch, pitch, speed) and Clean up (noise, silences) work on just that stretch; with nothing selected they change the whole sound, and Hear it plays the selection. Undo brings the sound back.
             Click the wave to put the cursor there (or type Select from). Edit copies or cuts the selection, and pastes at the cursor or over the selection,
             in this sound or another clip's. Generate puts silence, a tone or noise in the same way.
+            Select can drop named markers at the cursor, jump to them and select between them; View can show the pitches (spectral view).
             Drag the edges of the bright part to trim what the clip plays, and the small squares at its top corners to fade; the Clip menu has the same as numbers.
           </p>
           <p id="wave-status" class="wave-status"></p>
