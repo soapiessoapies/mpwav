@@ -39,7 +39,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -58,7 +58,7 @@
   if (!library.list().length) songId = library.adoptLegacy() || library.add(Song.demoSong());
   if (!library.load(songId)) songId = library.list()[0].id;
   const song = Song.sanitize(library.load(songId));
-  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, midi: false, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", ...uiSaved };
+  const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "contrast", metronome: false, countIn: true, keysMode: "play", singleKeys: true, midi: false, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", slide: "all", ...uiSaved };
   let arrange = null; // window edit mode (set up near the end)
   const sel = () => Song.track(song, song.selected);
   // What the synth actually plays: the track's settings, pushed around by its morph pad.
@@ -565,6 +565,12 @@
       return;
     }
     if (inDialog(e.target)) return;
+    // Alt + 1 to 6: the slides.
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[1-6]$/.test(e.code)) {
+      e.preventDefault();
+      setSlide(Slides.LIST[Number(e.code.slice(5)) - 1].id, true);
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !typingInto(e.target) && shortcut(e)) { e.preventDefault(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === "Space") {
@@ -636,7 +642,13 @@
       if (announce) Announce.say("Selected " + Song.content(song, clip).name);
       save();
     },
-    onOpenClip: (t, clip) => openClip(t, clip, true),
+    // Opening a clip from a slide with no clip editor goes to the slide that has one.
+    onOpenClip(t, clip) {
+      openClip(t, clip, true);
+      if (ui.slide === "arrange" || ui.slide === "mix" || (ui.slide === "edit" && t.kind === "audio")) setSlide(t.kind === "audio" ? "sound" : "make", true);
+    },
+    // Edit: rows as tall as the window allows, so every note is easy to hit. Arrange: short rows, more tracks.
+    rowSize: () => (ui.slide === "edit" ? { fixed: document.documentElement.dataset.layout === "compact" ? 132 : 168, max: 420 } : ui.slide === "arrange" ? { max: 120 } : {}),
     onNewClip(t, bar) {
       if (t.kind === "audio") { pickSound({ mode: "clip", trackId: t.id, bar }); return; }
       const clip = Song.addClip(song, t, bar, 1);
@@ -880,9 +892,46 @@
     clearBtn.textContent = "Clear";
   }
 
+  // --- the Make and Sound slides' pickers: the track, and one of its clips ---
+  const makeTrack = $("make-track"), makeClip = $("make-clip");
+  function renderMakeBar(o) {
+    const t = sel();
+    const tracks = song.tracks.map((x) => [x.id, x.name]);
+    const clips = t.clips.map((c) => [c.id, `${Song.content(song, c).name} (bar ${c.start + 1}${c.length > 1 ? `–${Song.clipEnd(c)}` : ""})`]);
+    const fill = (select, list, value) => {
+      const sig = JSON.stringify(list);
+      if (select.dataset.sig !== sig) {
+        select.dataset.sig = sig;
+        select.textContent = "";
+        for (const [v, words] of list) select.add(new Option(words, v));
+      }
+      select.value = value;
+    };
+    fill(makeTrack, tracks, t.id);
+    fill(makeClip, [["", clips.length ? "No clip open" : "No clips yet"], ...clips], o && o.t === t ? o.clip.id : "");
+    makeClip.disabled = !clips.length;
+    $("make-new").textContent = t.kind === "audio" ? "Add a sound…" : "New clip";
+  }
+  makeTrack.addEventListener("change", () => {
+    selectTrack(makeTrack.value, true);
+    const t = sel();
+    if (t.clips.length) openClip(t, t.clips[0], false);
+    else closeClip();
+  });
+  makeClip.addEventListener("change", () => {
+    const t = sel(), clip = t.clips.find((c) => c.id === makeClip.value);
+    if (clip) openClip(t, clip, false);
+    else closeClip();
+  });
+  $("make-new").addEventListener("click", () => $("new-clip").click());
+  $("make-loops").addEventListener("click", () => $("loops-btn").click());
+
   function renderEditor() {
     const o = find(open);
     if (open && !o) open = null; // the clip was deleted
+    renderMakeBar(o);
+    // The Sound slide shows the wave editor for an open audio clip, the synth's pages otherwise.
+    document.documentElement.dataset.sound = o && o.c.audio ? "audio" : "synth";
     $("clip-empty").hidden = !!o;
     $("clip-body").hidden = !o;
     arrange?.refresh(); // an empty clip editor stops sharing the column
@@ -946,7 +995,7 @@
       return;
     }
     if (!list.length) {
-      $("note-sel").textContent = "No notes selected. Click a note in the piano roll, or Shift-click to pick several.";
+      $("note-sel").textContent = "No notes selected. Click a note (in the piano roll or on the timeline), or Shift-click to pick several.";
       return;
     }
     const first = list[0];
@@ -1235,6 +1284,7 @@
     $("wave-hear").textContent = hearing ? "Stop" : waveSel ? "Hear the selection" : "Hear it";
     $("wave-target").textContent = waveSel ? "Change the selection" : "Change the whole sound";
     $("fx-scope").textContent = waveSel ? "Effects change the selection." : "Effects change the whole sound.";
+    $("op-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
     $("tp-scope").textContent = $("tone-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
     $("nr-learn").disabled = !waveSel;
     $("nr-go").disabled = !waveNoise;
@@ -3113,6 +3163,10 @@
     const want = ui.layout === "desktop" ? "wide" : ui.layout === "phone" ? "compact"
       : w >= 1000 ? "wide" : w <= 640 ? "compact" : "medium";
     const fit = ui.fit && want === "wide" ? "on" : "off";
+    // The slide switcher: in the transport bar on a desktop, on its own row under it otherwise.
+    const bar = document.querySelector(".transport-bar"), nav = $("slides");
+    if (want === "wide" && nav.parentElement !== bar) bar.insertBefore(nav, bar.querySelector(".tempo"));
+    else if (want !== "wide" && nav.parentElement === bar) bar.after(nav);
     if (document.documentElement.dataset.layout !== want || document.documentElement.dataset.fit !== fit) {
       document.documentElement.dataset.layout = want;
       document.documentElement.dataset.fit = fit;
@@ -3218,12 +3272,12 @@
   // The guided tour (src/ui/tour.js): from Settings, and once on a first visit.
   $("tour-btn").addEventListener("click", () => {
     settings.close();
-    Tour.start();
+    (setSlide("all", false), Tour.start());
   });
   // First visit: Home opens at launch and blocks the page while it's up, so
   // the tour waits for Home to close (see first paint, below).
   const autoTour = () => {
-    if (Tour.shouldAutoRun() && !Tour.active() && !document.querySelector("dialog[open]")) Tour.start();
+    if (Tour.shouldAutoRun() && !Tour.active() && !document.querySelector("dialog[open]")) (setSlide("all", false), Tour.start());
   };
 
   $("show-tips").addEventListener("change", (e) => {
@@ -3279,6 +3333,7 @@
     },
   });
   function setArranging(on) {
+    if (on) setSlide("all", false); // every panel has to be there to be moved
     arrange.setArranging(on);
     $("arrange-bar").hidden = !on;
     if (on) {
@@ -3290,6 +3345,32 @@
     }
   }
   $("arrange-btn").addEventListener("click", () => setArranging(true));
+
+  // --- slides: one job at a time ---
+  const slideNav = Slides.create($("slides"), { onPick: (id) => setSlide(id, true) });
+  function setSlide(id, byHand) {
+    const s = Slides.find(id), was = ui.slide;
+    ui.slide = s.id;
+    document.documentElement.dataset.slide = s.id;
+    slideNav.show(s.id);
+    $("note-edit-h").textContent = s.id === "mix" ? "Mixer" : s.id === "sound" ? "Sound" : "Note Edit";
+    if (byHand && arrange.arranging) setArranging(false);
+    if (byHand && s.page && s.id !== was) pages.select(s.page, false);
+    // Make and Sound work on one clip: open the selected one, or the track's first.
+    if (byHand && (s.id === "make" || s.id === "sound") && !find(open)) {
+      const p = pickedClip(), t = sel();
+      if (p) openClip(p.t, p.clip, false);
+      else if (t.clips.length) openClip(t, t.clips[0], false);
+    }
+    arrange.refresh();
+    renderEditor();
+    timeline.render();
+    roll.rebuild();
+    requestAnimationFrame(() => { timeline.render(); drawZooms(); redrawWave(); });
+    if (byHand) Announce.say(`${s.name} slide: ${s.about}`);
+    save();
+  }
+  setSlide(ui.slide, false);
   $("arrange-done").addEventListener("click", () => setArranging(false));
   $("arrange-reset").addEventListener("click", () => arrange.reset());
   const sideLeft = $("side-left");

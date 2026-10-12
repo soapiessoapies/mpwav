@@ -92,7 +92,8 @@
     // --- splitters between panels that share a column ---
     // Only panels that stretch (not folded, not the keyboard) take part.
     const stretches = (id) => id !== "keys-section" && !foldedSet.has(id) &&
-      !(id === "clip-editor" && document.getElementById("clip-body").hidden);
+      !(id === "clip-editor" && document.getElementById("clip-body").hidden) &&
+      getComputedStyle(document.getElementById(id)).display !== "none"; // a slide has it put away
     function placeSplitters() {
       for (const old of document.querySelectorAll(".splitter")) old.remove();
       for (const [k] of COLS) {

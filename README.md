@@ -56,6 +56,7 @@ level of sound design.
 | Record | Plays and adds what you play to the open clip, as long as you held each key; Undo take removes the last recording |
 | Mix | Note Edit › Mix: faders, pan, M (mute) and S (solo) per track |
 | Copy and paste | Ctrl + C / X / V / D: notes when the piano roll has focus, clips otherwise; Ctrl + Shift + D makes a linked copy |
+| Slides | All, Make, Arrange, Edit, Sound, Mix (the row of buttons by the tempo, or Alt + 1 to 6): each shows only the panels for that job, at full size. Edit plays the whole song with tall rows so any note can be changed; Sound lays the wave editor's menus open as panels; Mix is the mixer with tall faders |
 | Split | Select a clip, click the ruler inside it, then Split: it's cut in two at that bar and each half is its own clip |
 | Storage | Settings › Storage shows the sounds kept in this browser and clears the versions no song uses (mpwav also clears them when it opens, and when a song is removed) |
 | Sections | Duplicate, insert a bar, or delete bars across every track, using the loop range |

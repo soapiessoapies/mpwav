@@ -537,3 +537,38 @@ Generate, **Clean up**, View, Clip.
   The learned noise is kept while mpwav is open and works on any sound
   with the same sample rate. Pressed hard it takes quiet detail too.
 - **Delete silences** moves the clip's trim points with each cut.
+
+## Slides: one job at a time (v0.19.0)
+
+The user's idea: "different function slides the audience can switch
+between, to add more workflow space per each aspect of the sound you're
+editing", so making a song is split into steps that are easier to manage.
+
+A row of six buttons (in the transport bar on a desktop, under it on a
+phone; Alt + 1 to 6) picks the slide. Play, Record, Undo, Tempo and
+Settings stay put on every slide.
+
+| Slide | The job | What's on screen |
+| --- | --- | --- |
+| All | everything at once, as before slides | all four panels |
+| Make | play and record ideas into one clip | the clip's piano roll at full height, the keyboard and chords, Note Edit on the Note page |
+| Arrange | lay the clips out into a song | the timeline at full height with short rows (room for more tracks) and the clip tools; Note Edit on the Track page |
+| Edit | play the whole song and change any note | the timeline with rows as tall as the window allows, the clip tools put away and clip names faded back; click a note and its length, loudness and sound are in Note Edit |
+| Sound | shape one sound | a synth track: its Sound, Shape, Filter and Warp pages side by side, with the keyboard. An audio clip: the wave at full size with every menu laid open as a panel |
+| Mix | balance the tracks | the mixer across the whole width, with faders as tall as the window |
+
+- **Picking what to work on without the timeline.** Make and Sound have a
+  Track and a Clip picker, New clip and Loops at the top of the clip
+  editor. Arriving on either opens the selected clip (or the track's
+  first) if none is open.
+- **Opening a clip from Arrange or Mix** (double-click, Enter) goes to
+  Make, or to Sound for an audio clip.
+- **The slide is remembered**, and each one opens Note Edit on the page
+  that fits it. Arranging panels and the tour both switch to All.
+- **How it works:** `src/ui/slides.js` lists the slides; the layout of
+  each is CSS on `<html data-slide>` (and `data-sound`, audio or synth,
+  for the Sound slide). A test checks the stylesheet hides exactly the
+  panels each slide leaves out. The timeline asks `rowSize()` how tall
+  rows may be.
+- **Waiting on the user's poster and vision board** for the look. Nothing
+  here is restyled; the slides only move and resize what was there.

@@ -54,6 +54,7 @@ const SHELL = [
   "src/ui/zoombar.js",
   "src/ui/timeline.js",
   "src/ui/tabs.js",
+  "src/ui/slides.js",
   "src/ui/morph-pad.js",
   "src/ui/arrange.js",
   "src/ui/install.js",

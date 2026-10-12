@@ -138,12 +138,14 @@
     // Rows stretch to fill the playing box when the studio fits the window.
     let rowH = ROW_H;
     function fitRows(song) {
-      if (document.documentElement.dataset.fit !== "on") return ROW_H;
+      // h.rowSize() (optional): { fixed, max } to make rows taller or shorter than usual.
+      const size = h.rowSize ? h.rowSize() : {};
+      if (document.documentElement.dataset.fit !== "on") return size.fixed || ROW_H;
       const open = song.tracks.filter((t) => !h.isCollapsed(t.id)).length;
       const folded = song.tracks.length - open;
       if (!open) return ROW_H;
       const room = scroller.clientHeight - RULER_H - 2 - folded * FOLDED_H;
-      return Math.max(ROW_MIN, Math.min(ROW_MAX, Math.floor(room / open) - 1));
+      return Math.max(ROW_MIN, Math.min(size.max || ROW_MAX, Math.floor(room / open) - 1));
     }
 
     function render() {

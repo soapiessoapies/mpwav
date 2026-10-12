@@ -1218,3 +1218,109 @@ html[data-motion="off"] .tour-spot { transition: none; }
 /* Starter loops dialog (src/state/loops.js) */
 .loop-parts { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .loop-parts li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+
+/* ---------- slides: one job at a time ----------
+   <html data-slide> says which. Each slide puts away the panels its job
+   doesn't need (tests/slides.test.js checks these against src/ui/slides.js). */
+[data-slide="make"] #playbox,
+[data-slide="arrange"] #clip-editor, [data-slide="arrange"] #keys-section,
+[data-slide="edit"] #clip-editor, [data-slide="edit"] #keys-section,
+[data-slide="sound"] #playbox,
+[data-slide="mix"] #playbox, [data-slide="mix"] #clip-editor, [data-slide="mix"] #keys-section { display: none !important; }
+
+.slides { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.slide-btn { min-height: 36px; padding: 0 12px; font-weight: 600; }
+.slide-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+/* Desktop: the switcher sits in the transport bar (app.js moves it there), between Redo and Tempo. */
+.transport-bar > .slides { margin-left: auto; flex-wrap: nowrap; gap: 3px; }
+.transport-bar > .slides .slide-btn { padding: 0 9px; }
+.transport-bar > .slides + .tempo { margin-left: 0; }
+[data-fit="on"] .transport-bar > .slides .slide-btn { min-height: 36px; }
+@media (max-width: 1799px) {
+  [data-layout="wide"] .undo .btn-word, [data-layout="wide"] .tempo-word, [data-layout="wide"] .settings-word {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+}
+/* Narrower still: Play, Record and Loop as icons too (their names stay for screen readers). */
+@media (max-width: 1399px) {
+  [data-layout="wide"] .transport-bar .btn-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+[data-layout="compact"] .slides, [data-layout="medium"] .slides { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+[data-layout="compact"] .slide-btn { min-height: 40px; flex: 1 0 auto; }
+
+/* The track and clip pickers: only where the timeline is put away. */
+.make-bar { display: none; }
+[data-slide="make"] .make-bar, [data-slide="sound"] .make-bar { display: flex; }
+.make-bar select { max-width: 16em; }
+
+/* Bottom column with nothing showing: no gap left behind. */
+[data-slide="arrange"] .col-bottom, [data-slide="edit"] .col-bottom, [data-slide="mix"] .col-bottom { display: none; }
+
+/* Arrange and Edit: the timeline has the whole height. Edit puts the clip
+   tools away and lets the clip labels fade back, so it reads as one song. */
+[data-slide="edit"] .playbox .tool-row { display: none; }
+[data-slide="edit"] .clip-name { opacity: 0.55; }
+[data-layout="compact"][data-slide="edit"] .tl-row:not(.collapsed) { height: var(--row-h); } /* phones: taller rows here */
+
+/* Mix: the mixer across the whole width, with tall faders. */
+[data-layout="wide"][data-slide="mix"] .studio,
+[data-layout="wide"][data-slide="sound"][data-sound="synth"] .studio {
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 560px);
+  grid-template-areas: "transport title" "bar bar" "main main" "side side" "bottom bottom";
+}
+[data-layout="wide"][data-side="left"][data-slide="mix"] .studio,
+[data-layout="wide"][data-side="left"][data-slide="sound"][data-sound="synth"] .studio {
+  grid-template-columns: clamp(320px, 24vw, 560px) minmax(0, 1fr);
+  grid-template-areas: "title transport" "bar bar" "main main" "side side" "bottom bottom";
+}
+[data-fit="on"][data-slide="mix"] .studio,
+[data-fit="on"][data-slide="sound"][data-sound="synth"] .studio { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+[data-slide="mix"] .col-main { display: none; }
+[data-slide="mix"] #note-edit .pager, [data-slide="mix"] #note-edit .page:not(#p-mix) { display: none !important; }
+[data-slide="mix"] #p-mix { display: flex !important; flex: 1 1 0; min-height: 0; }
+[data-slide="mix"] .strips { flex: 1 1 auto; min-height: 320px; justify-content: safe center; align-items: stretch; }
+[data-slide="mix"] .strip { flex: 0 1 150px; min-width: 96px; }
+[data-slide="mix"] .strip > :not(.fader-wrap) { flex: none; }
+[data-slide="mix"] .fader-wrap { flex: 1 1 auto; margin-top: 8px; min-height: 0; }
+[data-slide="mix"] .fader-row { flex: 1 1 auto; height: auto; min-height: 150px; }
+[data-slide="mix"] .col-side { position: static; max-height: none; }
+
+/* Sound, a synth track: its four sound pages side by side. */
+[data-slide="sound"][data-sound="synth"] #note-edit .pager,
+[data-slide="sound"][data-sound="synth"] #note-edit .page:not(#p-sound):not(#p-shape):not(#p-filter):not(#p-warp) { display: none !important; }
+[data-slide="sound"][data-sound="synth"] #p-sound, [data-slide="sound"][data-sound="synth"] #p-shape,
+[data-slide="sound"][data-sound="synth"] #p-filter, [data-slide="sound"][data-sound="synth"] #p-warp { display: block !important; }
+[data-slide="sound"][data-sound="synth"] #note-edit {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 16px; align-content: start; overflow-y: auto;
+}
+[data-slide="sound"][data-sound="synth"] #note-edit > .panel-head { grid-column: 1 / -1; }
+[data-fit="on"][data-slide="sound"][data-sound="synth"] #note-edit { grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+[data-fit="on"][data-slide="sound"][data-sound="synth"] #note-edit > .page { min-height: 0; overflow-y: auto; }
+[data-slide="sound"][data-sound="synth"] .col-side { position: static; max-height: none; }
+[data-slide="sound"][data-sound="synth"] #clip-body { display: none; }
+[data-fit="on"][data-slide="sound"][data-sound="synth"] .col > .clip-editor { flex: 0 0 auto; }
+[data-slide="sound"][data-sound="synth"] #clip-empty { display: none; }
+
+/* Sound, an audio clip: the wave at full size, and every menu laid open as a panel. */
+/* (Keys do nothing for a sound file, so the keyboard is away too.) */
+[data-slide="sound"][data-sound="audio"] #note-edit, [data-slide="sound"][data-sound="audio"] #keys-section,
+[data-slide="sound"][data-sound="audio"] .col-bottom { display: none !important; }
+[data-layout="wide"][data-slide="sound"][data-sound="audio"] .studio {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "transport title" "bar bar" "main main" "bottom bottom";
+}
+[data-slide="sound"][data-sound="audio"] .col-side { display: none; }
+.menu-title { display: none; margin: 0; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+[data-slide="sound"] .wave-editor {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 8px 10px; align-items: start; align-content: start; overflow-y: auto;
+}
+[data-slide="sound"] .wave-editor > * { grid-column: 1 / -1; }
+[data-slide="sound"] .wave-editor > .menu[popover] {
+  grid-column: auto; order: 2; display: flex; position: static; max-width: none; max-height: none; overflow: visible; box-shadow: none;
+  background: var(--panel-2);
+}
+[data-slide="sound"] .wave-editor .menu-title { display: block; }
+[data-slide="sound"] .wave-editor .menu-btn { display: none; }
+[data-slide="sound"] .wave-editor > .tool-row:not(:has(> :not(.menu-btn))) { display: none; } /* the row that was only menu buttons */
+[data-slide="sound"] .wave-editor > .wave, [data-fit="on"][data-slide="sound"] .wave-editor > .wave { height: clamp(140px, 26vh, 320px); flex: none; }
+[data-slide="sound"] .wave-editor > .help { order: 3; }

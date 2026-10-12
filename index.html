@@ -73,6 +73,9 @@
     </button>
   </div>
 
+  <!-- Slides: one job at a time (All is everything at once) -->
+  <nav id="slides" class="slides" aria-label="Slides"></nav>
+
   <!-- Title: top right -->
   <header class="title-block">
     <label for="song-title" class="sr-only">Song title</label>
@@ -166,6 +169,13 @@
         <span id="clip-len-help" class="sr-only">How many bars this clip covers on the timeline; past its loop it repeats. It stops at the next clip.</span>
         <button id="close-clip" type="button" class="quiet">Close</button>
       </div>
+      <!-- On the Make and Sound slides the timeline is away: pick the track and clip here -->
+      <div id="make-bar" class="toolbar make-bar" role="group" aria-label="What to work on">
+        <label class="inline">Track <select id="make-track"></select></label>
+        <label class="inline">Clip <select id="make-clip"></select></label>
+        <button type="button" id="make-new">New clip</button>
+        <button type="button" id="make-loops" aria-haspopup="dialog">Loops</button>
+      </div>
       <p id="clip-empty" class="help">
         No clip open: double-click one, or press New clip.
       </p>
@@ -231,6 +241,7 @@
             <button type="button" class="menu-btn" popovertarget="clip-menu">Clip</button>
           </div>
           <div id="sel-menu" class="menu" popover role="group" aria-label="Select">
+            <h3 class="menu-title">Select</h3>
             <button type="button" id="sel-all" aria-keyshortcuts="Control+A">All of the sound</button>
             <button type="button" id="sel-trim">The trimmed part</button>
             <button type="button" id="sel-sound">All but the silent ends</button>
@@ -238,18 +249,22 @@
             <button type="button" id="sel-none">Nothing</button>
           </div>
           <div id="view-menu" class="menu" popover role="group" aria-label="View">
+            <h3 class="menu-title">View</h3>
             <button type="button" id="wz-in" data-stay>Zoom in</button>
             <button type="button" id="wz-out" data-stay>Zoom out</button>
             <button type="button" id="wz-sel">Zoom to the selection</button>
             <button type="button" id="wz-fit">Show the whole sound</button>
           </div>
           <div id="wedit-menu" class="menu" popover role="group" aria-label="Edit">
+            <h3 class="menu-title">Edit</h3>
             <button type="button" id="wave-copy" aria-keyshortcuts="Control+C">Copy</button>
             <button type="button" id="wave-cut" aria-keyshortcuts="Control+X">Cut</button>
             <button type="button" id="wave-paste" aria-keyshortcuts="Control+V">Paste</button>
             <button type="button" id="wave-paste-mix">Paste mixed in (on top)</button>
           </div>
           <div id="op-menu" class="menu" popover role="group" aria-label="Change the sound">
+            <h3 class="menu-title">Change</h3>
+            <p id="op-scope" class="menu-note">These change the whole sound.</p>
             <label class="inline">Amplify by <input id="op-db" type="number" inputmode="decimal" step="0.5" min="-48" max="48" value="3"> dB</label>
             <button type="button" id="op-amplify">Amplify</button>
             <button type="button" id="op-normalize">Normalize (as loud as it goes)</button>
@@ -261,6 +276,7 @@
             <button type="button" id="op-trim">Trim the clip to the selection</button>
           </div>
           <div id="fx-menu" class="menu" popover role="group" aria-label="Effects">
+            <h3 class="menu-title">Effects</h3>
             <p id="fx-scope" class="menu-note">Effects change the whole sound.</p>
             <label class="inline">Echo every <input id="fx-delay" type="number" inputmode="numeric" step="10" min="10" max="2000" value="250"> ms</label>
             <label class="inline">Each repeat <input id="fx-feedback" type="number" inputmode="numeric" step="5" min="5" max="90" value="40"> % as loud</label>
@@ -276,6 +292,7 @@
             <p id="fx-compress-help" class="menu-note">Turns the loud parts down, then everything back up, so quiet parts come forward. 20 to 1 is a limiter.</p>
           </div>
           <div id="tone-menu" class="menu" popover role="group" aria-label="Tone">
+            <h3 class="menu-title">Tone</h3>
             <p id="tone-scope" class="menu-note">These change the whole sound.</p>
             <label class="inline">Bass <input id="eq-bass" type="number" inputmode="decimal" step="1" min="-18" max="18" value="0"> dB</label>
             <label class="inline">Middle <input id="eq-mid" type="number" inputmode="decimal" step="1" min="-18" max="18" value="0"> dB</label>
@@ -286,6 +303,7 @@
             <button type="button" id="fx-high">Cut the lows (thin)</button>
           </div>
           <div id="clean-menu" class="menu" popover role="group" aria-label="Clean up">
+            <h3 class="menu-title">Clean up</h3>
             <p class="menu-note">To take out hiss or hum: select a stretch that is only the noise and learn it. Then select what to clean (or nothing, for the whole sound) and reduce.</p>
             <button type="button" id="nr-learn" data-stay>Learn the noise from the selection</button>
             <p id="nr-status" class="menu-note" role="status">No noise learned yet.</p>
@@ -296,6 +314,7 @@
             <button type="button" id="ds-go">Delete silences</button>
           </div>
           <div id="tp-menu" class="menu" popover role="group" aria-label="Time and pitch">
+            <h3 class="menu-title">Time and pitch</h3>
             <p id="tp-scope" class="menu-note">These change the whole sound.</p>
             <label class="inline">Stretch to <input id="tp-percent" type="number" inputmode="numeric" step="5" min="25" max="400" value="150"> % as long</label>
             <button type="button" id="tp-stretch">Stretch (keep the pitch)</button>
@@ -305,6 +324,7 @@
             <p id="fx-speed-help" class="menu-note">Together is like a record: up is faster and higher, down is slower and lower. 12 semitones is an octave.</p>
           </div>
           <div id="gen-menu" class="menu" popover role="group" aria-label="Generate">
+            <h3 class="menu-title">Generate</h3>
             <p class="menu-note">A new sound goes in at the cursor, or takes the selection's place.</p>
             <label class="inline">Length <input id="gen-secs" type="number" inputmode="decimal" step="0.1" min="0.01" max="60" value="1"> s</label>
             <button type="button" id="gen-silence">Insert silence</button>
@@ -315,6 +335,7 @@
             <button type="button" id="gen-noise">Insert noise (hiss)</button>
           </div>
           <div id="clip-menu" class="menu" popover role="group" aria-label="Clip: what it plays of the sound">
+            <h3 class="menu-title">Clip</h3>
             <label class="inline">Trim from <input id="wave-start" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
             <label class="inline">Trim to <input id="wave-end" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
             <label class="inline">Fade in <input id="wave-fadein" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
@@ -598,6 +619,10 @@
     <button id="shortcuts-close" type="button" class="quiet">Close</button>
   </div>
   <p class="help">The computer keys either <strong>play</strong> notes or <strong>edit</strong>: switch with Ctrl + E or the switch by the keyboard. Single-key shortcuts can be turned off in Settings.</p>
+    <h3>Slides</h3>
+    <table><tbody>
+      <tr><th scope="row">Alt + 1 to 6</th><td>All, Make, Arrange, Edit, Sound, Mix: each slide shows only the panels for that job</td></tr>
+    </tbody></table>
     <h3>Anywhere</h3>
     <table class="keys-table">
       <tr><th scope="row">Space</th><td>Play / stop</td></tr>
@@ -791,6 +816,7 @@
 <script src="src/ui/zoombar.js"></script>
 <script src="src/ui/timeline.js"></script>
 <script src="src/ui/tabs.js"></script>
+<script src="src/ui/slides.js"></script>
 <script src="src/ui/morph-pad.js"></script>
 <script src="src/ui/arrange.js"></script>
 <script src="src/ui/install.js"></script>
