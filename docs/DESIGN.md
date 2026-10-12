@@ -486,9 +486,7 @@ tone, noise, zeroNear, soundSpan), tested in `tests/wave-ops.test.js`.
 | --- | --- |
 | Filters | notch, an EQ with more bands |
 | Time and pitch | pitch bend |
-| Selection | find beats |
 | Amplitude | a drawn volume envelope (v0.20.0 has a straight ramp), invert |
-| Clean-up | click removal |
 | Selection | find beats |
 | Views | a wide level meter and status bar |
 
