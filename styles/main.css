@@ -927,6 +927,10 @@ dialog .check { white-space: normal; align-items: flex-start; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
 .menu:popover-open, .menu.open { display: flex; }
+.menu[popover] { max-height: calc(100vh - 16px); overflow-y: auto; }
+.menu .inline { justify-content: space-between; }
+.menu .inline select { min-height: 36px; }
+.menu-note { margin: 0; max-width: 22em; color: var(--muted); font-size: 0.85rem; }
 .menu.open { position: static; margin: 0 0 8px; box-shadow: none; }
 .menu > button { min-height: 40px; text-align: left; }
 .menu .tempo-list { margin: 4px 0 0; }

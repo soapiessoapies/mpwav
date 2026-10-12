@@ -1233,6 +1233,7 @@
     $("wave-fit").setAttribute("aria-pressed", String(a.fit));
     $("wave-hear").textContent = hearing ? "Stop" : waveSel ? "Hear the selection" : "Hear it";
     $("wave-target").textContent = waveSel ? "Change the selection" : "Change the whole sound";
+    $("fx-scope").textContent = waveSel ? "Effects change the selection." : "Effects change the whole sound.";
     for (const id of ["op-delete", "op-trim", "wz-sel", "sel-none"]) $(id).disabled = !waveSel;
     $("wz-out").disabled = $("wz-fit").disabled = !waveView;
     $("wave-cut").disabled = !waveSel;
@@ -1404,6 +1405,24 @@
   });
   $("sel-all").addEventListener("click", () => setWaveSel(0, Infinity, true));
   $("sel-none").addEventListener("click", () => setWaveSel(waveCursor, waveCursor, true));
+  // The sound without the silence before and after it.
+  $("sel-sound").addEventListener("click", () => {
+    const o = openAudio(), buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf) return;
+    const [a, b] = WaveOps.soundSpan(Samples.channels(buf));
+    if (b <= a) { Announce.say("The whole sound is silent"); return; }
+    setWaveSel(a / buf.sampleRate, b / buf.sampleRate, true);
+  });
+  // Moves each end of the selection (or the cursor) to the nearest place
+  // the wave crosses zero, within a 50th of a second: cuts there don't click.
+  $("sel-zero").addEventListener("click", () => {
+    const o = openAudio(), buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf) return;
+    const rate = buf.sampleRate, chans = Samples.channels(buf);
+    const snap = (t) => WaveOps.zeroNear(chans, t * rate, Math.round(rate / 50)) / rate;
+    if (waveSel) setWaveSel(snap(waveSel.from), snap(waveSel.to), true);
+    else setWaveSel(snap(waveCursor), snap(waveCursor), true);
+  });
   $("sel-trim").addEventListener("click", () => {
     const o = openAudio();
     if (o) setWaveSel(o.c.audio.start, o.c.audio.end == null ? Infinity : o.c.audio.end, true);
@@ -1497,20 +1516,25 @@
   // Paste goes in at the cursor, or takes the selection's place; mixed in,
   // it lays on top from there and nothing moves.
   function wavePaste(mixed) {
-    const o = openAudio(), copied = waveCopied;
-    if (!o) return;
-    if (!copied) { Announce.say("Nothing copied yet. Select a stretch and Copy it first."); return; }
+    if (!waveCopied) { Announce.say("Nothing copied yet. Select a stretch and Copy it first."); return; }
+    const copied = waveCopied;
+    putPiece(() => copied, mixed, mixed ? "Mixed in" : "Pasted");
+  }
+  // Puts a piece of sound in: `make(rate)` gives { chans, rate } (a copy, or
+  // a newly generated sound at this sound's own sample rate).
+  function putPiece(make, mixed, verb) {
+    if (!openAudio()) return;
     const sel = waveSel, at = sel ? sel.from : waveCursor;
     editSound((chans, from, to, a) => {
-      const rate = Samples.info(a.sampleId).rate;
-      const piece = WaveOps.fit(copied.chans, copied.rate, rate, chans.length);
+      const rate = Samples.info(a.sampleId).rate, made = make(rate);
+      const piece = WaveOps.fit(made.chans, made.rate, rate, chans.length);
       const secs = piece[0].length / rate, frame = Math.round(at * rate);
       const out = mixed ? WaveOps.mix(chans, frame, piece) : WaveOps.insert(sel ? WaveOps.remove(chans, from, to) : chans, frame, piece);
       waveSel = { from: at, to: at + secs };
       waveView = null;
       return {
         chans: out, where: "",
-        say: `${mixed ? "Mixed in" : "Pasted"} ${secs.toFixed(2)} seconds at ${at.toFixed(2)}` + (mixed && WaveOps.peak(out, frame, frame + piece[0].length) > 1 ? ", and too loud now (the tops are cut flat)" : ""),
+        say: `${verb} ${secs.toFixed(2)} seconds at ${at.toFixed(2)}` + (mixed && WaveOps.peak(out, frame, frame + piece[0].length) > 1 ? ", and too loud now (the tops are cut flat)" : ""),
         then: (b) => {
           if (mixed) return;
           const move = (t) => WaveOps.afterInsert(sel ? WaveOps.afterCut(t, sel.from, sel.to) : t, at, secs);
@@ -1524,6 +1548,59 @@
   $("wave-cut").addEventListener("click", () => waveCopy(true));
   $("wave-paste").addEventListener("click", () => wavePaste(false));
   $("wave-paste-mix").addEventListener("click", () => wavePaste(true));
+
+  // --- Generate: silence, a tone or noise, put in like a paste ---
+  const field = (id, lo, hi, fallback) => { const v = Number($(id).value); return Number.isFinite(v) && $(id).value !== "" ? Math.max(lo, Math.min(hi, v)) : fallback; };
+  const genSecs = () => field("gen-secs", 0.01, 60, 1);
+  $("gen-silence").addEventListener("click", () => {
+    const secs = genSecs();
+    putPiece((rate) => ({ chans: [new Float32Array(Math.round(secs * rate))], rate }), false, "Inserted silence,");
+  });
+  $("gen-tone").addEventListener("click", () => {
+    const secs = genSecs(), hz = field("gen-hz", 20, 16000, 440), shape = $("gen-shape").value, level = WaveOps.dbToGain(field("gen-db", -48, 0, -6));
+    putPiece((rate) => ({ chans: WaveOps.tone(rate, secs, { shape, hz, level }), rate }), false, `Inserted a ${hz} Hz ${shape} tone,`);
+  });
+  $("gen-noise").addEventListener("click", () => {
+    const secs = genSecs(), level = WaveOps.dbToGain(field("gen-db", -48, 0, -6));
+    putPiece((rate) => ({ chans: WaveOps.noise(rate, secs, level), rate }), false, "Inserted noise,");
+  });
+
+  // --- Effects: on the selection, or the whole sound ---
+  const tooLoud = (chans, from, to) => (WaveOps.peak(chans, from, to) > 1 ? ", and too loud now (the tops are cut flat)" : "");
+  $("fx-echo").addEventListener("click", () => {
+    const delay = field("fx-delay", 10, 2000, 250) / 1000, feedback = field("fx-feedback", 5, 90, 40) / 100;
+    editSound((chans, from, to, a) => {
+      const out = WaveOps.echo(chans, from, to, Samples.info(a.sampleId).rate, { delay, feedback });
+      return { chans: out, say: `Echo every ${Math.round(delay * 1000)} ms` + tooLoud(out, from, out[0].length) };
+    });
+  });
+  for (const kind of ["low", "high"]) {
+    $("fx-" + kind).addEventListener("click", () => {
+      const hz = field("fx-hz", 20, 20000, 1000);
+      editSound((chans, from, to, a) => ({
+        chans: WaveOps.filter(chans, from, to, Samples.info(a.sampleId).rate, kind, hz),
+        say: `${kind === "low" ? "Highs" : "Lows"} cut ${kind === "low" ? "above" : "below"} ${hz} Hz`,
+      }));
+    });
+  }
+  $("fx-speed").addEventListener("click", () => {
+    const semis = Math.round(field("fx-semis", -24, 24, 0));
+    if (!semis) { Announce.say("Type how many semitones to shift by. 12 is an octave up, minus 12 an octave down."); return; }
+    const sel = waveSel;
+    editSound((chans, from, to, a) => {
+      const rate = Samples.info(a.sampleId).rate, out = WaveOps.speed(chans, from, to, Math.pow(2, semis / 12));
+      const t0 = from / rate, t1 = to / rate, len = (to - from + out[0].length - chans[0].length) / rate;
+      if (sel) waveSel = { from: t0, to: t0 + len };
+      waveView = null;
+      return {
+        chans: out, say: `${Math.abs(semis)} semitone${Math.abs(semis) === 1 ? "" : "s"} ${semis > 0 ? "higher and faster" : "lower and slower"}`,
+        then: (b) => {
+          b.start = WaveOps.afterResize(b.start, t0, t1, len);
+          b.end = b.end == null ? null : WaveOps.afterResize(b.end, t0, t1, len);
+        },
+      };
+    });
+  });
   // The wave has the keys once it's clicked, until something outside the wave editor is.
   document.addEventListener("pointerdown", (e) => { waveActive = !!(e.target.closest && e.target.closest("#wave-editor")); }, true);
   $("op-amplify").addEventListener("click", () => {

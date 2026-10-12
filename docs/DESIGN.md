@@ -433,8 +433,7 @@ clears the ones nothing needs:
   song may be about to use it). `Samples.usage` / `Samples.tidy`, and
   `soundsInUse` in app.js, which reads every saved song.
 
-**Not built yet, from the same reference:** generating silence, tones or noise, a noise-reduction pass, and a wide
-level meter with a status bar across the app.
+**Not built yet, from the same reference:** see "Effects and Generate" below.
 
 ## Split a clip (v0.15.0)
 
@@ -451,3 +450,44 @@ changed, moved or deleted without touching the other half.
   cut is (`Song.splitApart`).
 - **Not built yet:** splitting between bar lines, and a shortcut (Ctrl + E
   is taken by Keys edit).
+
+## Effects and Generate, from Cool Edit Pro (v0.16.0)
+
+The wave editor's second row is now a menu bar: **Edit, Change, Effects,
+Generate, View, Clip**. The clip's own numbers (Trim from / to, Fade in /
+out, Gain) moved into the Clip menu to make room; dragging the trim edges
+and fade corners on the wave is unchanged.
+
+**Effects** work on the selection, or the whole sound with nothing selected:
+
+| Effect | Settings | What it does |
+| --- | --- | --- |
+| Echo | every N ms, each repeat N % as loud | repeats of the stretch that ring on after it; the sound gets longer if they run past its end |
+| Cut the highs | Filter at N Hz | a low-pass: muffled, further away |
+| Cut the lows | Filter at N Hz | a high-pass: thin, like a small radio |
+| Change speed and pitch | N semitones | like a record: up is faster and higher, down slower and lower |
+
+**Generate** puts a new sound in at the cursor, or in the selection's place:
+silence, a tone (pitch in Hz; sine, triangle, square or saw; level in dB) or
+noise, of the length typed.
+
+**Select** gained two helpers:
+- **All but the silent ends:** selects the sound without the silence before
+  and after it (then Trim the clip to the selection, or Delete the rest).
+- **Snap to quiet points:** moves each end of the selection (or the cursor)
+  to the nearest place the wave crosses zero, so cuts and pastes don't click.
+
+All of it is pure maths in `src/audio/wave-ops.js` (echo, filter, speed,
+tone, noise, zeroNear, soundSpan), tested in `tests/wave-ops.test.js`.
+
+**Still on the list, from the same reference:**
+
+| Group | Not built yet |
+| --- | --- |
+| Delay effects | reverb, chorus, flanger |
+| Filters | graphic EQ, notch |
+| Time and pitch | stretch without changing pitch, pitch bend |
+| Amplitude | compressor, hard limiter, volume envelope, invert |
+| Clean-up | noise reduction, click removal, delete silence |
+| Selection | find beats |
+| Views | spectral view, cue list, a wide level meter and status bar |

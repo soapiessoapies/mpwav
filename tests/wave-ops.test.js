@@ -102,3 +102,77 @@ test("outline zoomed in past one sample per point still draws something", () => 
   const out = W.outline(sound([0.5, -0.5]), 0, 2, 4);
   assert.deepEqual(Array.from(out), [0, 0.5, 0, 0.5, -0.5, 0, -0.5, 0]);
 });
+
+test("echo repeats the stretch, each repeat quieter, and rings on past the end", () => {
+  const out = W.echo(sound([1, 0, 0, 0]), 0, 1, 2, { delay: 1, feedback: 0.5 }); // 2 frames a second: a 2-frame delay
+  assert.deepEqual(Array.from(out[0].slice(0, 7), (v) => +v.toFixed(3)), [1, 0, 0.5, 0, 0.25, 0, 0.125]);
+  assert.ok(out[0].length > 4, "the sound got longer to hold the tail");
+});
+
+test("echo only echoes the stretch, not what follows it", () => {
+  const out = W.echo(sound([1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), 0, 2, 1, { delay: 2, feedback: 0.5 });
+  assert.equal(+out[0][2].toFixed(3), 0.5);
+  assert.equal(+out[0][4].toFixed(3), 1.25, "the later hit plays over the echo");
+  assert.equal(+out[0][6].toFixed(3), 0.125, "but leaves no echo of its own");
+});
+
+test("a low-pass keeps a low tone and takes out a high one; a high-pass does the opposite", () => {
+  const rate = 8000, low = W.tone(rate, 0.5, { hz: 100, level: 1 }), high = W.tone(rate, 0.5, { hz: 3000, level: 1 });
+  const loud = (chans) => W.peak(chans, 1000, 3000);
+  assert.ok(loud(W.filter(low, 0, 4000, rate, "low", 500)) > 0.9);
+  assert.ok(loud(W.filter(high, 0, 4000, rate, "low", 500)) < 0.1);
+  assert.ok(loud(W.filter(low, 0, 4000, rate, "high", 1500)) < 0.1);
+  assert.ok(loud(W.filter(high, 0, 4000, rate, "high", 1500)) > 0.9);
+});
+
+test("a filter leaves the sound outside the stretch alone", () => {
+  const out = W.filter(sound([1, -1, 1, -1, 1, -1]), 2, 4, 8000, "low", 200);
+  assert.deepEqual([out[0][0], out[0][1], out[0][4], out[0][5]], [1, -1, 1, -1]);
+});
+
+test("speed: twice as fast is half as long, and only the stretch changes", () => {
+  const out = W.speed(sound([9, 0, 1, 2, 3, 4, 5, 6, 7, 9]), 1, 9, 2);
+  assert.deepEqual(list(out), [[9, 0, 2, 4, 6, 9]]);
+  assert.equal(W.speed(sound([0, 1, 2, 3]), 0, 4, 0.5)[0].length, 8, "half speed is twice as long");
+});
+
+test("afterResize moves trim points with a stretch that changed length", () => {
+  assert.equal(W.afterResize(0.5, 1, 3, 1), 0.5);
+  assert.equal(W.afterResize(2, 1, 3, 1), 1.5, "inside: in proportion");
+  assert.equal(W.afterResize(4, 1, 3, 1), 3, "after: by the difference");
+});
+
+test("tone: the right length, level and pitch, starting and ending at silence", () => {
+  const [d] = W.tone(1000, 1, { hz: 10, level: 0.5 });
+  assert.equal(d.length, 1000);
+  assert.equal(Math.abs(d[0]), 0);
+  assert.equal(Math.abs(d[999]), 0);
+  assert.ok(Math.abs(W.peak([d], 0, 1000) - 0.5) < 0.01);
+  let ups = 0;
+  for (let i = 1; i < 1000; i++) if (d[i - 1] <= 0 && d[i] > 0) ups++;
+  assert.equal(ups, 10, "ten cycles in a second");
+  for (const shape of ["square", "saw", "triangle"]) assert.ok(W.peak(W.tone(1000, 0.2, { shape, hz: 50, level: 1 }), 0, 200) > 0.9, shape);
+});
+
+test("noise stays inside its level", () => {
+  let seed = 1;
+  const [d] = W.noise(1000, 0.5, 0.3, () => (seed = (seed * 16807) % 2147483647) / 2147483647);
+  assert.equal(d.length, 500);
+  const p = W.peak([d], 0, 500);
+  assert.ok(p > 0.2 && p <= 0.3);
+});
+
+test("zeroNear finds the closest zero crossing, and leaves the ends alone", () => {
+  const s = sound([0.5, 0.4, 0.3, -0.2, -0.4, -0.3, 0.1, 0.5]);
+  assert.equal(W.zeroNear(s, 2, 10), 3);
+  assert.equal(W.zeroNear(s, 5, 10), 6);
+  assert.equal(W.zeroNear(s, 0, 10), 0);
+  assert.equal(W.zeroNear(s, 8, 10), 8);
+  assert.equal(W.zeroNear(sound([1, 1, 1, 1, 1, 1]), 3, 1), 3, "none in reach: stays put");
+});
+
+test("soundSpan is the sound without its silent ends", () => {
+  assert.deepEqual(W.soundSpan(sound([0, 0.001, 0.5, 0, 0.2, 0, 0])), [2, 5]);
+  assert.deepEqual(W.soundSpan(sound([0, 0, 0], [0, 0.3, 0])), [1, 2], "any channel counts");
+  assert.deepEqual(W.soundSpan(sound([0, 0, 0])), [3, 3], "all silent: nothing");
+});
