@@ -359,3 +359,57 @@ one clip:
 - **Undo take:** removes everything the take added, on every track.
 - **The tour:** now 11 steps, with Starter loops added and the Record step
   rewritten.
+
+## The wave editor, after Cool Edit Pro (v0.13.0)
+
+Cool Edit Pro is the reference for how the wave editor works (function
+only; the look stays mpwav's). Its idea: **select a stretch of the sound,
+then change just that stretch.** With nothing selected, a change applies to
+the whole sound.
+
+**Selecting**
+- Drag across the wave. A plain click lets go of the selection.
+- Or type it: **Select from / to / Length**, in seconds. This is the
+  keyboard and screen-reader way in, and each change is announced.
+- The **Select** menu: All of the sound, The trimmed part, Nothing.
+
+**The Change menu** (its button reads "Change the selection" or "Change the
+whole sound", so the scope is always on screen):
+
+| Edit | What it does |
+| --- | --- |
+| Amplify | louder or quieter by the dB typed above it; says so if it clips |
+| Normalize | as loud as it goes without clipping; says how many dB it moved |
+| Fade in / Fade out | a straight fade across the stretch |
+| Silence | mutes the stretch, keeping its length |
+| Reverse | plays the stretch backwards |
+| Delete | cuts the stretch out; the sound gets shorter and the trim points move with it |
+| Trim the clip to the selection | sets the clip's trim to the selection (the sound itself is untouched) |
+
+**Around the wave**
+- **The big time** (m:ss.mmm) shows where the selection starts, follows the
+  pointer over the wave, and counts along while Hear it plays.
+- **Hear it** plays the selection when there is one (the button says so),
+  shows a playhead, and becomes Stop while it plays.
+- **A ruler** of times along the wave's bottom edge.
+- **Zoom:** the View menu (Zoom in, Zoom out, Zoom to the selection, Show
+  the whole sound) and a zoom bar under the wave, like the timeline's.
+- **The status line** adds the sample rate, mono or stereo, and the peak
+  level in dB.
+- **Clip menu:** Play backwards (was "Reverse"), Fit to tempo, Loop the
+  whole sound, Replace sound. The trim fields are now "Trim from / Trim to".
+
+**How edits are stored.** An edit never changes a sound: it makes an edited
+copy (`Samples.addEdited`, a 16-bit WAV in IndexedDB) with a new id and
+points the clip at it. Undo puts the old id back, so the old sound returns.
+Other clips that use the original sound keep it. The maths is in
+`src/audio/wave-ops.js` (pure functions, tested in
+`tests/wave-ops.test.js`).
+
+**Known gap:** old copies are never cleaned out of the browser's storage,
+so heavy editing of long sounds uses space. A tidy-up needs to check every
+saved song first.
+
+**Not built yet, from the same reference:** copy and paste of a stretch,
+generating silence, tones or noise, a noise-reduction pass, and a wide
+level meter with a status bar across the app.

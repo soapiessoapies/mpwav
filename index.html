@@ -206,25 +206,66 @@
         <div id="roll-zoombar" class="notes-only"></div>
         <!-- An audio clip opens here instead of the piano roll -->
         <div id="wave-editor" class="wave-editor audio-only">
-          <div class="tool-row">
-            <div class="toolbar" role="group" aria-label="Sound">
-              <button type="button" id="wave-hear">Hear it</button>
-              <button type="button" id="wave-reverse" aria-pressed="false">Reverse</button>
-              <button type="button" id="wave-fit" aria-pressed="false" aria-describedby="wave-fit-help">Fit to tempo</button>
-              <button type="button" id="wave-fill">Loop the whole sound</button>
-              <button type="button" id="wave-replace">Replace sound…</button>
+          <!-- Select a stretch of the sound, then change just that stretch -->
+          <div class="tool-row wave-select">
+            <button type="button" id="wave-hear">Hear it</button>
+            <span id="wave-time" class="wave-time" aria-hidden="true">0:00.000</span>
+            <div class="wave-fields" role="group" aria-label="Selection">
+              <label class="inline">Select from <input id="sel-from" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+              <label class="inline">to <input id="sel-to" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+              <label class="inline">Length <input id="sel-len" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+            </div>
+            <button type="button" class="menu-btn" popovertarget="sel-menu">Select</button>
+            <button type="button" class="menu-btn" popovertarget="view-menu">View</button>
+          </div>
+          <div class="tool-row wave-select">
+            <button type="button" id="wave-target" class="menu-btn" popovertarget="op-menu">Change the whole sound</button>
+            <button type="button" class="menu-btn" popovertarget="clip-menu">Clip</button>
+            <div class="wave-fields" role="group" aria-label="What the clip plays">
+              <label class="inline">Trim from <input id="wave-start" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+              <label class="inline">Trim to <input id="wave-end" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
+              <label class="inline">Fade in <input id="wave-fadein" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
+              <label class="inline">Fade out <input id="wave-fadeout" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
+              <label class="inline">Gain <input id="wave-gain" type="number" inputmode="decimal" step="0.5" min="-24" max="12"> dB</label>
             </div>
           </div>
-          <p id="wave-fit-help" class="help tip">Fit to tempo speeds the sound up or slows it down so it fills the clip's loop exactly. Like a record, its pitch moves with it.</p>
-          <div class="wave-fields">
-            <label class="inline">Start <input id="wave-start" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
-            <label class="inline">End <input id="wave-end" type="number" inputmode="decimal" step="0.01" min="0"> s</label>
-            <label class="inline">Fade in <input id="wave-fadein" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
-            <label class="inline">Fade out <input id="wave-fadeout" type="number" inputmode="numeric" step="10" min="0" max="10000"> ms</label>
-            <label class="inline">Gain <input id="wave-gain" type="number" inputmode="decimal" step="0.5" min="-24" max="12"> dB</label>
+          <div id="sel-menu" class="menu" popover role="group" aria-label="Select">
+            <button type="button" id="sel-all">All of the sound</button>
+            <button type="button" id="sel-trim">The trimmed part</button>
+            <button type="button" id="sel-none">Nothing</button>
           </div>
-          <p class="help tip">Drag the edges of the bright part to trim, and the small squares at its top corners to fade. The fields above do the same from a keyboard.</p>
+          <div id="view-menu" class="menu" popover role="group" aria-label="View">
+            <button type="button" id="wz-in" data-stay>Zoom in</button>
+            <button type="button" id="wz-out" data-stay>Zoom out</button>
+            <button type="button" id="wz-sel">Zoom to the selection</button>
+            <button type="button" id="wz-fit">Show the whole sound</button>
+          </div>
+          <div id="op-menu" class="menu" popover role="group" aria-label="Change the sound">
+            <label class="inline">Amplify by <input id="op-db" type="number" inputmode="decimal" step="0.5" min="-48" max="48" value="3"> dB</label>
+            <button type="button" id="op-amplify">Amplify</button>
+            <button type="button" id="op-normalize">Normalize (as loud as it goes)</button>
+            <button type="button" id="op-fadein">Fade in</button>
+            <button type="button" id="op-fadeout">Fade out</button>
+            <button type="button" id="op-silence">Silence</button>
+            <button type="button" id="op-reverse">Reverse</button>
+            <button type="button" id="op-delete">Delete (cut it out)</button>
+            <button type="button" id="op-trim">Trim the clip to the selection</button>
+          </div>
+          <div id="clip-menu" class="menu" popover role="group" aria-label="Clip">
+            <button type="button" id="wave-reverse" aria-pressed="false">Play backwards</button>
+            <button type="button" id="wave-fit" aria-pressed="false" aria-describedby="wave-fit-help">Fit to tempo</button>
+            <button type="button" id="wave-fill">Loop the whole sound</button>
+            <button type="button" id="wave-replace">Replace sound…</button>
+          </div>
+          <p id="wave-fit-help" class="help tip">Fit to tempo speeds the sound up or slows it down so it fills the clip's loop exactly. Like a record, its pitch moves with it.</p>
+          <p class="help tip">
+            Drag across the wave to select a stretch of the sound (or type its times). Then the Change menu (Amplify, Normalize, Fade, Silence, Reverse, Delete) changes just that stretch;
+            with nothing selected it changes the whole sound, and Hear it plays the selection. Undo brings the sound back.
+            Drag the edges of the bright part to trim what the clip plays, and the small squares at its top corners to fade.
+          </p>
           <div id="wave" class="wave" aria-hidden="true"></div>
+          <div id="wave-ruler" class="wave-ruler" aria-hidden="true"></div>
+          <div id="wave-zoombar"></div>
           <p id="wave-status" class="wave-status"></p>
         </div>
       </div>
@@ -647,6 +688,7 @@
 <script src="src/audio/transport.js"></script>
 <script src="src/audio/morph.js"></script>
 <script src="src/audio/wav.js"></script>
+<script src="src/audio/wave-ops.js"></script>
 <script src="src/audio/drums.js"></script>
 <script src="src/audio/render.js"></script>
 <script src="src/state/presets.js"></script>

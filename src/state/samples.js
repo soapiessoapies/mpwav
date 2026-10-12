@@ -7,7 +7,11 @@
 //   load(ids)        makes sure those sounds are decoded (call before playing)
 //   buffer(id, rev)  the decoded AudioBuffer (reversed if asked), or null
 //   peaks(id)        a waveform outline: [min, max] pairs, or null
-//   info(id)         { name, duration } once loaded
+//   info(id)         { name, duration, rate, channels } once loaded
+//   addEdited(id, chans)  stores an edited copy of sound `id` (new channels,
+//                    see src/audio/wave-ops.js) and returns the copy's id
+//   outline(id, rev, from, to, n)  a waveform outline of seconds from..to
+//   peak(id)         the sound's loudest sample, 0..1
 //   exportAll(ids)   { id: { name, type, data (base64) } } for a song file
 //   importAll(map)   stores sounds from a song file
 // Without IndexedDB (some private windows) sounds stay in memory for the visit.
@@ -21,6 +25,7 @@
   const reversed = new Map();  // id -> AudioBuffer, played backwards
   const outlines = new Map();  // id -> Float32Array of min/max pairs
   const names = new Map();     // id -> name
+  const loudest = new Map();   // id -> peak, worked out when asked
   const pending = new Map();   // id -> Promise while decoding
   const missing = new Set();   // ids looked for and not found (or not decodable)
 
@@ -134,7 +139,39 @@
   const peaks = (id) => outlines.get(id) || null;
   // Is the sound known to be absent from this browser (rather than still loading)?
   const isMissing = (id) => missing.has(id);
-  const info = (id) => (decoded.has(id) ? { name: names.get(id), duration: decoded.get(id).duration } : null);
+  const info = (id) => {
+    const buf = decoded.get(id);
+    return buf ? { name: names.get(id), duration: buf.duration, rate: buf.sampleRate, channels: buf.numberOfChannels } : null;
+  };
+  const channels = (buf) => [...Array(buf.numberOfChannels).keys()].map((c) => buf.getChannelData(c));
+
+  // An edit never changes a sound: it makes a copy with a new id, so undo
+  // (which puts the old id back in the song) still finds the old sound.
+  // The copy is ready to play straight away; storing it carries on behind.
+  function addEdited(id, chans) {
+    const src = decoded.get(id);
+    if (!src || !chans.length || !chans[0].length) return null;
+    const buf = decoderCtx().createBuffer(chans.length, chans[0].length, src.sampleRate);
+    // Clipped to full scale, as the stored file will be.
+    chans.forEach((d, c) => buf.getChannelData(c).set(d.map((v) => Math.max(-1, Math.min(1, v)))));
+    const next = "snd-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const rec = { name: names.get(id), type: "audio/wav", bytes: Wav.encode(buf) };
+    remember(next, rec, buf);
+    put(next, rec);
+    return next;
+  }
+
+  // The outline of part of a sound (seconds), as it shows when zoomed in.
+  function outlineOf(id, rev, from, to, n) {
+    const buf = buffer(id, rev);
+    return buf ? WaveOps.outline(channels(buf), from * buf.sampleRate, to * buf.sampleRate, n) : null;
+  }
+  function peak(id) {
+    const buf = decoded.get(id);
+    if (!buf) return 0;
+    if (!loudest.has(id)) loudest.set(id, WaveOps.peak(channels(buf), 0, buf.length));
+    return loudest.get(id);
+  }
 
   // --- song files carry their sounds ---
   function toBase64(bytes) {
@@ -166,5 +203,5 @@
     }
   }
 
-  root.Samples = { add, load, buffer, peaks, info, isMissing, exportAll, importAll, PEAKS };
+  root.Samples = { add, addEdited, load, buffer, peaks, outline: outlineOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
 })(window);

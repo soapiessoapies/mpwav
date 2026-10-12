@@ -11,7 +11,8 @@
 
   const MIN_THUMB = 100; // px: with both 24px ends on it, the middle still has a big grab area
 
-  // h: { get() -> { start, end, total }, set(start, end), fit(), label, unit(n) -> words }
+  // h: { get() -> { start, end, total }, set(start, end), fit(), label, unit(n) -> words,
+  //      total(n) -> words (optional: how to say the whole length) }
   function create(el, h) {
     el.className = "zoombar";
     el.innerHTML =
@@ -40,7 +41,7 @@
       // The ends sit on the thumb's edges (siblings, so no control is nested in another).
       hStart.style.left = left + "px";
       hEnd.style.left = left + width - hEnd.offsetWidth + "px";
-      const words = `${h.unit(Math.floor(start) + 1)} to ${h.unit(Math.ceil(end))} of ${total}`;
+      const words = `${h.unit(Math.floor(start) + 1)} to ${h.unit(Math.ceil(end))} of ${h.total ? h.total(total) : total}`;
       for (const [elx, now] of [[thumb, start], [hStart, start], [hEnd, end]]) {
         elx.setAttribute("aria-valuemin", "0");
         elx.setAttribute("aria-valuemax", String(total));

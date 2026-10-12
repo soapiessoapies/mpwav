@@ -1155,12 +1155,34 @@
   $("inst-gain").addEventListener("change", (e) => editSampler((s) => { s.gain = Number(e.target.value) || 0; }, `Gain ${Number(e.target.value) || 0} dB`));
   $("inst-reverse").addEventListener("change", (e) => editSampler((s) => { s.reverse = e.target.checked; }, e.target.checked ? "Reversed" : "Forwards"));
 
-  // --- the wave editor: an open audio clip's trim, fades, gain, reverse, fit ---
+  // --- the wave editor: an open audio clip's trim, fades, gain, fit, and
+  // edits to the sound itself. Like a classic wave editor, you select a
+  // stretch (drag, or type its times) and an edit changes just that; with
+  // nothing selected it changes the whole sound. ---
   const waveEl = $("wave");
   const WAVE_FIELDS = { "wave-start": "start", "wave-end": "end", "wave-fadein": "fadeIn", "wave-fadeout": "fadeOut", "wave-gain": "gain" };
+  let waveSel = null;  // the selection: { from, to }, seconds in the sound
+  let waveView = null; // the part in view: { start, end }, seconds along the picture (null: all of it)
+  let waveFor = null;  // the clip content those two belong to
+  let hearing = null;  // Hear it, while it plays: { at, from, length, rate, synth }
+  let waveZoom = null; // the zoom bar under the wave
+  const clock = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(3).padStart(6, "0")}`;
+  const openAudio = () => { const o = find(open); return o && o.c.audio ? o : null; };
+  // The picture reads in playing order, so played backwards it's mirrored.
+  const mirror = (a, dur, t) => (a.reverse ? dur - t : t);
+  const viewOf = (dur) => (waveView ? { start: Math.min(waveView.start, dur), end: Math.min(waveView.end, dur) } : { start: 0, end: dur });
+  const selWords = (s) => `${s.from.toFixed(2)} to ${s.to.toFixed(2)} seconds`;
+
   function renderWave(o) {
     const a = o.c.audio, info = Samples.info(a.sampleId);
     const dur = info ? info.duration : 0;
+    if (waveFor !== o.c.id) { waveFor = o.c.id; waveSel = waveView = null; }
+    // An undo can bring back a shorter sound.
+    if (waveSel && dur) {
+      waveSel = { from: Math.min(waveSel.from, dur), to: Math.min(waveSel.to, dur) };
+      if (waveSel.to - waveSel.from < 0.001) waveSel = null;
+    }
+    if (waveView && dur && waveView.end - waveView.start >= dur - 1e-6) waveView = null;
     const end = a.end == null ? dur : Math.min(a.end, dur);
     const keep = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
     keep("wave-start", +a.start.toFixed(3));
@@ -1168,49 +1190,72 @@
     keep("wave-fadein", Math.round(a.fadeIn * 1000));
     keep("wave-fadeout", Math.round(a.fadeOut * 1000));
     keep("wave-gain", a.gain);
-    $("wave-start").max = $("wave-end").max = +dur.toFixed(3);
+    keep("sel-from", waveSel ? +waveSel.from.toFixed(3) : "");
+    keep("sel-to", waveSel ? +waveSel.to.toFixed(3) : "");
+    keep("sel-len", waveSel ? +(waveSel.to - waveSel.from).toFixed(3) : "");
+    for (const id of ["wave-start", "wave-end", "sel-from", "sel-to", "sel-len"]) $(id).max = +dur.toFixed(3);
     $("wave-reverse").setAttribute("aria-pressed", String(a.reverse));
     $("wave-fit").setAttribute("aria-pressed", String(a.fit));
+    $("wave-hear").textContent = hearing ? "Stop" : waveSel ? "Hear the selection" : "Hear it";
+    $("wave-target").textContent = waveSel ? "Change the selection" : "Change the whole sound";
+    for (const id of ["op-delete", "op-trim", "wz-sel", "sel-none"]) $(id).disabled = !waveSel;
+    $("wz-out").disabled = $("wz-fit").disabled = !waveView;
     const loopSecs = o.c.bars * Song.STEPS * Song.stepSeconds(song, o.clip.start * Song.STEPS);
     const trimmed = Math.max(0, end - a.start);
+    const peak = info ? Samples.peak(a.sampleId) : 0;
     $("wave-status").textContent = !info ? (Samples.isMissing(a.sampleId) ? "This sound isn't in this browser. Import the song file that has it, or Replace sound." : "Loading the sound…")
-      : `${info.name}: ${dur.toFixed(2)} s, playing ${trimmed.toFixed(2)} s` +
+      : `${info.name}: ${dur.toFixed(2)} s, ${info.rate} Hz, ${info.channels === 1 ? "mono" : info.channels === 2 ? "stereo" : info.channels + " channels"}, ` +
+        (peak < 1e-5 ? "silent" : `peak ${(Math.round(WaveOps.gainToDb(peak) * 10) / 10 || 0).toFixed(1).replace("-", "−")} dB`) +
+        ` · playing ${trimmed.toFixed(2)} s` +
         (a.fit ? `, fitted to the ${o.c.bars}-bar loop (${(trimmed / loopSecs).toFixed(2)}× speed)`
           : trimmed > loopSecs + 0.01 ? `; the ${o.c.bars}-bar loop (${loopSecs.toFixed(2)} s) cuts it short` : "");
+    if (!hearing) showWaveTime();
     drawWave(o, dur);
+    drawRuler(viewOf(dur));
+    if (waveZoom) waveZoom.draw();
   }
-  // The whole sound, dimmed, with the trimmed part bright, fades as slopes,
-  // and handles to drag: the trim edges and the fade corners.
+  // The big time: where the selection starts, or the pointer, or the playhead.
+  function showWaveTime(t) {
+    $("wave-time").textContent = clock(t == null ? (waveSel ? waveSel.from : 0) : t);
+  }
+  // The part of the sound in view, dimmed, with the trimmed part bright,
+  // fades as slopes, the selection, and handles to drag: the trim edges
+  // and the fade corners.
   function drawWave(o, dur) {
-    const a = o.c.audio, peaks = Samples.peaks(a.sampleId);
-    const waveEl = $("wave");
+    const a = o.c.audio;
     waveEl.textContent = "";
     waveEl.style.setProperty("--track", `var(--c-${o.t.color})`);
-    if (!peaks || !dur) return;
-    const W = 1000, H = 100, n = peaks.length / 2;
+    if (!dur) return;
+    const view = viewOf(dur);
+    const W = 1000, H = 100, n = 1000;
+    const peaks = Samples.outline(a.sampleId, a.reverse, view.start, view.end, n);
+    if (!peaks) return;
     const ns = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("preserveAspectRatio", "none");
     let top = "", bottom = "";
     for (let i = 0; i < n; i++) {
-      const k = a.reverse ? n - 1 - i : i; // reversed, the outline reads backwards
       const x = (i / (n - 1)) * W;
-      top += `${x.toFixed(1)},${(H / 2 - peaks[k * 2 + 1] * H / 2).toFixed(1)} `;
-      bottom = `${x.toFixed(1)},${(H / 2 - peaks[k * 2] * H / 2).toFixed(1)} ` + bottom;
+      top += `${x.toFixed(1)},${(H / 2 - peaks[i * 2 + 1] * H / 2).toFixed(1)} `;
+      bottom = `${x.toFixed(1)},${(H / 2 - peaks[i * 2] * H / 2).toFixed(1)} ` + bottom;
     }
     const shape = document.createElementNS(ns, "polygon");
     shape.setAttribute("points", top + bottom);
     shape.setAttribute("class", "wave-shape");
     svg.append(shape);
     waveEl.append(svg);
+    const pct = (q) => ((q - view.start) / (view.end - view.start)) * 100;
+    // Puts a box over seconds from..to of the sound, wherever that shows.
+    const place = (el, from, to) => {
+      const p0 = pct(mirror(a, dur, a.reverse ? to : from)), p1 = pct(mirror(a, dur, a.reverse ? from : to));
+      el.style.left = p0 + "%";
+      el.style.width = p1 - p0 + "%";
+    };
     const end = a.end == null ? dur : Math.min(a.end, dur);
-    // In the reversed view the trim shows mirrored, where it plays from.
-    const x0 = (a.reverse ? dur - end : a.start) / dur, x1 = (a.reverse ? dur - a.start : end) / dur;
     const part = document.createElement("div");
     part.className = "wave-part";
-    part.style.left = x0 * 100 + "%";
-    part.style.width = (x1 - x0) * 100 + "%";
+    place(part, a.start, end);
     // The view reads in playing order, so the fade in is always on the left.
     const len = end - a.start || 1;
     const fiW = a.fadeIn / len, foW = a.fadeOut / len;
@@ -1221,7 +1266,105 @@
       `<span class="wave-knob" data-drag="fadeIn" style="left:${Math.min(50, fiW * 100)}%"></span>` +
       `<span class="wave-knob right" data-drag="fadeOut" style="right:${Math.min(50, foW * 100)}%"></span>`;
     waveEl.append(part);
+    if (waveSel) {
+      const sel = document.createElement("div");
+      sel.className = "wave-sel";
+      place(sel, waveSel.from, waveSel.to);
+      waveEl.append(sel);
+    }
+    if (hearing) {
+      const head = document.createElement("div");
+      head.className = "wave-head";
+      head.style.left = pct(hearing.pos == null ? hearing.from : hearing.pos) + "%";
+      waveEl.append(head);
+    }
   }
+  // Times under the wave, about eight of them however far in the view is.
+  function drawRuler(view) {
+    const el = $("wave-ruler"), span = view.end - view.start;
+    el.textContent = "";
+    if (!(span > 0)) return;
+    const step = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300].find((s) => span / s <= 8) || 600;
+    const places = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
+    for (let k = Math.ceil(view.start / step - 1e-9); k * step < view.end; k++) {
+      const t = k * step, tick = document.createElement("span");
+      tick.style.left = ((t - view.start) / span) * 100 + "%";
+      tick.textContent = step >= 60 || t >= 60 ? `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, "0")}` : t.toFixed(places) + " s";
+      el.append(tick);
+    }
+  }
+  function redrawWave() {
+    const o = openAudio();
+    if (o) renderWave(o);
+  }
+
+  // --- the view: zoom in on part of the sound ---
+  function setWaveView(start, end) {
+    const o = openAudio(), dur = o ? soundSecs(o.c.audio.sampleId) : 0;
+    if (!dur) return;
+    const span = Math.max(Math.min(0.01, dur), Math.min(dur, end - start));
+    const from = Math.max(0, Math.min(dur - span, start));
+    waveView = span >= dur - 1e-6 ? null : { start: from, end: from + span };
+    renderWave(o);
+  }
+  waveZoom = ZoomBar.create($("wave-zoombar"), {
+    label: "Sound", unit: (n) => (n / 1000).toFixed(2), total: (n) => (n / 1000).toFixed(2) + " seconds",
+    get: () => {
+      const o = openAudio(), dur = o ? soundSecs(o.c.audio.sampleId) : 0, v = viewOf(dur);
+      return { start: v.start * 1000, end: v.end * 1000, total: Math.round(dur * 1000) };
+    },
+    set: (a, b) => setWaveView(a / 1000, b / 1000),
+    fit: () => setWaveView(0, Infinity),
+  });
+  // Zooming keeps the selection (or else the middle of the view) in the middle.
+  function zoomWave(by) {
+    const o = openAudio(), dur = o ? soundSecs(o.c.audio.sampleId) : 0;
+    if (!dur) return;
+    const a = o.c.audio, v = viewOf(dur);
+    const mid = waveSel ? mirror(a, dur, (waveSel.from + waveSel.to) / 2) : (v.start + v.end) / 2;
+    const half = ((v.end - v.start) * by) / 2;
+    setWaveView(mid - half, mid + half);
+  }
+  $("wz-in").addEventListener("click", () => zoomWave(0.5));
+  $("wz-out").addEventListener("click", () => zoomWave(2));
+  $("wz-fit").addEventListener("click", () => { setWaveView(0, Infinity); Announce.say("Whole sound in view"); });
+  $("wz-sel").addEventListener("click", () => {
+    const o = openAudio();
+    if (!o || !waveSel) return;
+    const dur = soundSecs(o.c.audio.sampleId), len = waveSel.to - waveSel.from, pad = len * 0.05;
+    const p0 = mirror(o.c.audio, dur, o.c.audio.reverse ? waveSel.to : waveSel.from);
+    setWaveView(p0 - pad, p0 + len + pad);
+    Announce.say("Selection in view");
+  });
+
+  // --- the selection ---
+  function setWaveSel(from, to, say) {
+    const o = openAudio(), dur = o ? soundSecs(o.c.audio.sampleId) : 0;
+    if (!dur) return;
+    const a = Math.max(0, Math.min(dur, Math.min(from, to))), b = Math.max(0, Math.min(dur, Math.max(from, to)));
+    waveSel = b - a < 0.001 ? null : { from: a, to: b };
+    renderWave(o);
+    if (say) Announce.say(waveSel ? `Selected ${selWords(waveSel)}` : "Nothing selected");
+  }
+  $("sel-from").addEventListener("change", (e) => {
+    const o = openAudio(), v = Number(e.target.value) || 0;
+    if (o) setWaveSel(v, waveSel && waveSel.to > v ? waveSel.to : soundSecs(o.c.audio.sampleId), true);
+  });
+  $("sel-to").addEventListener("change", (e) => {
+    const v = Number(e.target.value) || 0;
+    setWaveSel(waveSel && waveSel.from < v ? waveSel.from : 0, v, true);
+  });
+  $("sel-len").addEventListener("change", (e) => {
+    const from = waveSel ? waveSel.from : 0;
+    setWaveSel(from, from + (Number(e.target.value) || 0), true);
+  });
+  $("sel-all").addEventListener("click", () => setWaveSel(0, Infinity, true));
+  $("sel-none").addEventListener("click", () => setWaveSel(0, 0, true));
+  $("sel-trim").addEventListener("click", () => {
+    const o = openAudio();
+    if (o) setWaveSel(o.c.audio.start, o.c.audio.end == null ? Infinity : o.c.audio.end, true);
+  });
+
   function editAudio(fn, text) {
     const o = find(open);
     if (!o || !o.c.audio) return;
@@ -1240,7 +1383,7 @@
       }, `${e.target.closest("label").firstChild.textContent.trim()} ${raw || "reset"}`);
     });
   }
-  $("wave-reverse").addEventListener("click", () => editAudio((a) => { a.reverse = !a.reverse; }, "Reverse " + ($("wave-reverse").getAttribute("aria-pressed") === "true" ? "off" : "on")));
+  $("wave-reverse").addEventListener("click", () => editAudio((a) => { a.reverse = !a.reverse; waveView = null; }, "Play backwards " + ($("wave-reverse").getAttribute("aria-pressed") === "true" ? "off" : "on")));
   $("wave-fit").addEventListener("click", () => editAudio((a) => { a.fit = !a.fit; }, "Fit to tempo " + ($("wave-fit").getAttribute("aria-pressed") === "true" ? "off" : "on")));
   $("wave-fill").addEventListener("click", () => editAudio((a, o) => {
     const info = Samples.info(a.sampleId);
@@ -1254,41 +1397,147 @@
     const o = find(open);
     if (o) pickSound({ mode: "replace", trackId: o.t.id, contentId: o.c.id });
   });
-  $("wave-hear").addEventListener("click", () => {
-    const o = find(open);
-    if (!o || !o.c.audio || (transport && transport.playing)) return;
-    ready().then(() => {
-      const from = o.clip.start * Song.STEPS;
-      const seg = Song.audioSegment(song, o.t, from, from, soundSecs, Song.stepSeconds(song, from));
-      if (seg) audio[o.t.id].synth.playAudio(Samples.buffer(seg.sampleId, seg.reverse), seg, Engine.ctx.currentTime + 0.03);
+
+  // --- edits to the sound itself. Each makes an edited copy of the sound
+  // and points the clip at it, so Undo (the old id) brings the sound back. ---
+  // fn(chans, from, to, a) -> { chans, say, then(a) } or null; from/to are frames.
+  function editSound(fn) {
+    const o = openAudio();
+    const buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf) return;
+    stopHearing();
+    const a = o.c.audio, sel = waveSel, rate = buf.sampleRate;
+    const from = sel ? Math.round(sel.from * rate) : 0, to = sel ? Math.round(sel.to * rate) : buf.length;
+    const done = fn(Samples.channels(buf), from, to, a);
+    if (!done) return;
+    const id = Samples.addEdited(a.sampleId, done.chans);
+    if (!id) return;
+    a.sampleId = id;
+    if (done.then) done.then(a);
+    o.c.audio = Song.cleanAudio(a) || a;
+    afterChange(`${done.say}: ${sel ? selWords(sel) : "the whole sound"}`);
+  }
+  $("op-amplify").addEventListener("click", () => {
+    const db = Math.max(-48, Math.min(48, Number($("op-db").value) || 0));
+    if (!db) { Announce.say("Type how many decibels to amplify by. Minus makes it quieter."); return; }
+    editSound((chans, from, to) => {
+      const out = WaveOps.amplify(chans, from, to, db);
+      return { chans: out, say: `${db > 0 ? "Louder" : "Quieter"} by ${Math.abs(db)} dB` + (WaveOps.peak(out, from, to) > 1 ? ", and too loud now (the tops are cut flat)" : "") };
     });
   });
-  // Dragging the trim edges and the fade knobs.
+  $("op-normalize").addEventListener("click", () => editSound((chans, from, to) => {
+    const { chans: out, db } = WaveOps.normalize(chans, from, to);
+    if (Math.abs(db) < 0.05) { Announce.say(WaveOps.peak(chans, from, to) > 0.5 ? "Already as loud as it goes" : "Nothing to normalize: it's silent"); return null; }
+    return { chans: out, say: `Normalized, ${db > 0 ? "up" : "down"} ${Math.abs(db).toFixed(1)} dB` };
+  }));
+  // Played backwards, the picture is mirrored: fade the way it looks and sounds.
+  for (const dir of ["in", "out"]) {
+    $("op-fade" + dir).addEventListener("click", () => editSound((chans, from, to, a) =>
+      ({ chans: WaveOps.fade(chans, from, to, a.reverse ? (dir === "in" ? "out" : "in") : dir), say: "Faded " + dir })));
+  }
+  $("op-silence").addEventListener("click", () => editSound((chans, from, to) => ({ chans: WaveOps.silence(chans, from, to), say: "Silenced" })));
+  $("op-reverse").addEventListener("click", () => editSound((chans, from, to) => ({ chans: WaveOps.reverse(chans, from, to), say: "Reversed" })));
+  $("op-delete").addEventListener("click", () => {
+    const sel = waveSel;
+    if (!sel) return;
+    editSound((chans, from, to) => {
+      const out = WaveOps.remove(chans, from, to);
+      if (out[0].length < 64) { Announce.say("That would delete the whole sound. Select a part of it."); return null; }
+      waveSel = waveView = null;
+      return {
+        chans: out, say: "Deleted",
+        then: (a) => {
+          const left = soundSecs(a.sampleId);
+          a.start = WaveOps.afterCut(a.start, sel.from, sel.to);
+          a.end = a.end == null ? null : WaveOps.afterCut(a.end, sel.from, sel.to);
+          if ((a.end == null ? left : a.end) - a.start < 0.01) { a.start = 0; a.end = null; }
+        },
+      };
+    });
+  });
+  $("op-trim").addEventListener("click", () => {
+    const sel = waveSel;
+    if (sel) editAudio((a) => { a.start = sel.from; a.end = sel.to; }, `The clip now plays only ${selWords(sel)}`);
+  });
+
+  // --- Hear it: the selection, or the clip as it plays in the song ---
+  function stopHearing() {
+    if (!hearing) return;
+    hearing.synth.allOff();
+    hearing = null;
+    redrawWave();
+  }
+  function followHearing() {
+    const o = hearing && openAudio();
+    if (!o) { hearing = null; return; }
+    const pos = hearing.from + (Engine.ctx.currentTime - hearing.at) * hearing.rate;
+    if (pos >= hearing.from + hearing.length) { hearing = null; renderWave(o); return; }
+    const a = o.c.audio, dur = soundSecs(a.sampleId), view = viewOf(dur);
+    hearing.pos = Math.max(hearing.from, pos);
+    const head = waveEl.querySelector(".wave-head");
+    if (head) head.style.left = ((hearing.pos - view.start) / (view.end - view.start)) * 100 + "%";
+    showWaveTime(mirror(a, dur, hearing.pos));
+    requestAnimationFrame(followHearing);
+  }
+  $("wave-hear").addEventListener("click", () => {
+    if (hearing) { stopHearing(); return; }
+    const o = openAudio();
+    if (!o || (transport && transport.playing)) return;
+    ready().then(() => {
+      const a = o.c.audio, buf = Samples.buffer(a.sampleId, a.reverse);
+      if (!buf || hearing) return;
+      const from = o.clip.start * Song.STEPS;
+      const seg = waveSel
+        ? { offset: a.reverse ? buf.duration - waveSel.to : waveSel.from, length: waveSel.to - waveSel.from, rate: 1, fadeIn: 0, fadeOut: 0, gain: a.gain }
+        : Song.audioSegment(song, o.t, from, from, soundSecs, Song.stepSeconds(song, from));
+      if (!seg) return;
+      const synth = audio[o.t.id].synth, at = Engine.ctx.currentTime + 0.03;
+      synth.playAudio(buf, seg, at);
+      hearing = { at, from: seg.offset, length: seg.length, rate: seg.rate, synth };
+      renderWave(o);
+      requestAnimationFrame(followHearing);
+    });
+  });
+
+  // Dragging: the trim edges and the fade knobs, or anywhere else to select.
   waveEl.addEventListener("pointerdown", (e) => {
-    const what = e.target.dataset && e.target.dataset.drag;
-    const o = find(open);
-    if (!what || !o || !o.c.audio) return;
-    const info = Samples.info(o.c.audio.sampleId);
+    if (e.button > 0) return;
+    const what = (e.target.dataset && e.target.dataset.drag) || "select";
+    const o = openAudio();
+    const info = o && Samples.info(o.c.audio.sampleId);
     if (!info) return;
     e.preventDefault();
     waveEl.setPointerCapture(e.pointerId);
-    const box = waveEl.getBoundingClientRect(), dur = info.duration, a = o.c.audio;
-    const flip = (x) => (a.reverse ? dur - x : x); // screen position -> time in the sound
+    const box = waveEl.getBoundingClientRect(), dur = info.duration, a = o.c.audio, view = viewOf(dur);
+    const at = (ev) => view.start + Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width)) * (view.end - view.start); // seconds along the picture
+    const anchor = mirror(a, dur, at(e));
+    let moved = false;
     const move = (ev) => {
-      const q = Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width)) * dur; // seconds along the view
-      const t = flip(q); // ...and in the sound itself
-      const end = a.end == null ? dur : a.end;
-      // The trimmed part as it shows (in playing order): fades are measured from its edges.
-      const v0 = a.reverse ? dur - end : a.start, v1 = a.reverse ? dur - a.start : end, half = (end - a.start) / 2;
-      if (what === "start") a.start = Math.max(0, Math.min(t, end - 0.01));
-      else if (what === "end") a.end = Math.min(dur, Math.max(t, a.start + 0.01));
-      else if (what === "fadeIn") a.fadeIn = Math.max(0, Math.min(q - v0, half));
-      else a.fadeOut = Math.max(0, Math.min(v1 - q, half));
+      const q = at(ev), t = mirror(a, dur, q); // ...and in the sound itself
+      if (what === "select") {
+        if (!moved && Math.abs(ev.clientX - e.clientX) < 3) return;
+        moved = true;
+        waveSel = Math.abs(t - anchor) < 0.001 ? null : { from: Math.min(anchor, t), to: Math.max(anchor, t) };
+      } else {
+        const end = a.end == null ? dur : a.end;
+        // The trimmed part as it shows (in playing order): fades are measured from its edges.
+        const v0 = a.reverse ? dur - end : a.start, v1 = a.reverse ? dur - a.start : end, half = (end - a.start) / 2;
+        if (what === "start") a.start = Math.max(0, Math.min(t, end - 0.01));
+        else if (what === "end") a.end = Math.min(dur, Math.max(t, a.start + 0.01));
+        else if (what === "fadeIn") a.fadeIn = Math.max(0, Math.min(q - v0, half));
+        else a.fadeOut = Math.max(0, Math.min(v1 - q, half));
+        timeline.render();
+      }
       renderWave(o);
-      timeline.render();
     };
     const up = () => {
       waveEl.removeEventListener("pointermove", move);
+      if (what === "select") {
+        if (!moved) waveSel = null; // a plain click lets go of the selection
+        renderWave(o);
+        if (moved && waveSel) Announce.say(`Selected ${selWords(waveSel)}`);
+        return;
+      }
       editAudio(() => {}, what === "start" || what === "end" ? `Trimmed: ${a.start.toFixed(2)} to ${(a.end == null ? dur : a.end).toFixed(2)} seconds`
         : `Fade ${what === "fadeIn" ? "in" : "out"} ${Math.round(a[what] * 1000)} ms`);
     };
@@ -1296,6 +1545,14 @@
     waveEl.addEventListener("pointerup", up, { once: true });
     waveEl.addEventListener("pointercancel", up, { once: true });
   });
+  // The big time follows the pointer over the wave.
+  waveEl.addEventListener("pointermove", (e) => {
+    const o = openAudio(), dur = o ? soundSecs(o.c.audio.sampleId) : 0;
+    if (!dur || hearing) return;
+    const box = waveEl.getBoundingClientRect(), view = viewOf(dur);
+    showWaveTime(mirror(o.c.audio, dur, view.start + Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)) * (view.end - view.start)));
+  });
+  waveEl.addEventListener("pointerleave", () => { if (!hearing) showWaveTime(); });
 
   // --- undo / redo ---
   function showUndo() {
@@ -1680,7 +1937,8 @@
   }
 
   // --- Section and Tempo menus (popovers): they open under their button,
-  // and an action closes its menu (toggles like Metronome leave it open) ---
+  // and an action closes its menu (toggles like Metronome, and buttons
+  // marked data-stay like Zoom in, leave it open) ---
   // Older browsers (iOS before 17) have no popovers: the button opens and
   // closes the menu itself, and it sits under the button in the page.
   const hasPopover = typeof HTMLElement.prototype.showPopover === "function";
@@ -1698,7 +1956,7 @@
       menu.addEventListener("keydown", (e) => { if (e.key === "Escape") { menu.hidePopover(); btn.focus(); } });
       menu.addEventListener("click", (e) => {
         const b = e.target.closest("button");
-        if (b && !b.hasAttribute("aria-pressed") && b.parentElement === menu && b.id !== "tap" && b.id !== "tempo-add") { menu.hidePopover(); btn.focus(); }
+        if (b && !b.hasAttribute("aria-pressed") && !b.hasAttribute("data-stay") && b.parentElement === menu && b.id !== "tap" && b.id !== "tempo-add") { menu.hidePopover(); btn.focus(); }
       });
       continue;
     }
@@ -1712,7 +1970,7 @@
     });
     menu.addEventListener("click", (e) => {
       const b = e.target.closest("button");
-      if (b && !b.hasAttribute("aria-pressed") && b.parentElement === menu && b.id !== "tap" && b.id !== "tempo-add") {
+      if (b && !b.hasAttribute("aria-pressed") && !b.hasAttribute("data-stay") && b.parentElement === menu && b.id !== "tap" && b.id !== "tempo-add") {
         menu.hidePopover();
         btn.focus();
       }
@@ -2807,7 +3065,7 @@
   showLoop();
   showRowsFold();
   // Draw the zoom bars once the layout has settled (and again after fonts load).
-  const drawZooms = () => { tlZoom.draw(); rollZoom.draw(); };
+  const drawZooms = () => { tlZoom.draw(); rollZoom.draw(); waveZoom.draw(); };
   requestAnimationFrame(drawZooms);
   setTimeout(drawZooms, 250);
   window.addEventListener("load", drawZooms);
