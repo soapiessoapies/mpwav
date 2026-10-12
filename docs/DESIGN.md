@@ -484,10 +484,36 @@ tone, noise, zeroNear, soundSpan), tested in `tests/wave-ops.test.js`.
 
 | Group | Not built yet |
 | --- | --- |
-| Delay effects | reverb, chorus, flanger |
+| Delay effects | chorus, flanger |
 | Filters | graphic EQ, notch |
-| Time and pitch | stretch without changing pitch, pitch bend |
-| Amplitude | compressor, hard limiter, volume envelope, invert |
+| Time and pitch | pitch bend |
+| Amplitude | volume envelope, invert |
 | Clean-up | noise reduction, click removal, delete silence |
 | Selection | find beats |
 | Views | spectral view, cue list, a wide level meter and status bar |
+
+## Reverb, Compress, and Time and pitch (v0.17.0)
+
+Three more from the Cool Edit list. The menu bar gained **Time and pitch**,
+so it reads Edit, Change, Effects, Time and pitch, Generate, View, Clip.
+
+| Where | What | Settings | What it does |
+| --- | --- | --- | --- |
+| Effects | Reverb | Room size %, Room level % | a room around the stretch, ringing on after it; a bigger room rings longer, and the sound gets longer to hold the ring |
+| Effects | Compress | Squash above N dB, Squash by N to 1 | turns the loud parts down, then the stretch back up to where it peaked, so quiet parts come forward; 20 to 1 is a limiter |
+| Time and pitch | Stretch | % as long | longer or shorter at the same pitch |
+| Time and pitch | Change the pitch | semitones | higher or lower at the same length |
+| Time and pitch | Change speed and pitch together | semitones | the record-style change from v0.16.0, moved here |
+
+How they work, in `src/audio/wave-ops.js`:
+- **Reverb** is the classic Freeverb layout: six feedback echoes, duller
+  each time round, smeared by three more. Bigger rooms are fed less, so
+  the level stays even across sizes.
+- **Compress** follows the level and listens a hundredth of a second
+  ahead, so it has already turned down when a sudden hit arrives. If
+  nothing is over the threshold it says so and changes nothing.
+- **Stretch** lays short overlapping grains further apart or closer
+  together, picking each to line up with the one before (WSOLA). **Change
+  the pitch** is a stretch followed by a speed change back to the same
+  length. Voices and single instruments come out best; a stretch of 30
+  seconds of stereo takes about two seconds to work out.

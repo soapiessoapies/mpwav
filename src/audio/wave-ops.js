@@ -22,6 +22,14 @@
 //   filter(chans, from, to, rate, "low" | "high", hz)  cuts the highs or the lows
 //   speed(chans, from, to, factor) plays the stretch faster (factor > 1) or
 //                                  slower, like a record: pitch moves with it
+//   stretch(chans, from, to, rate, ratio)   makes the stretch `ratio` times as
+//                                  long without changing its pitch
+//   pitch(chans, from, to, rate, semitones) ...or its pitch without changing its length
+//   reverb(chans, from, to, rate, { size, mix })   a room around the stretch,
+//                                  ringing on after it
+//   compress(chans, from, to, rate, { threshold, ratio })  turns the loud parts
+//                                  down, then the whole stretch back up to where it
+//                                  peaked; returns { chans, db } (db: how far up)
 //   afterResize(t, from, to, len)  where time `t` ends up once from..to is `len` long
 //   tone(rate, secs, { shape, hz, level })   a new sound: sine, square, saw or triangle
 //   noise(rate, secs, level, random)         ...or hiss
@@ -187,6 +195,116 @@
   const afterResize = (t, from, to, len) =>
     (t <= from ? t : t >= to ? t + len - (to - from) : from + ((t - from) * len) / (to - from));
 
+  // Longer or shorter at the same pitch: short overlapping grains of the
+  // sound are laid down further apart or closer together, each one picked
+  // (a little either side of where it's due) to line up with the grain
+  // before it, so the wave carries on smoothly. Known as WSOLA.
+  function stretch(chans, from, to, rate, ratio) {
+    const [a, b] = span(chans, from, to), n = b - a;
+    const r = Math.max(0.25, Math.min(4, ratio));
+    const N = Math.max(16, 2 * Math.round(rate * 0.02)); // a 40 ms grain
+    if (r === 1 || n < 2) return chans.map((d) => Float32Array.from(d));
+    const src = chans.map((d) => d.subarray(a, b));
+    if (n < N * 2) return insert(remove(chans, a, b), a, fit(src, r, 1, chans.length)); // too short to grain: resample
+    const hop = N / 2, due = hop / r, reach = Math.round(N / 4), outLen = Math.round(n * r);
+    const mono = new Float32Array(n);
+    for (const d of src) for (let i = 0; i < n; i++) mono[i] += d[i];
+    const win = Float32Array.from({ length: N }, (_, j) => 0.5 - 0.5 * Math.cos((2 * Math.PI * j) / N));
+    const piece = chans.map(() => new Float32Array(outLen + N)), weight = new Float32Array(outLen + N);
+    const last = n - N;
+    let prev = 0;
+    for (let k = 0, o = 0; o < outLen; k++, o += hop) {
+      let p = Math.min(last, Math.round(k * due));
+      const want = prev + hop; // where the last grain would carry on from
+      if (k > 0 && want <= last) {
+        let best = -Infinity;
+        for (let q = Math.max(0, p - reach); q <= Math.min(last, p + reach); q += 2) {
+          let score = 0;
+          for (let j = 0; j < N; j += 4) score += mono[q + j] * mono[want + j];
+          if (score > best) { best = score; p = q; }
+        }
+      }
+      for (let c = 0; c < src.length; c++) {
+        const d = src[c], out = piece[c];
+        for (let j = 0; j < N; j++) out[o + j] += d[p + j] * win[j];
+      }
+      for (let j = 0; j < N; j++) weight[o + j] += win[j];
+      prev = p;
+    }
+    for (const out of piece) for (let i = 0; i < outLen; i++) if (weight[i] > 0.05) out[i] /= weight[i];
+    return insert(remove(chans, a, b), a, piece.map((d) => d.subarray(0, outLen)));
+  }
+
+  // Higher or lower at the same length: stretched, then sped back.
+  function pitch(chans, from, to, rate, semitones) {
+    const [a, b] = span(chans, from, to), f = Math.pow(2, semitones / 12);
+    if (b <= a || !semitones) return chans.map((d) => Float32Array.from(d));
+    const long = stretch(chans, a, b, rate, f);
+    return speed(long, a, b + long[0].length - chans[0].length, f);
+  }
+
+  // A room: six echoes that feed back on themselves (duller each time
+  // round), smeared by three more. The classic "Freeverb" layout. Only the
+  // stretch goes into the room; its ring carries on after it.
+  const COMBS = [1116, 1188, 1277, 1356, 1422, 1491], SMEARS = [556, 441, 341];
+  function reverb(chans, from, to, rate, { size = 0.5, mix = 0.3 } = {}) {
+    const [a, b] = span(chans, from, to);
+    const wetLevel = Math.max(0, Math.min(1, mix));
+    if (b <= a || !wetLevel) return chans.map((d) => Float32Array.from(d));
+    const k = rate / 44100, back = 0.7 + 0.28 * Math.max(0, Math.min(1, size)), dull = 0.25;
+    const tail = Math.min(Math.round(rate * 4), Math.round((Math.log(0.001) / Math.log(back)) * COMBS[5] * k));
+    return chans.map((x, c) => {
+      const line = (len) => ({ buf: new Float32Array(Math.max(1, Math.round((len + c * 23) * k))), i: 0, low: 0 });
+      const combs = COMBS.map(line), smears = SMEARS.map(line);
+      const feed = 0.09 * Math.sqrt((1 - back) / 0.16); // a bigger room builds up more: feed it less
+      const out = new Float32Array(Math.max(x.length, b + tail));
+      out.set(x);
+      for (let i = a; i < b + tail; i++) {
+        const input = (i < b ? x[i] : 0) * feed;
+        let wet = 0;
+        for (const cb of combs) {
+          const y = cb.buf[cb.i];
+          cb.low = y * (1 - dull) + cb.low * dull;
+          cb.buf[cb.i] = input + cb.low * back;
+          cb.i = (cb.i + 1) % cb.buf.length;
+          wet += y;
+        }
+        for (const sm of smears) {
+          const y = sm.buf[sm.i];
+          sm.buf[sm.i] = wet + y * 0.5;
+          sm.i = (sm.i + 1) % sm.buf.length;
+          wet = y - wet;
+        }
+        out[i] += wet * wetLevel;
+      }
+      return out;
+    });
+  }
+
+  // Follows how loud the sound is (quick to rise, slower to fall) and turns
+  // it down by the ratio whenever that's over the threshold. It listens a
+  // hundredth of a second ahead, so it's already turned down when a sudden
+  // hit arrives. `touched` says whether anything was over the threshold.
+  function compress(chans, from, to, rate, { threshold = -18, ratio = 4 } = {}) {
+    const [a, b] = span(chans, from, to);
+    const out = chans.map((d) => Float32Array.from(d));
+    const before = peak(chans, a, b), rise = Math.exp(-1 / (rate * 0.003)), fall = Math.exp(-1 / (rate * 0.12));
+    if (before < 1e-5 || ratio <= 1) return { chans: out, db: 0, touched: false };
+    const ahead = Math.round(rate * 0.01);
+    let level = 0, touched = false;
+    for (let i = a; i < b; i++) {
+      let x = 0;
+      const j = Math.min(b - 1, i + ahead);
+      for (const d of chans) x = Math.max(x, Math.abs(d[j]));
+      level = x > level ? rise * level + (1 - rise) * x : fall * level + (1 - fall) * x;
+      const over = gainToDb(Math.max(level, 1e-6)) - threshold;
+      if (over > 0) { const g = dbToGain(over / ratio - over); for (const d of out) d[i] *= g; touched = true; }
+    }
+    const up = before / Math.max(peak(out, a, b), 1e-6);
+    for (const d of out) for (let i = a; i < b; i++) d[i] *= up;
+    return { chans: out, db: gainToDb(up), touched };
+  }
+
   // --- new sounds ---
   const SHAPES = {
     sine: (p) => Math.sin(2 * Math.PI * p),
@@ -254,7 +372,8 @@
   }
 
   const api = {
-    amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, echo, filter, speed, tone, noise,
+    amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, echo, filter, speed, stretch, pitch,
+    reverb, compress, tone, noise,
     zeroNear, soundSpan, peak, outline, afterCut, afterInsert, afterResize, dbToGain, gainToDb,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

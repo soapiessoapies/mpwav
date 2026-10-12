@@ -1234,6 +1234,7 @@
     $("wave-hear").textContent = hearing ? "Stop" : waveSel ? "Hear the selection" : "Hear it";
     $("wave-target").textContent = waveSel ? "Change the selection" : "Change the whole sound";
     $("fx-scope").textContent = waveSel ? "Effects change the selection." : "Effects change the whole sound.";
+    $("tp-scope").textContent = waveSel ? "These change the selection." : "These change the whole sound.";
     for (const id of ["op-delete", "op-trim", "wz-sel", "sel-none"]) $(id).disabled = !waveSel;
     $("wz-out").disabled = $("wz-fit").disabled = !waveView;
     $("wave-cut").disabled = !waveSel;
@@ -1583,23 +1584,57 @@
       }));
     });
   }
-  $("fx-speed").addEventListener("click", () => {
-    const semis = Math.round(field("fx-semis", -24, 24, 0));
-    if (!semis) { Announce.say("Type how many semitones to shift by. 12 is an octave up, minus 12 an octave down."); return; }
+  $("fx-reverb").addEventListener("click", () => {
+    const size = field("fx-room", 0, 100, 50) / 100, mix = field("fx-wet", 5, 100, 35) / 100;
+    editSound((chans, from, to, a) => {
+      const out = WaveOps.reverb(chans, from, to, Samples.info(a.sampleId).rate, { size, mix });
+      return { chans: out, say: `Reverb, a ${size < 0.34 ? "small" : size < 0.67 ? "medium" : "big"} room` + tooLoud(out, from, out[0].length) };
+    });
+  });
+  $("fx-compress").addEventListener("click", () => {
+    const threshold = field("fx-thresh", -60, 0, -18), ratio = field("fx-ratio", 1.5, 20, 4);
+    editSound((chans, from, to, a) => {
+      const { chans: out, db, touched } = WaveOps.compress(chans, from, to, Samples.info(a.sampleId).rate, { threshold, ratio });
+      if (!touched) { Announce.say(`Nothing here is louder than ${threshold} dB. Type a lower number in Squash above.`); return null; }
+      return { chans: out, say: `Compressed: quiet parts are ${db.toFixed(1)} dB louder` };
+    });
+  });
+
+  // --- Time and pitch: the stretch changes length, so the selection and the trim follow it ---
+  function resizeSound(say, fn) {
     const sel = waveSel;
     editSound((chans, from, to, a) => {
-      const rate = Samples.info(a.sampleId).rate, out = WaveOps.speed(chans, from, to, Math.pow(2, semis / 12));
+      const rate = Samples.info(a.sampleId).rate, out = fn(chans, from, to, rate);
       const t0 = from / rate, t1 = to / rate, len = (to - from + out[0].length - chans[0].length) / rate;
       if (sel) waveSel = { from: t0, to: t0 + len };
       waveView = null;
       return {
-        chans: out, say: `${Math.abs(semis)} semitone${Math.abs(semis) === 1 ? "" : "s"} ${semis > 0 ? "higher and faster" : "lower and slower"}`,
+        chans: out, say,
         then: (b) => {
           b.start = WaveOps.afterResize(b.start, t0, t1, len);
           b.end = b.end == null ? null : WaveOps.afterResize(b.end, t0, t1, len);
         },
       };
     });
+  }
+  const semitones = () => {
+    const semis = Math.round(field("fx-semis", -24, 24, 0));
+    if (!semis) Announce.say("Type how many semitones to shift by. 12 is an octave up, minus 12 an octave down.");
+    return semis;
+  };
+  const semiWords = (n) => `${Math.abs(n)} semitone${Math.abs(n) === 1 ? "" : "s"}`;
+  $("fx-speed").addEventListener("click", () => {
+    const semis = semitones();
+    if (semis) resizeSound(`${semiWords(semis)} ${semis > 0 ? "higher and faster" : "lower and slower"}`, (chans, from, to) => WaveOps.speed(chans, from, to, Math.pow(2, semis / 12)));
+  });
+  $("tp-pitch").addEventListener("click", () => {
+    const semis = semitones();
+    if (semis) resizeSound(`${semiWords(semis)} ${semis > 0 ? "higher" : "lower"}, the same length`, (chans, from, to, rate) => WaveOps.pitch(chans, from, to, rate, semis));
+  });
+  $("tp-stretch").addEventListener("click", () => {
+    const percent = Math.round(field("tp-percent", 25, 400, 100));
+    if (percent === 100) { Announce.say("Type how long to make it: 200 is twice as long, 50 half."); return; }
+    resizeSound(`Stretched to ${percent} % as long, at the same pitch`, (chans, from, to, rate) => WaveOps.stretch(chans, from, to, rate, percent / 100));
   });
   // The wave has the keys once it's clicked, until something outside the wave editor is.
   document.addEventListener("pointerdown", (e) => { waveActive = !!(e.target.closest && e.target.closest("#wave-editor")); }, true);

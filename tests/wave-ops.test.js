@@ -176,3 +176,80 @@ test("soundSpan is the sound without its silent ends", () => {
   assert.deepEqual(W.soundSpan(sound([0, 0, 0], [0, 0.3, 0])), [1, 2], "any channel counts");
   assert.deepEqual(W.soundSpan(sound([0, 0, 0])), [3, 3], "all silent: nothing");
 });
+
+// How many times a second the wave rises through zero: its pitch.
+const pitchOf = (d, rate, from, to) => {
+  let ups = 0;
+  for (let i = from + 1; i < to; i++) if (d[i - 1] <= 0 && d[i] > 0) ups++;
+  return (ups * rate) / (to - from);
+};
+
+test("stretch makes a tone twice as long, or half, at the same pitch and level", () => {
+  const rate = 8000, src = W.tone(rate, 1, { hz: 220, level: 0.8 });
+  for (const ratio of [2, 0.5, 1.3]) {
+    const [d] = W.stretch(src, 0, rate, rate, ratio);
+    assert.equal(d.length, Math.round(rate * ratio), "length x" + ratio);
+    const hz = pitchOf(d, rate, 400, d.length - 400);
+    assert.ok(Math.abs(hz - 220) < 6, `pitch stays 220 at x${ratio}, got ${hz.toFixed(1)}`);
+    const p = W.peak([d], 400, d.length - 400);
+    assert.ok(p > 0.7 && p < 0.9, `level kept at x${ratio}, got ${p.toFixed(2)}`);
+  }
+});
+
+test("stretch changes only the stretch, on every channel", () => {
+  const rate = 8000, t = W.tone(rate, 1, { hz: 200, level: 0.5 })[0];
+  const out = W.stretch([t, Float32Array.from(t, (v) => -v)], 2000, 6000, rate, 1.5);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].length, 8000 + 2000);
+  assert.deepEqual(Array.from(out[0].slice(0, 2000)), Array.from(t.slice(0, 2000)));
+  assert.deepEqual(Array.from(out[1].slice(-2000)), Array.from(t.slice(-2000), (v) => -v));
+});
+
+test("pitch moves a tone up an octave without changing its length", () => {
+  const rate = 8000, src = W.tone(rate, 1, { hz: 220, level: 0.8 });
+  const [d] = W.pitch(src, 0, rate, rate, 12);
+  assert.ok(Math.abs(d.length - rate) <= 2, "same length");
+  const hz = pitchOf(d, rate, 400, d.length - 400);
+  assert.ok(Math.abs(hz - 440) < 12, "an octave up, got " + hz.toFixed(1));
+  const down = pitchOf(W.pitch(src, 0, rate, rate, -12)[0], rate, 400, rate - 400);
+  assert.ok(Math.abs(down - 110) < 6, "an octave down, got " + down.toFixed(1));
+});
+
+test("reverb rings on after the sound, longer in a bigger room, and leaves the start alone", () => {
+  const rate = 8000, click = [Float32Array.from({ length: rate }, (_, i) => (i === 1000 ? 1 : 0))];
+  const small = W.reverb(click, 1000, 1100, rate, { size: 0.1, mix: 1 });
+  const big = W.reverb(click, 1000, 1100, rate, { size: 0.9, mix: 1 });
+  assert.equal(W.peak(small, 0, 1000), 0, "nothing before the stretch");
+  assert.equal(small[0][1000], 1, "the dry sound is still there");
+  assert.ok(W.peak(small, 1300, 3000) > 0.001, "a ring after it");
+  assert.ok(big[0].length > small[0].length, "a bigger room rings for longer");
+  const late = (chans) => W.peak(chans, 6000, 8000);
+  assert.ok(late(big) > late(small) * 3, "and is still going when the small one has died away");
+  assert.ok(W.peak(big, 1001, big[0].length) < 1, "without getting louder than the sound");
+});
+
+test("reverb on a steady tone stays in range", () => {
+  const rate = 8000, src = W.tone(rate, 1, { hz: 300, level: 0.5 });
+  const out = W.reverb(src, 0, rate, rate, { size: 1, mix: 1 });
+  assert.ok(W.peak(out, 0, out[0].length) < 1.2, "peak " + W.peak(out, 0, out[0].length).toFixed(2));
+});
+
+test("compress brings the quiet part up towards the loud part, and keeps the peak", () => {
+  const rate = 8000, quiet = W.tone(rate, 0.5, { hz: 200, level: 0.05 })[0], loud = W.tone(rate, 0.5, { hz: 200, level: 0.8 })[0];
+  const src = [Float32Array.from([...quiet, ...loud])];
+  const { chans, db } = W.compress(src, 0, rate, rate, { threshold: -24, ratio: 4 });
+  assert.ok(db > 3, "turned back up by " + db.toFixed(1) + " dB");
+  assert.ok(Math.abs(W.peak(chans, 0, rate) - 0.8) < 0.01, "same peak");
+  const gap = (c) => W.peak(c, 4500, 7500) / W.peak(c, 500, 3500);
+  assert.ok(gap(chans) < gap(src) / 2, "the gap between loud and quiet at least halves");
+  assert.equal(W.compress(src, 0, rate, rate, { ratio: 1 }).db, 0, "a ratio of 1 changes nothing");
+  assert.equal(W.compress(src, 0, rate, rate, { threshold: 0 }).touched, false, "nothing is over 0 dB");
+});
+
+test("compress catches a sudden hit: it's listening a moment ahead", () => {
+  const rate = 8000, d = new Float32Array(rate);
+  for (let i = 2000; i < rate; i++) d[i] = 0.8 * Math.sin((2 * Math.PI * 200 * i) / rate) * Math.exp(-(i - 2000) / 800);
+  const { db, touched } = W.compress([d], 0, rate, rate, { threshold: -18, ratio: 4 });
+  assert.ok(touched);
+  assert.ok(db > 3, "the hit was turned down, so the rest comes up " + db.toFixed(1) + " dB");
+});

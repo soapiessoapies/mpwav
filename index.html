@@ -223,6 +223,7 @@
             <button type="button" class="menu-btn" popovertarget="wedit-menu">Edit</button>
             <button type="button" id="wave-target" class="menu-btn" popovertarget="op-menu">Change the whole sound</button>
             <button type="button" class="menu-btn" popovertarget="fx-menu">Effects</button>
+            <button type="button" class="menu-btn" popovertarget="tp-menu">Time and pitch</button>
             <button type="button" class="menu-btn" popovertarget="gen-menu">Generate</button>
             <button type="button" class="menu-btn" popovertarget="view-menu">View</button>
             <button type="button" class="menu-btn" popovertarget="clip-menu">Clip</button>
@@ -262,12 +263,25 @@
             <label class="inline">Echo every <input id="fx-delay" type="number" inputmode="numeric" step="10" min="10" max="2000" value="250"> ms</label>
             <label class="inline">Each repeat <input id="fx-feedback" type="number" inputmode="numeric" step="5" min="5" max="90" value="40"> % as loud</label>
             <button type="button" id="fx-echo">Echo</button>
+            <label class="inline">Room size <input id="fx-room" type="number" inputmode="numeric" step="5" min="0" max="100" value="50"> %</label>
+            <label class="inline">Room level <input id="fx-wet" type="number" inputmode="numeric" step="5" min="5" max="100" value="35"> %</label>
+            <button type="button" id="fx-reverb">Reverb (a room around it)</button>
             <label class="inline">Filter at <input id="fx-hz" type="number" inputmode="numeric" step="50" min="20" max="20000" value="1000"> Hz</label>
             <button type="button" id="fx-low">Cut the highs (muffled)</button>
             <button type="button" id="fx-high">Cut the lows (thin)</button>
+            <label class="inline">Squash above <input id="fx-thresh" type="number" inputmode="numeric" step="1" min="-60" max="0" value="-18"> dB</label>
+            <label class="inline">Squash by <input id="fx-ratio" type="number" inputmode="decimal" step="0.5" min="1.5" max="20" value="4"> to 1</label>
+            <button type="button" id="fx-compress" aria-describedby="fx-compress-help">Compress (even out the loudness)</button>
+            <p id="fx-compress-help" class="menu-note">Turns the loud parts down, then everything back up, so quiet parts come forward. 20 to 1 is a limiter.</p>
+          </div>
+          <div id="tp-menu" class="menu" popover role="group" aria-label="Time and pitch">
+            <p id="tp-scope" class="menu-note">These change the whole sound.</p>
+            <label class="inline">Stretch to <input id="tp-percent" type="number" inputmode="numeric" step="5" min="25" max="400" value="150"> % as long</label>
+            <button type="button" id="tp-stretch">Stretch (keep the pitch)</button>
             <label class="inline">Shift by <input id="fx-semis" type="number" inputmode="numeric" step="1" min="-24" max="24" value="-12"> semitones</label>
-            <button type="button" id="fx-speed" aria-describedby="fx-speed-help">Change speed and pitch</button>
-            <p id="fx-speed-help" class="menu-note">Like a record: up is faster and higher, down is slower and lower. 12 semitones is an octave.</p>
+            <button type="button" id="tp-pitch">Change the pitch (keep the length)</button>
+            <button type="button" id="fx-speed" aria-describedby="fx-speed-help">Change speed and pitch together</button>
+            <p id="fx-speed-help" class="menu-note">Together is like a record: up is faster and higher, down is slower and lower. 12 semitones is an octave.</p>
           </div>
           <div id="gen-menu" class="menu" popover role="group" aria-label="Generate">
             <p class="menu-note">A new sound goes in at the cursor, or takes the selection's place.</p>
@@ -293,7 +307,7 @@
           <p id="wave-fit-help" class="help tip">Fit to tempo speeds the sound up or slows it down so it fills the clip's loop exactly. Like a record, its pitch moves with it.</p>
           <p class="help tip">
             Drag across the wave to select a stretch of the sound (or type its times). Then Change (Amplify, Normalize, Fade, Silence, Reverse, Delete)
-            and Effects (Echo, filters, speed) work on just that stretch; with nothing selected they change the whole sound, and Hear it plays the selection. Undo brings the sound back.
+            Effects (Echo, Reverb, filters, Compress) and Time and pitch (stretch, pitch, speed) work on just that stretch; with nothing selected they change the whole sound, and Hear it plays the selection. Undo brings the sound back.
             Click the wave to put the cursor there (or type Select from). Edit copies or cuts the selection, and pastes at the cursor or over the selection,
             in this sound or another clip's. Generate puts silence, a tone or noise in the same way.
             Drag the edges of the bright part to trim what the clip plays, and the small squares at its top corners to fade; the Clip menu has the same as numbers.
