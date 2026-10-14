@@ -623,7 +623,7 @@ rounded wave bars and flowing curves.
   colors. The pixel details and paper tabs are unchanged.
 - **Still to come from Phie:** the vision board and mockup plan.
 
-## Export (v0.22.0)
+## Export (v0.22.0; single clips v0.23.0)
 
 Home's **Export…** opens one dialog for every way out of mpwav, modeled on the
 bounce and export commands of a desktop editor (SoundCraft's Bounce Mix,
@@ -636,6 +636,9 @@ Bounce Stems, Export MIDI and Session Info as Text):
 - **Stems:** one file per track you can hear, all starting together, in a
   .zip with the song info. Normalizing uses one gain for every stem, so they
   still mix back to the same balance.
+- **Clip:** the clip selected on the timeline (or open in the editor) on its
+  own, over its own bars, as a sound file in the chosen format, muted track
+  or not. A note clip comes as a .zip of the sound and its notes as MIDI.
 - **MIDI:** a Standard MIDI File (type 1, 96 ticks a beat): a tempo track with
   every tempo change and ramp, then one track per synth or drum track; drums
   on channel 10 with General MIDI notes. Audio tracks are left out; swing and
@@ -650,4 +653,4 @@ Code: `src/audio/wav.js` (WAV and AIFF encoders, normalize, dither),
 `src/state/song-info.js`; `Render.renderSong` takes `sampleRate`, `tail`
 and `tracks`. The dialog remembers its choices (`sound-studio.export`).
 Not here: FLAC and MP3 (no encoder in the browser without a large library),
-exporting single clips, and real-time formats.
+and real-time formats.
