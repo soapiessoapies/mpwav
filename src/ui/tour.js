@@ -73,6 +73,11 @@
       text: "Your songs: start a new one, open the demo, save a song file, or Export the song as sound files, stems or MIDI to share.",
     },
     {
+      el: "#guide-btn",
+      title: "Guide",
+      text: "New to music? The Guide shows your scale, the chords that fit and patterns to try. Coming from Ableton or Cool Edit? It maps their words to mpwav's.",
+    },
+    {
       el: "#settings-btn",
       title: "Settings",
       text: "Look, size and layout, tips under each part of the studio, and this tour again (Settings, Tutorial).",

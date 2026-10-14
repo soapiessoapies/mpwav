@@ -687,3 +687,19 @@ option to mark them on the keyboard), the seven chords that fit with what
 each one does (click to hear), five chord patterns to try (click to hear),
 beat basics, things to try, and a few words explained. Notes are spelled the
 way the key is written (sharps in sharp keys).
+
+## Polish for both audiences (v0.25.0)
+
+A pass over every screen at laptop and phone size, for people who know
+Ableton or Cool Edit and for beginners:
+- **Sound pads are compact:** one row per section (its name, its pads, a ⋯
+  menu to move or remove it), folded until there's a pad (and on phones,
+  where the keyboard is pinned). Folded, only "Sound pads" shows. Before,
+  they took over the keys panel and squeezed the editors.
+- **Familiar names:** hovering the Playing box, Clip and Note Edit headings
+  says what each is in Ableton's and Cool Edit's terms; the Guide has a
+  "Coming from Ableton or Cool Edit?" table and the usual shortcuts.
+- **The tour** gains a Guide step.
+- **The demo** is marked as C major (it always was), so the chord buttons
+  and the Guide match it from the start.
+- axe (WCAG 2.2 AA) finds nothing in the Guide, the pads or the Export dialog.

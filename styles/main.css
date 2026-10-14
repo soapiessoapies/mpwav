@@ -1375,20 +1375,22 @@ fieldset:disabled { opacity: 0.55; }
 .export .choice > legend { font-weight: 700; }
 .export .toolbar { margin-top: 14px; }
 
-/* Sound pads, under the keyboard */
-.pads { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
-.pads-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Sound pads, under the keyboard: a row per section */
+.pads { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.pads-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pads-title { margin: 0 auto 0 0; font-size: 1rem; }
-.pad-sections { display: grid; gap: 10px; margin-top: 8px; }
-.pad-sec-head { display: flex; gap: 6px; align-items: center; }
-.pad-sec-name { font-weight: 700; min-width: 0; max-width: 16em; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; color: var(--text); }
-.pad-sec-name:hover, .pad-sec-name:focus { border-color: var(--line); background: var(--panel-2); }
-.pad-sec-btn { min-width: 32px; min-height: 32px; padding: 0 6px; }
-.pad-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.pads-head > button { min-height: 36px; }
+.pad-sections { display: grid; gap: 4px; margin-top: 6px; }
+.pad-section { display: flex; gap: 8px; align-items: center; min-height: 40px; }
+.pad-sec-name { flex: none; font-weight: 700; font-size: 0.9rem; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; color: var(--muted); }
+.pad-sec-name:hover, .pad-sec-name:focus { border-color: var(--line); background: var(--panel-2); color: var(--text); }
+.pad-row { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; align-items: center; }
 .pad-wrap { display: inline-flex; }
-.pad { min-width: 72px; min-height: 48px; border-radius: 8px 0 0 8px; font-weight: 700; }
-.pad-more { min-width: 32px; min-height: 48px; border-radius: 0 8px 8px 0; border-left: 0; padding: 0 6px; }
-.pad-empty { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.pad { min-width: 64px; min-height: 40px; border-radius: 8px 0 0 8px; font-weight: 700; }
+.pad-more { min-width: 28px; min-height: 40px; border-radius: 0 8px 8px 0; border-left: 0; padding: 0 4px; }
+.pad-sec-more { flex: none; min-width: 32px; min-height: 32px; padding: 0 6px; }
+.pad-empty { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+[data-fit="on"] .pads .help { display: none; }
 
 /* The Guide: a sheet beside the studio */
 .guide {
@@ -1414,3 +1416,8 @@ fieldset:disabled { opacity: 0.55; }
 #keys .in-scale { box-shadow: inset 0 -10px 0 -4px var(--accent); }
 #keys .scale-root { box-shadow: inset 0 -12px 0 -4px var(--accent), inset 0 0 0 2px var(--accent); }
 @media (min-width: 900px) { .guide-open .studio { margin-right: min(380px, 40vw); } }
+.g-map { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.g-map th, .g-map td { text-align: left; vertical-align: top; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.g-map th { color: var(--muted); font-weight: 600; }
+.pads:has(#pads-toggle[aria-expanded="false"]) .pads-head > button:not(.disclosure) { display: none; }
+.pads:has(#pads-toggle[aria-expanded="false"]) { padding-top: 4px; }

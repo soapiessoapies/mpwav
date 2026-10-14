@@ -781,6 +781,7 @@
     t("lead").volume = -3;
     t("pad").volume = -6;
     s.loop = { on: true, start: 0, end: 8 };
+    s.key = { ...s.key, root: 0, scale: "major" }; // it's in C major: the chords and the Guide follow
     return s;
   }
 

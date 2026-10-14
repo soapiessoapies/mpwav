@@ -3746,31 +3746,24 @@
     if (chosen) select.value = chosen;
   }
 
+  // One compact row per section: its name, its pads, and a ⋯ menu to move
+  // or remove the section. The whole area folds away (and starts folded
+  // until there's a pad, and on phones, where the keyboard is pinned).
+  let secOpen = null; // the section whose ⋯ menu is open
   function renderPads() {
     const box = $("pad-sections");
     box.textContent = "";
-    padBank.sections.forEach((sec, i) => {
+    const total = padBank.sections.reduce((n, sec) => n + sec.pads.length, 0);
+    $("pads-toggle").textContent = total ? `Sound pads (${total})` : "Sound pads";
+    for (const sec of padBank.sections) {
       const group = document.createElement("div");
       group.className = "pad-section";
       group.setAttribute("role", "group");
-      const head = document.createElement("div");
-      head.className = "pad-sec-head";
+      group.setAttribute("aria-label", sec.name);
       const name = Object.assign(document.createElement("input"), { type: "text", value: sec.name, maxLength: 24, className: "pad-sec-name", autocomplete: "off" });
       name.setAttribute("aria-label", "Section name");
+      name.size = Math.max(4, sec.name.length);
       name.addEventListener("change", () => { Pads.renameSection(padBank, sec.id, name.value); savePads(); renderPads(); Announce.say(`Section renamed ${Pads.section(padBank, sec.id).name}`); });
-      const small = (label, text, fn, disabled) => {
-        const b = Object.assign(document.createElement("button"), { type: "button", className: "quiet pad-sec-btn", textContent: text, disabled: !!disabled });
-        b.setAttribute("aria-label", label);
-        b.addEventListener("click", fn);
-        return b;
-      };
-      head.append(name,
-        small(`Move ${sec.name} up`, "↑", () => { Pads.moveSection(padBank, sec.id, -1); savePads(); renderPads(); }, i === 0),
-        small(`Move ${sec.name} down`, "↓", () => { Pads.moveSection(padBank, sec.id, 1); savePads(); renderPads(); }, i === padBank.sections.length - 1),
-        small(`Remove the ${sec.name} section (its pads move to the section above)`, "✕", () => {
-          if (Pads.removeSection(padBank, sec.id)) { savePads(); renderPads(); Announce.say(`Removed ${sec.name}`); }
-        }, padBank.sections.length < 2));
-      group.setAttribute("aria-label", sec.name);
       const row = document.createElement("div");
       row.className = "pad-row";
       for (const pad of sec.pads) {
@@ -3785,13 +3778,44 @@
         wrap.append(play, more);
         row.append(wrap);
       }
-      if (!sec.pads.length) row.append(Object.assign(document.createElement("p"), { className: "pad-empty", textContent: "No pads yet: + Pad adds one here." }));
-      group.append(head, row);
+      if (!sec.pads.length) row.append(Object.assign(document.createElement("span"), { className: "pad-empty", textContent: "empty" }));
+      const secMore = Object.assign(document.createElement("button"), { type: "button", className: "quiet pad-sec-more", textContent: "⋯" });
+      secMore.setAttribute("aria-label", `${sec.name} section: move or remove`);
+      secMore.setAttribute("aria-haspopup", "true");
+      secMore.addEventListener("click", () => openSecMenu(sec, secMore));
+      group.append(name, row, secMore);
       box.append(group);
-    });
+    }
     sectionOptions($("pad-add-section"), $("pad-add-section").value);
     sectionOptions($("wx-pad-section"), $("wx-pad-section").value);
   }
+
+  function placeMenu(menu, btn) {
+    menu.showPopover();
+    const r = btn.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = (r.bottom + 4 + menu.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - menu.offsetHeight - 4) : r.bottom + 4) + "px";
+    menu.addEventListener("toggle", (e) => { if (e.newState !== "open" && btn.isConnected) btn.focus(); }, { once: true });
+  }
+  function openSecMenu(sec, btn) {
+    secOpen = sec;
+    const i = padBank.sections.indexOf(sec);
+    $("pad-sec-menu-h").textContent = sec.name;
+    $("sec-up").disabled = i === 0;
+    $("sec-down").disabled = i === padBank.sections.length - 1;
+    $("sec-remove").disabled = padBank.sections.length < 2;
+    placeMenu($("pad-sec-menu"), btn);
+    $("pad-sec-menu").querySelector("button:not(:disabled)")?.focus();
+  }
+  const secAct = (fn, say) => () => {
+    if (!secOpen) return;
+    const sec = secOpen;
+    $("pad-sec-menu").hidePopover();
+    if (fn(sec)) { savePads(); renderPads(); Announce.say(say(sec)); }
+  };
+  $("sec-up").addEventListener("click", secAct((sec) => Pads.moveSection(padBank, sec.id, -1), (sec) => `${sec.name} moved up`));
+  $("sec-down").addEventListener("click", secAct((sec) => Pads.moveSection(padBank, sec.id, 1), (sec) => `${sec.name} moved down`));
+  $("sec-remove").addEventListener("click", secAct((sec) => Pads.removeSection(padBank, sec.id), (sec) => `Removed ${sec.name}; its pads moved up a section`));
 
   async function playPad(pad) {
     await ready();
@@ -3810,13 +3834,8 @@
     $("pad-menu-h").textContent = pad.name;
     $("pad-name").value = pad.name;
     sectionOptions($("pad-move"), f.section.id);
-    const menu = $("pad-menu");
-    menu.showPopover();
-    const r = btn.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
-    menu.style.top = (r.bottom + 4 + menu.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - menu.offsetHeight - 4) : r.bottom + 4) + "px";
+    placeMenu($("pad-menu"), btn);
     $("pad-name").focus();
-    menu.addEventListener("toggle", (e) => { if (e.newState !== "open" && btn.isConnected) btn.focus(); }, { once: true });
   }
   $("pad-name").addEventListener("change", () => {
     if (!padOpen) return;
@@ -3866,6 +3885,7 @@
     const pad = Pads.addPad(padBank, $("pad-add-section").value || padBank.sections[0].id, { name, sampleId });
     if (!pad) { padMsg.textContent = "That section is full: pick another, or add a section."; return null; }
     savePads(); renderPads();
+    if ($("pads-body").hidden) showPadsOpen(true);
     const sec = Pads.findPad(padBank, pad.id).section;
     padMsg.textContent = `Added the ${pad.name} pad to ${sec.name}.`;
     Announce.say(padMsg.textContent);
@@ -3938,7 +3958,8 @@
     ui.padsOpen = open;
   }
   $("pads-toggle").addEventListener("click", () => { showPadsOpen($("pads-body").hidden); save(); });
-  showPadsOpen(ui.padsOpen !== false);
+  // Open if you opened it last time; at first, only once there's a pad, and not on a phone.
+  showPadsOpen(typeof ui.padsOpen === "boolean" ? ui.padsOpen : Pads.soundIds(padBank).length > 0 && !compact());
 
   // --- The wave editor's Export menu: the selection, the parts between
   // markers, and variations, as files (and the selection to the pads) ---

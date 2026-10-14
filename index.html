@@ -103,7 +103,7 @@
     <!-- Playing box: the timeline -->
     <section id="playbox" class="panel playbox" aria-labelledby="playbox-h" tabindex="-1">
       <div class="panel-head">
-        <h2 id="playbox-h">Playing box</h2>
+        <h2 id="playbox-h" title="The arrangement: tracks and clips along a timeline (Ableton's Arrangement view, Cool Edit's Multitrack view)">Playing box</h2>
         <button id="new-clip" type="button" class="quiet">New clip</button>
         <button id="loops-btn" type="button" class="quiet" aria-haspopup="dialog">Loops</button>
         <div class="loop-range" role="group" aria-label="Loop">
@@ -164,7 +164,7 @@
     <!-- Clip editor: the open clip's notes -->
     <section id="clip-editor" class="panel clip-editor" aria-labelledby="clip-h" tabindex="-1">
       <div class="panel-head">
-        <h2 id="clip-h">Clip</h2>
+        <h2 id="clip-h" title="The clip editor: a piano roll for notes, or a waveform editor for a sound (Ableton's Detail view, Cool Edit's Edit view)">Clip</h2>
         <label class="inline clip-name-field">Name <input id="clip-name" type="text" maxlength="40" autocomplete="off"></label>
         <label class="inline">Loop <select id="clip-bars"></select></label>
         <label class="inline">Plays for <input id="clip-len" type="number" inputmode="numeric" min="1" max="256" step="1" aria-describedby="clip-len-help"> bars</label>
@@ -395,7 +395,7 @@
     <!-- Note Edit: paged settings for the selected notes and the selected track -->
     <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
       <div class="panel-head">
-        <h2 id="note-edit-h">Note Edit</h2>
+        <h2 id="note-edit-h" title="The inspector: the selected note, the track's sound (its instrument and effects), its mix, and the whole song">Note Edit</h2>
         <span id="note-edit-track" class="track-chip"></span>
       </div>
       <div class="pager">
@@ -587,7 +587,7 @@
             <button type="button" id="pad-section-add">+ Section</button>
           </div>
           <div id="pads-body">
-          <p class="help tip">Your own sounds on keys, kept for every song: a drum hit you like, a wave you made. Click a pad to hear it; its <span aria-hidden="true">⋯</span> button names it, moves it to another section, or adds it to the song at the cursor. Name the sections however helps you (Bass, Treble, Percussion…).</p>
+          <p class="help tip">Your own sounds on keys, kept for every song. Click a pad to hear it; its <span aria-hidden="true">⋯</span> renames it, moves it, or adds it to the song at the cursor. Type over a section's name to rename it.</p>
           <div id="pad-sections" class="pad-sections"></div>
           <p id="pad-status" class="help" aria-live="polite"></p>
           </div>
@@ -601,6 +601,13 @@
           <label class="inline">Note <select id="pad-note"></select></label>
           <button type="button" id="pad-from-synth">Capture the selected track's sound on that note</button>
           <p class="menu-note">Capturing records one note of the track's sound, as it's set up now, into a pad.</p>
+        </div>
+        <div id="pad-sec-menu" class="menu" popover data-own role="group" aria-label="Section">
+          <h3 class="menu-title" id="pad-sec-menu-h">Section</h3>
+          <button type="button" id="sec-up">Move up</button>
+          <button type="button" id="sec-down">Move down</button>
+          <button type="button" id="sec-remove">Remove the section (its pads move up a section)</button>
+          <p class="menu-note">Rename a section by typing over its name.</p>
         </div>
         <div id="pad-menu" class="menu" popover data-own role="group" aria-label="Pad">
           <h3 class="menu-title" id="pad-menu-h">Pad</h3>
@@ -658,6 +665,23 @@
       <li>Leave gaps. Silence makes the notes around it stand out.</li>
       <li>Change one thing at a time, and listen after each change.</li>
     </ul>
+  </section>
+  <section aria-labelledby="g-pro-h">
+    <h3 id="g-pro-h">Coming from Ableton or Cool Edit?</h3>
+    <table class="g-map">
+      <thead><tr><th scope="col">You know</th><th scope="col">In mpwav</th></tr></thead>
+      <tbody>
+        <tr><td>Arrangement view, Multitrack view</td><td>Playing box (the Arrange slide)</td></tr>
+        <tr><td>Detail view, MIDI clip editor</td><td>The clip editor's piano roll (Make)</td></tr>
+        <tr><td>Edit view (waveform editor)</td><td>Open a sound clip (Sound): Select, Edit, Effects, Tone, Time and pitch, Generate, Clean up</td></tr>
+        <tr><td>Device view, instrument and effects</td><td>Note Edit › Sound and Shape (the Sound slide)</td></tr>
+        <tr><td>Mixer</td><td>The Mix slide: faders, pan, mute and solo</td></tr>
+        <tr><td>Cue list, locators</td><td>Markers (wave editor › Select), the loop bars</td></tr>
+        <tr><td>Export Audio, Mixdown, Bounce</td><td>Home › Export: mix, stems, a clip, MIDI</td></tr>
+        <tr><td>Drum Rack, sample slots</td><td>Drum tracks, and Sound pads under the keyboard</td></tr>
+      </tbody>
+    </table>
+    <p class="help">The usual keys work: Space play and stop, Ctrl + Z and Ctrl + Y undo and redo, Ctrl + C, X and V, Ctrl + A select all, Ctrl + S save. <kbd>?</kbd> lists every shortcut.</p>
   </section>
   <section aria-labelledby="g-words-h">
     <h3 id="g-words-h">Words</h3>
