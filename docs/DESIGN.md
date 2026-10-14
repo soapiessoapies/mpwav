@@ -622,3 +622,32 @@ rounded wave bars and flowing curves.
   4.5:1, control edges and focus rings 3:1) covers Poster's full set of
   colors. The pixel details and paper tabs are unchanged.
 - **Still to come from Phie:** the vision board and mockup plan.
+
+## Export (v0.22.0)
+
+Home's **Export…** opens one dialog for every way out of mpwav, modeled on the
+bounce and export commands of a desktop editor (SoundCraft's Bounce Mix,
+Bounce Stems, Export MIDI and Session Info as Text):
+
+- **Mix:** the whole song as one sound file. WAV at 16-bit, 24-bit or 32-bit
+  float, or AIFF at 16 or 24-bit; 44.1 or 48 kHz; optional normalize (peaks
+  at -1 dB), dither (16-bit only, TPDF) and a ring-out tail for echoes and
+  reverb (off: the file stops on the bar line, so a loop repeats cleanly).
+- **Stems:** one file per track you can hear, all starting together, in a
+  .zip with the song info. Normalizing uses one gain for every stem, so they
+  still mix back to the same balance.
+- **MIDI:** a Standard MIDI File (type 1, 96 ticks a beat): a tempo track with
+  every tempo change and ramp, then one track per synth or drum track; drums
+  on channel 10 with General MIDI notes. Audio tracks are left out; swing and
+  per-note effects aren't written.
+- **Song info:** a text summary: length and running time, tempo, key, swing,
+  master, and every track with its sound, mix and clips by bar.
+- **Which bars:** the whole song, the loop, or a range of bars, for the mix,
+  stems and MIDI.
+
+Code: `src/audio/wav.js` (WAV and AIFF encoders, normalize, dither),
+`src/state/zip.js` (a stored zip with CRC-32s), `src/state/midi-file.js`,
+`src/state/song-info.js`; `Render.renderSong` takes `sampleRate`, `tail`
+and `tracks`. The dialog remembers its choices (`sound-studio.export`).
+Not here: FLAC and MP3 (no encoder in the browser without a large library),
+exporting single clips, and real-time formats.

@@ -586,25 +586,79 @@
       <p class="home-sub">Start something new, or pick up where you left off.</p>
       <div id="ios-note" class="home-ios" hidden>
         <p><strong>On an iPhone or iPad, save your work to your device.</strong> Safari can clear what a website keeps if you don't visit for about a week.</p>
-        <p><span id="ios-install">Add mpwav to your Home Screen (Share › Add to Home Screen) so it keeps your songs, and save</span><span id="ios-installed" hidden>Save</span> copies to Files: <strong>Save song file</strong> keeps the song to keep working on, <strong>Export WAV</strong> keeps how it sounds.</p>
+        <p><span id="ios-install">Add mpwav to your Home Screen (Share › Add to Home Screen) so it keeps your songs, and save</span><span id="ios-installed" hidden>Save</span> copies to Files: <strong>Save song file</strong> keeps the song to keep working on, <strong>Export</strong> keeps how it sounds.</p>
       </div>
       <section class="home-current" aria-labelledby="home-current-h">
         <h3 id="home-current-h">This song: <span id="home-current-name"></span></h3>
         <div class="toolbar" role="group" aria-labelledby="home-current-h">
           <button type="button" id="export-file" aria-keyshortcuts="Control+S">Save song file</button>
           <button type="button" id="save-as" hidden>Save as…</button>
-          <button type="button" id="export-wav" aria-describedby="export-wav-help">Export WAV</button>
+          <button type="button" id="export-wav" aria-describedby="export-wav-help" aria-haspopup="dialog">Export…</button>
           <button type="button" id="song-dup">Duplicate</button>
           <button type="button" id="share-link" aria-describedby="share-help">Copy share link</button>
         </div>
         <p id="share-help" class="help">A link with the whole song inside: anyone who opens it gets their own copy. Songs that use sound files are shared as a song file instead.</p>
-        <p id="export-wav-help" class="help tip">Export WAV renders the whole song, every track with its effects and mix, to a sound file you can play anywhere.</p>
+        <p id="export-wav-help" class="help tip">Export makes files from the song: the mix as a WAV or AIFF sound file, stems (a file per track), MIDI notes, or a text summary.</p>
         <p id="export-status" class="help" aria-live="polite"></p>
       </section>
       <h3 class="home-h">Your songs</h3>
       <ul id="song-list" class="song-grid" aria-label="Your songs"></ul>
     </div>
   </div>
+</dialog>
+
+<dialog id="export" class="settings export" aria-labelledby="export-h">
+  <div class="settings-head">
+    <h2 id="export-h">Export</h2>
+    <button id="export-close" type="button" class="quiet">Close</button>
+  </div>
+  <p class="help">Turn the song into files to share, keep or open in other apps. Nothing here changes the song.</p>
+  <fieldset class="choice">
+    <legend>What to export</legend>
+    <div class="export-what">
+      <label><input type="radio" name="export-what" value="mix" checked> <span><strong>Mix</strong>: the whole song as one sound file, every track with its effects and mix</span></label>
+      <label><input type="radio" name="export-what" value="stems"> <span><strong>Stems</strong>: one sound file per track, lined up to start together, in a .zip</span></label>
+      <label><input type="radio" name="export-what" value="midi"> <span><strong>MIDI</strong>: the notes, for other music apps and notation (.mid)</span></label>
+      <label><input type="radio" name="export-what" value="info"> <span><strong>Song info</strong>: a text summary of the tracks, clips, tempo and key (.txt)</span></label>
+    </div>
+  </fieldset>
+  <fieldset class="choice" id="export-range-box">
+    <legend>Which bars</legend>
+    <div class="export-what">
+      <label><input type="radio" name="export-range" value="all" checked> <span id="export-range-all">The whole song</span></label>
+      <label><input type="radio" name="export-range" value="loop"> <span id="export-range-loop">The loop</span></label>
+      <label class="export-bars"><input type="radio" name="export-range" value="bars"> <span>Bars</span>
+        <input id="export-from" type="number" min="1" step="1" value="1" aria-label="From bar"> <span aria-hidden="true">to</span>
+        <input id="export-to" type="number" min="1" step="1" value="8" aria-label="To bar"></label>
+    </div>
+  </fieldset>
+  <fieldset class="choice" id="export-audio">
+    <legend>Sound file</legend>
+    <div class="export-row">
+      <label for="export-format">Format</label>
+      <select id="export-format">
+        <option value="wav16">WAV, 16-bit (plays anywhere)</option>
+        <option value="wav24">WAV, 24-bit (for editing more)</option>
+        <option value="wav32">WAV, 32-bit float (never clips)</option>
+        <option value="aiff16">AIFF, 16-bit (Apple apps)</option>
+        <option value="aiff24">AIFF, 24-bit</option>
+      </select>
+    </div>
+    <div class="export-row">
+      <label for="export-rate">Sample rate</label>
+      <select id="export-rate">
+        <option value="44100">44.1 kHz (music)</option>
+        <option value="48000">48 kHz (video)</option>
+      </select>
+    </div>
+    <label class="export-check"><input type="checkbox" id="export-normalize"> Normalize: as loud as it can go without clipping (peaks at -1 dB)</label>
+    <label class="export-check"><input type="checkbox" id="export-dither" checked> Dither (16-bit only): keeps quiet fades smooth</label>
+    <label class="export-check"><input type="checkbox" id="export-tail" checked> Let echoes and reverb ring out after the last bar (off: stop on the bar line, for a loop that repeats cleanly)</label>
+  </fieldset>
+  <div class="toolbar">
+    <button type="button" id="export-go" class="primary">Export</button>
+  </div>
+  <p id="export-dlg-status" class="help" aria-live="polite"></p>
 </dialog>
 
 <dialog id="loops" class="settings loops" aria-labelledby="loops-h">
@@ -817,6 +871,9 @@
 <script src="src/state/samples.js"></script>
 <script src="src/state/song-files.js"></script>
 <script src="src/state/share-link.js"></script>
+<script src="src/state/zip.js"></script>
+<script src="src/state/midi-file.js"></script>
+<script src="src/state/song-info.js"></script>
 <script src="src/state/loops.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>

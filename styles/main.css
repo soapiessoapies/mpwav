@@ -1363,3 +1363,14 @@ html[data-motion="off"] .tour-spot { transition: none; }
 [data-slide="sound"] .wave-editor > .tool-row:not(:has(> :not(.menu-btn))) { display: none; } /* the row that was only menu buttons */
 [data-slide="sound"] .wave-editor > .wave, [data-fit="on"][data-slide="sound"] .wave-editor > .wave { height: clamp(140px, 26vh, 320px); flex: none; }
 [data-slide="sound"] .wave-editor > .help { order: 3; }
+
+/* Export dialog */
+.export-what { display: grid; gap: 8px; }
+.export-what label { display: flex; gap: 8px; align-items: baseline; }
+.export-bars input[type="number"] { width: 5em; }
+.export-row { display: grid; grid-template-columns: 8em minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; }
+.export-check { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
+fieldset:disabled { opacity: 0.55; }
+.export .choice { margin-top: 14px; }
+.export .choice > legend { font-weight: 700; }
+.export .toolbar { margin-top: 14px; }

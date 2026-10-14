@@ -70,7 +70,7 @@
     {
       el: "#songs-btn",
       title: "Home",
-      text: "Your songs: start a new one, open the demo, save a song file, or export a .wav to share.",
+      text: "Your songs: start a new one, open the demo, save a song file, or Export the song as sound files, stems or MIDI to share.",
     },
     {
       el: "#settings-btn",

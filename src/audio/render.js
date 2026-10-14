@@ -15,7 +15,11 @@
   // live(track) -> the synth settings to play it with (the morph pad applied).
   // Bars [from, to) are rendered; by default the whole song.
   // onProgress(fraction) is called as each bar is reached.
-  async function renderSong(song, live, { from = 0, to = Song.songBars(song), onProgress } = {}) {
+  // sampleRate: 44100 or 48000. tail: let echoes and reverb ring out after
+  // the last bar (off = stop right on the bar line, for loops that repeat).
+  // tracks: which tracks to play (by default every track you can hear; one
+  // track at a time for stems).
+  async function renderSong(song, live, { from = 0, to = Song.songBars(song), onProgress, sampleRate = SAMPLE_RATE, tail = true, tracks = Song.audible(song) } = {}) {
     const steps = (to - from) * Song.STEPS;
     if (steps <= 0) throw new Error("The song has no clips to export yet.");
     await Samples.load(Song.soundIds(song)); // uploaded sounds, decoded
@@ -24,13 +28,15 @@
     const times = [];
     let t = 0.05;
     for (let i = 0; i < steps; i++) { times.push(t); t += Song.stepSeconds(song, from * Song.STEPS + i); }
+    // Without a tail the file starts on the first beat, so it loops cleanly.
+    if (!tail) for (let i = 0; i < times.length; i++) times[i] -= 0.05;
     const Offline = root.OfflineAudioContext || root.webkitOfflineAudioContext;
     if (!Offline) throw new Error("this browser can't render sound");
-    const ctx = new Offline(2, Math.ceil((t + TAIL) * SAMPLE_RATE), SAMPLE_RATE);
+    const ctx = new Offline(2, Math.ceil((t + (tail ? TAIL : 0) - (tail ? 0 : 0.05)) * sampleRate), sampleRate);
 
     const bus = Engine.buildBus(ctx);
     bus.master.gain.value = song.master <= Song.FADER.min ? 0 : Math.pow(10, song.master / 20);
-    const parts = Song.audible(song).map((track) => {
+    const parts = tracks.map((track) => {
       const channel = Mixer.createChannel(ctx, bus.input);
       channel.setVolume(track.volume, Song.FADER.min);
       channel.setPan(track.pan);
@@ -71,5 +77,5 @@
     return ctx.startRendering();
   }
 
-  root.Render = { renderSong, SAMPLE_RATE };
+  root.Render = { renderSong, SAMPLE_RATE, RATES: [44100, 48000] };
 })(window);

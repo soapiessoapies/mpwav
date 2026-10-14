@@ -2791,24 +2791,24 @@
 
   // Hands over a finished file: on iPhones and iPads a button opens the share
   // sheet (Save to Files) with a fresh tap; elsewhere it downloads.
-  function deliver(blob, name, done) {
+  function deliver(blob, name, done, status = exportStatus) {
     if (isIOS && SongFiles.canShare(blob, name)) {
-      exportStatus.textContent = `${name} is ready. `;
+      status.textContent = `${name} is ready. `;
       const b = document.createElement("button");
       b.type = "button";
       b.className = "share-btn";
       b.textContent = `Save ${name} to Files…`;
       b.addEventListener("click", async () => {
-        try { await SongFiles.share(blob, name); exportStatus.textContent = done; }
-        catch (e) { if (!e || e.name !== "AbortError") { SongFiles.download(blob, name); exportStatus.textContent = done; } }
+        try { await SongFiles.share(blob, name); status.textContent = done; }
+        catch (e) { if (!e || e.name !== "AbortError") { SongFiles.download(blob, name); status.textContent = done; } }
       });
-      exportStatus.append(b);
+      status.append(b);
       b.focus();
       Announce.say(`${name} is ready: press Save to Files`);
       return;
     }
     SongFiles.download(blob, name);
-    exportStatus.textContent = done;
+    status.textContent = done;
     Announce.say(done);
   }
 
@@ -2992,23 +2992,128 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  $("export-wav").addEventListener("click", async () => {
-    const btn = $("export-wav");
-    if (!Song.songBars(song)) { exportStatus.textContent = "Add a clip first: there's nothing to export yet."; return; }
-    btn.disabled = true;
-    exportStatus.textContent = "Rendering the song…";
+  // --- Export (like a DAW's bounce dialog): the mix as WAV or AIFF, stems
+  // (a file per track, in a .zip), MIDI notes, or the song info as text ---
+  const exportDlg = $("export");
+  const exportMsg = $("export-dlg-status");
+  const EXPORT_KEY = "sound-studio.export";
+  const exportPrefs = (() => { try { return JSON.parse(localStorage.getItem(EXPORT_KEY)) || {}; } catch (e) { return {}; } })();
+  const radio = (name) => exportDlg.querySelector(`input[name="${name}"]:checked`).value;
+  const setRadio = (name, v) => { const r = exportDlg.querySelector(`input[name="${name}"][value="${v}"]`); if (r) r.checked = true; };
+
+  function syncExport() {
+    const what = radio("export-what");
+    $("export-audio").disabled = what === "midi" || what === "info";
+    $("export-range-box").disabled = what === "info";
+    const fmt = $("export-format").value;
+    $("export-dither").disabled = !fmt.endsWith("16");
     try {
-      const buffer = await Render.renderSong(song, live, {
-        onProgress: (f) => { exportStatus.textContent = `Rendering the song… ${Math.round(f * 100)}%`; },
-      });
-      const name = Wav.fileName(song.title, ".wav");
-      deliver(new Blob([Wav.encode(buffer)], { type: "audio/wav" }), name,
-        `Saved ${name} (${Math.round(buffer.duration)} seconds). ${isIOS ? "Keep it in Files." : "Check your downloads."}`);
-    } catch (e) {
-      exportStatus.textContent = "Couldn't export: " + (e && e.message ? e.message : e);
+      localStorage.setItem(EXPORT_KEY, JSON.stringify({
+        what, range: radio("export-range"), format: fmt, rate: $("export-rate").value,
+        normalize: $("export-normalize").checked, dither: $("export-dither").checked, tail: $("export-tail").checked,
+      }));
+    } catch (e) { /* private window: just not remembered */ }
+  }
+
+  function openExport() {
+    const bars = Song.songBars(song);
+    $("export-range-all").textContent = `The whole song (bars 1 to ${Math.max(1, bars)})`;
+    $("export-range-loop").textContent = `The loop (bars ${song.loop.start + 1} to ${song.loop.end})`;
+    $("export-from").max = $("export-to").max = String(Math.max(1, bars));
+    if (exportPrefs.what) setRadio("export-what", exportPrefs.what);
+    if (exportPrefs.range && exportPrefs.range !== "bars") setRadio("export-range", exportPrefs.range);
+    if (exportPrefs.format) $("export-format").value = exportPrefs.format;
+    if (exportPrefs.rate) $("export-rate").value = exportPrefs.rate;
+    for (const k of ["normalize", "dither", "tail"]) if (typeof exportPrefs[k] === "boolean") $(`export-${k}`).checked = exportPrefs[k];
+    exportMsg.textContent = "";
+    syncExport();
+    exportDlg.showModal();
+  }
+
+  // The bars to export, [from, to), or a reason it can't.
+  function exportRange() {
+    const bars = Song.songBars(song);
+    const range = radio("export-range");
+    if (range === "loop") return { from: song.loop.start, to: song.loop.end, label: ` bars ${song.loop.start + 1}-${song.loop.end}` };
+    if (range === "bars") {
+      const from = Math.round(Number($("export-from").value)), to = Math.round(Number($("export-to").value));
+      if (!(from >= 1 && to >= from)) return { error: "Pick the bars to export: from a bar, to the same bar or a later one." };
+      return { from: from - 1, to, label: ` bars ${from}-${to}` };
     }
-    btn.disabled = false;
+    return { from: 0, to: bars, label: "" };
+  }
+
+  // One sound file from a rendered buffer, in the chosen format.
+  function soundFile(buffer, gain) {
+    const fmt = $("export-format").value;
+    const bitDepth = Number(fmt.replace(/\D/g, ""));
+    const opts = { bitDepth, gain, dither: bitDepth === 16 && $("export-dither").checked };
+    return fmt.startsWith("aiff")
+      ? { bytes: Wav.encodeAiff(buffer, opts), ext: ".aiff", type: "audio/aiff" }
+      : { bytes: Wav.encode(buffer, opts), ext: ".wav", type: "audio/wav" };
+  }
+
+  async function runExport() {
+    const what = radio("export-what");
+    const go = $("export-go");
+    const done = (name, extra = "") => `Saved ${name}${extra}. ${isIOS ? "Keep it in Files." : "Check your downloads."}`;
+    if (what === "info") {
+      const name = Wav.fileName(song.title, " info.txt");
+      deliver(new Blob([SongInfo.text(song)], { type: "text/plain" }), name, done(name), exportMsg);
+      return;
+    }
+    if (!Song.songBars(song)) { exportMsg.textContent = "Add a clip first: there's nothing to export yet."; return; }
+    const r = exportRange();
+    if (r.error) { exportMsg.textContent = r.error; return; }
+    if (what === "midi") {
+      const noteTracks = song.tracks.filter((t) => t.kind !== "audio");
+      if (!noteTracks.length) { exportMsg.textContent = "This song has only sound-file tracks: there are no notes to export as MIDI."; return; }
+      const name = Wav.fileName(song.title + r.label, ".mid");
+      deliver(new Blob([MidiFile.encode(song, r)], { type: "audio/midi" }), name, done(name, ` (${noteTracks.length} track${noteTracks.length === 1 ? "" : "s"})`), exportMsg);
+      return;
+    }
+    const opts = { from: r.from, to: r.to, sampleRate: Number($("export-rate").value), tail: $("export-tail").checked };
+    go.disabled = true;
+    try {
+      if (what === "mix") {
+        exportMsg.textContent = "Rendering the mix…";
+        const buffer = await Render.renderSong(song, live, { ...opts, onProgress: (f) => { exportMsg.textContent = `Rendering the mix… ${Math.round(f * 100)}%`; } });
+        const file = soundFile(buffer, $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1);
+        const name = Wav.fileName(song.title + r.label, file.ext);
+        deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds)`), exportMsg);
+      } else {
+        const tracks = Song.audible(song);
+        if (!tracks.length) throw new Error("every track is muted");
+        const buffers = [];
+        for (const [i, t] of tracks.entries()) {
+          const label = `Rendering stem ${i + 1} of ${tracks.length}: ${t.name}`;
+          exportMsg.textContent = label + "…";
+          buffers.push(await Render.renderSong(song, live, { ...opts, tracks: [t], onProgress: (f) => { exportMsg.textContent = `${label}… ${Math.round(f * 100)}%`; } }));
+        }
+        // Normalizing stems uses one gain for all of them, so they still mix back to the same balance.
+        const gain = $("export-normalize").checked ? Math.min(...buffers.map((b) => Wav.normalizeGain(b))) : 1;
+        const files = buffers.map((b, i) => {
+          const f = soundFile(b, gain);
+          return { name: `${String(i + 1).padStart(2, "0")} ${Wav.fileName(tracks[i].name, f.ext)}`, data: f.bytes };
+        });
+        files.push({ name: "song info.txt", data: new TextEncoder().encode(SongInfo.text(song)) });
+        const name = Wav.fileName(song.title + r.label + " stems", ".zip");
+        deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), name, done(name, ` (${tracks.length} stem${tracks.length === 1 ? "" : "s"})`), exportMsg);
+      }
+    } catch (e) {
+      exportMsg.textContent = "Couldn't export: " + (e && e.message ? e.message : e);
+    }
+    go.disabled = false;
+  }
+
+  $("export-wav").addEventListener("click", openExport);
+  $("export-close").addEventListener("click", () => exportDlg.close());
+  exportDlg.addEventListener("click", (e) => { if (e.target === exportDlg) exportDlg.close(); });
+  exportDlg.addEventListener("change", (e) => {
+    if (e.target.id === "export-from" || e.target.id === "export-to") setRadio("export-range", "bars");
+    syncExport();
   });
+  $("export-go").addEventListener("click", runExport);
 
   $("export-file").addEventListener("click", () => saveSong(false));
   // Share by link (src/state/share-link.js): the song rides in the #fragment.
