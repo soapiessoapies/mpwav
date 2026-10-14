@@ -30,4 +30,6 @@ test("samples are interleaved left/right and clipped to full scale", () => {
 test("file names come from the song title, minus characters files can't have", () => {
   assert.equal(W.fileName("My song: take 2/3?", ".wav"), "My song take 23.wav");
   assert.equal(W.fileName("   ", ".wav"), "mpwav song.wav");
+  assert.equal(W.fileName("Hit (up 0.5 keys, +1.5 dB)", ".wav"), "Hit (up 0.5 keys, +1.5 dB).wav");
+  assert.equal(W.fileName("Ends with dots...", ".wav"), "Ends with dots.wav");
 });

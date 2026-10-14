@@ -39,7 +39,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, posterSeen: true,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, posterSeen: true,
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -126,6 +126,7 @@
     const keep = new Set();
     const scan = (text) => { for (const m of String(text).matchAll(/snd-[a-z0-9]{1,24}/g)) keep.add(m[0]); };
     scan(JSON.stringify(song));
+    try { scan(localStorage.getItem("sound-studio.pads") || ""); } catch (e) { /* no storage */ }
     for (const e of library.list()) if (e.id !== songId) scan(JSON.stringify(library.load(e.id)));
     if (withUndo) for (const json of history.all()) scan(json);
     return keep;
@@ -2402,6 +2403,7 @@
   // closes the menu itself, and it sits under the button in the page.
   const hasPopover = typeof HTMLElement.prototype.showPopover === "function";
   for (const menu of document.querySelectorAll(".menu[popover]")) {
+    if (menu.hasAttribute("data-own")) continue;
     const btn = document.querySelector(`[popovertarget="${menu.id}"]`);
     if (!hasPopover) {
       btn.setAttribute("aria-expanded", "false");
@@ -2603,8 +2605,8 @@
     swing.setAttribute("aria-valuetext", swing.value === "0" ? "off" : swing.value + " percent");
   }
   const keyWords = () => (song.key.scale === "none" ? "No scale" : `${ROOTS[song.key.root]} ${SCALE_NAMES[song.key.scale].toLowerCase()}`);
-  keyRoot.addEventListener("change", () => { song.key.root = Number(keyRoot.value); renderSongPage(); afterChange(keyWords()); });
-  keyScale.addEventListener("change", () => { song.key.scale = keyScale.value; renderSongPage(); afterChange(keyWords()); });
+  keyRoot.addEventListener("change", () => { song.key.root = Number(keyRoot.value); renderSongPage(); afterChange(keyWords()); if (!$("guide").hidden) renderGuide(); });
+  keyScale.addEventListener("change", () => { song.key.scale = keyScale.value; renderSongPage(); afterChange(keyWords()); if (!$("guide").hidden) renderGuide(); });
   keyKeep.addEventListener("change", () => {
     song.key.keep = keyKeep.checked;
     afterChange(keyKeep.checked ? "New notes stay in key" : "Notes can go anywhere");
@@ -3094,11 +3096,13 @@
         const range = { from: ec.clip.start, to: ec.clip.start + ec.clip.length };
         exportMsg.textContent = `Rendering ${ec.c.name}…`;
         const buffer = await Render.renderSong(song, live, { ...opts, ...range, tracks: [ec.t], onProgress: (f) => { exportMsg.textContent = `Rendering ${ec.c.name}… ${Math.round(f * 100)}%`; } });
-        const file = soundFile(buffer, $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1);
+        const clipGain = $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1;
+        const file = soundFile(buffer, clipGain);
         const name = Wav.fileName(`${ec.t.name} - ${ec.c.name}`, file.ext);
+        const level = loudnessOf(Samples.channels(buffer), buffer.sampleRate, clipGain);
         const notes = !ec.c.audio && ec.c.notes.length;
         if (!notes) {
-          deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds)`), exportMsg);
+          deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds; ${level})`), exportMsg);
         } else {
           // A note clip: its sound and its notes, together in a .zip.
           const solo = { ...song, tracks: [ec.t] };
@@ -3107,14 +3111,16 @@
             { name: Wav.fileName(`${ec.t.name} - ${ec.c.name}`, ".mid"), data: MidiFile.encode(solo, range) },
           ];
           const zipName = Wav.fileName(`${ec.t.name} - ${ec.c.name}`, ".zip");
-          deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), zipName, done(zipName, ` (the sound and its ${ec.c.notes.length} notes as MIDI)`), exportMsg);
+          deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), zipName, done(zipName, ` (the sound, ${level}, and its ${ec.c.notes.length} notes as MIDI)`), exportMsg);
         }
       } else if (what === "mix") {
         exportMsg.textContent = "Rendering the mix…";
         const buffer = await Render.renderSong(song, live, { ...opts, onProgress: (f) => { exportMsg.textContent = `Rendering the mix… ${Math.round(f * 100)}%`; } });
-        const file = soundFile(buffer, $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1);
+        const mixGain = $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1;
+        const file = soundFile(buffer, mixGain);
         const name = Wav.fileName(song.title + r.label, file.ext);
-        deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds)`), exportMsg);
+        const level = loudnessOf(Samples.channels(buffer), buffer.sampleRate, mixGain);
+        deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds; ${level})`), exportMsg);
       } else {
         const tracks = Song.audible(song);
         if (!tracks.length) throw new Error("every track is muted");
@@ -3708,6 +3714,434 @@
     if (!seen) songsDlg.addEventListener("close", () => setTimeout(autoTour, 150), { once: true });
     else setTimeout(autoTour, 700);
   }
+
+  // --- Loudness: how loud a file comes out, after any normalizing ---
+  function loudnessOf(chans, rate, gain = 1) {
+    const g = gain === 1 ? chans : chans.map((d) => d.map((v) => Math.max(-1, Math.min(1, v * gain))));
+    return Loudness.describe(g, rate);
+  }
+  // Raw samples dressed as an AudioBuffer, for the file encoders.
+  const asBuffer = (chans, rate) => ({ numberOfChannels: chans.length, sampleRate: rate, length: chans[0].length, getChannelData: (c) => chans[c] });
+  // The Export dialog's format (Home › Export), remembered between visits.
+  function fileFor(chans, rate) {
+    const fmt = (exportPrefs.format || "wav16");
+    const bitDepth = Number(fmt.replace(/\D/g, "")) || 16;
+    const opts = { bitDepth, dither: bitDepth === 16 && exportPrefs.dither !== false };
+    const buf = asBuffer(chans, rate);
+    return fmt.startsWith("aiff")
+      ? { bytes: Wav.encodeAiff(buf, opts), ext: ".aiff", type: "audio/aiff" }
+      : { bytes: Wav.encode(buf, opts), ext: ".wav", type: "audio/wav" };
+  }
+
+  // --- Sound pads: your own sounds on keys, in named sections (src/state/pads.js) ---
+  const PADS_KEY = "sound-studio.pads";
+  let padBank = (() => { try { return Pads.sanitize(JSON.parse(localStorage.getItem(PADS_KEY))); } catch (e) { return Pads.create(); } })();
+  const padMsg = $("pad-status");
+  let padOpen = null; // the pad whose ⋯ menu is open
+  function savePads() { try { localStorage.setItem(PADS_KEY, JSON.stringify(padBank)); } catch (e) { /* private window */ } }
+
+  function sectionOptions(select, chosen) {
+    select.textContent = "";
+    for (const sec of padBank.sections) select.add(new Option(sec.name, sec.id));
+    if (chosen) select.value = chosen;
+  }
+
+  function renderPads() {
+    const box = $("pad-sections");
+    box.textContent = "";
+    padBank.sections.forEach((sec, i) => {
+      const group = document.createElement("div");
+      group.className = "pad-section";
+      group.setAttribute("role", "group");
+      const head = document.createElement("div");
+      head.className = "pad-sec-head";
+      const name = Object.assign(document.createElement("input"), { type: "text", value: sec.name, maxLength: 24, className: "pad-sec-name", autocomplete: "off" });
+      name.setAttribute("aria-label", "Section name");
+      name.addEventListener("change", () => { Pads.renameSection(padBank, sec.id, name.value); savePads(); renderPads(); Announce.say(`Section renamed ${Pads.section(padBank, sec.id).name}`); });
+      const small = (label, text, fn, disabled) => {
+        const b = Object.assign(document.createElement("button"), { type: "button", className: "quiet pad-sec-btn", textContent: text, disabled: !!disabled });
+        b.setAttribute("aria-label", label);
+        b.addEventListener("click", fn);
+        return b;
+      };
+      head.append(name,
+        small(`Move ${sec.name} up`, "↑", () => { Pads.moveSection(padBank, sec.id, -1); savePads(); renderPads(); }, i === 0),
+        small(`Move ${sec.name} down`, "↓", () => { Pads.moveSection(padBank, sec.id, 1); savePads(); renderPads(); }, i === padBank.sections.length - 1),
+        small(`Remove the ${sec.name} section (its pads move to the section above)`, "✕", () => {
+          if (Pads.removeSection(padBank, sec.id)) { savePads(); renderPads(); Announce.say(`Removed ${sec.name}`); }
+        }, padBank.sections.length < 2));
+      group.setAttribute("aria-label", sec.name);
+      const row = document.createElement("div");
+      row.className = "pad-row";
+      for (const pad of sec.pads) {
+        const wrap = document.createElement("span");
+        wrap.className = "pad-wrap";
+        const play = Object.assign(document.createElement("button"), { type: "button", className: "pad", textContent: pad.name });
+        play.addEventListener("click", () => playPad(pad));
+        const more = Object.assign(document.createElement("button"), { type: "button", className: "pad-more", textContent: "⋯" });
+        more.setAttribute("aria-label", `${pad.name}: options`);
+        more.setAttribute("aria-haspopup", "true");
+        more.addEventListener("click", () => openPadMenu(pad, more));
+        wrap.append(play, more);
+        row.append(wrap);
+      }
+      if (!sec.pads.length) row.append(Object.assign(document.createElement("p"), { className: "pad-empty", textContent: "No pads yet: + Pad adds one here." }));
+      group.append(head, row);
+      box.append(group);
+    });
+    sectionOptions($("pad-add-section"), $("pad-add-section").value);
+    sectionOptions($("wx-pad-section"), $("wx-pad-section").value);
+  }
+
+  async function playPad(pad) {
+    await ready();
+    await Samples.load([pad.sampleId]);
+    const buf = Samples.buffer(pad.sampleId);
+    if (!buf) { padMsg.textContent = `${pad.name}'s sound isn't in this browser any more.`; return; }
+    const src = Engine.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(Engine.input);
+    src.start();
+  }
+
+  function openPadMenu(pad, btn) {
+    padOpen = pad;
+    const f = Pads.findPad(padBank, pad.id);
+    $("pad-menu-h").textContent = pad.name;
+    $("pad-name").value = pad.name;
+    sectionOptions($("pad-move"), f.section.id);
+    const menu = $("pad-menu");
+    menu.showPopover();
+    const r = btn.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = (r.bottom + 4 + menu.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - menu.offsetHeight - 4) : r.bottom + 4) + "px";
+    $("pad-name").focus();
+    menu.addEventListener("toggle", (e) => { if (e.newState !== "open" && btn.isConnected) btn.focus(); }, { once: true });
+  }
+  $("pad-name").addEventListener("change", () => {
+    if (!padOpen) return;
+    Pads.renamePad(padBank, padOpen.id, $("pad-name").value);
+    savePads(); renderPads();
+    Announce.say(`Renamed ${padOpen.name}`);
+  });
+  $("pad-move").addEventListener("change", () => {
+    if (!padOpen || !Pads.movePad(padBank, padOpen.id, $("pad-move").value)) return;
+    savePads(); renderPads();
+    Announce.say(`${padOpen.name} moved to ${Pads.findPad(padBank, padOpen.id).section.name}`);
+  });
+  $("pad-play").addEventListener("click", () => { if (padOpen) playPad(padOpen); });
+  $("pad-remove").addEventListener("click", () => {
+    if (!padOpen) return;
+    Pads.removePad(padBank, padOpen.id);
+    savePads(); renderPads();
+    $("pad-menu").hidePopover();
+    padMsg.textContent = `Removed the ${padOpen.name} pad. Its sound stays in any song that uses it.`;
+    Announce.say(padMsg.textContent);
+  });
+  // Into the song: an audio clip at the cursor, on the "Pads" audio track.
+  $("pad-place").addEventListener("click", async () => {
+    if (!padOpen) return;
+    const pad = padOpen;
+    $("pad-menu").hidePopover();
+    await Samples.load([pad.sampleId]);
+    const info = Samples.info(pad.sampleId);
+    if (!info) { padMsg.textContent = `${pad.name}'s sound isn't in this browser any more.`; return; }
+    let t = song.tracks.find((x) => x.kind === "audio" && x.name === "Pads");
+    if (!t) {
+      t = Song.addTrack(song, { kind: "audio", name: "Pads" });
+      if (!t) { padMsg.textContent = "The song has as many tracks as it can hold."; return; }
+      syncAudio();
+      rebuildMixer();
+    }
+    const bars = Song.barsFor(song, info.duration);
+    const bar = Song.freeBar(t, song.cursor, bars);
+    const clip = Song.addAudioClip(song, t, bar, pad.sampleId, pad.name, info.duration);
+    if (!clip) { padMsg.textContent = "There's no room for it there."; return; }
+    picked = { trackId: t.id, clipId: clip.id };
+    afterChange(`Added ${pad.name} to Pads at bar ${clip.start + 1}`);
+    padMsg.textContent = `Added ${pad.name} at bar ${clip.start + 1}, on the Pads track.`;
+  });
+
+  function addPadSound(sampleId, name) {
+    const pad = Pads.addPad(padBank, $("pad-add-section").value || padBank.sections[0].id, { name, sampleId });
+    if (!pad) { padMsg.textContent = "That section is full: pick another, or add a section."; return null; }
+    savePads(); renderPads();
+    const sec = Pads.findPad(padBank, pad.id).section;
+    padMsg.textContent = `Added the ${pad.name} pad to ${sec.name}.`;
+    Announce.say(padMsg.textContent);
+    return pad;
+  }
+  $("pad-section-add").addEventListener("click", () => {
+    const sec = Pads.addSection(padBank, "New section");
+    if (!sec) { padMsg.textContent = `You can have up to ${Pads.MAX_SECTIONS} sections.`; return; }
+    savePads(); renderPads();
+    const inputs = $("pad-sections").querySelectorAll(".pad-sec-name");
+    const input = inputs[inputs.length - 1];
+    input.focus(); input.select();
+    Announce.say("Added a section: type its name");
+  });
+  $("pad-from-file").addEventListener("click", () => $("pad-file").click());
+  $("pad-file").addEventListener("change", async () => {
+    const file = $("pad-file").files && $("pad-file").files[0];
+    $("pad-file").value = "";
+    if (!file) return;
+    try {
+      const id = await Samples.add(file);
+      addPadSound(id, Samples.info(id).name);
+    } catch (e) { padMsg.textContent = `Couldn't read ${file.name} as a sound. Try a .wav or .mp3 file.`; }
+  });
+  // The open sound clip, or just its selection.
+  function selectionSamples() {
+    const o = openAudio();
+    const buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf) return null;
+    const rate = buf.sampleRate, sel = waveSel || { from: 0, to: buf.duration };
+    const chans = WaveOps.slice(Samples.channels(buf), Math.round(sel.from * rate), Math.round(sel.to * rate));
+    return { o, chans, rate, sel, name: o.c.name + (waveSel ? " (part)" : "") };
+  }
+  $("pad-from-clip").addEventListener("click", () => {
+    const s = selectionSamples();
+    if (!s) { padMsg.textContent = "Open a sound clip first (an audio track's clip), and select part of it if you like."; return; }
+    addPadSound(Samples.addChannels(s.chans, s.rate, s.name), s.name);
+  });
+  for (let m = 36; m <= 84; m++) $("pad-note").add(new Option(Notes.noteName(m), m));
+  $("pad-note").value = "60";
+  // One note of the selected track's sound, rendered the way export does.
+  $("pad-from-synth").addEventListener("click", async () => {
+    const t = sel();
+    if (t.kind === "audio") { padMsg.textContent = "Pick a synth or drum track to capture: an audio track's sounds can go straight in from the open clip."; return; }
+    const midi = Number($("pad-note").value);
+    padMsg.textContent = `Capturing ${t.name} on ${Notes.noteName(midi)}…`;
+    try {
+      const temp = JSON.parse(JSON.stringify(song));
+      for (const x of temp.tracks) x.clips = [];
+      const tt = temp.tracks.find((x) => x.id === t.id);
+      temp.contents = { cap: { id: "cap", trackId: t.id, name: "capture", bars: 1, notes: [{ step: 0, midi, len: 8, vel: 0.85 }] } };
+      tt.clips = [{ id: "capc", contentId: "cap", start: 0, length: 1, offset: 0 }];
+      temp.tempos = []; temp.bpm = 120; temp.swing = 0;
+      const buf = await Render.renderSong(temp, live, { from: 0, to: 1, tracks: [tt], tail: true });
+      const chans = Samples.channels(buf);
+      const [a, b] = WaveOps.soundSpan(chans, 0.0005);
+      if (b <= a) { padMsg.textContent = `${t.name} made no sound on ${Notes.noteName(midi)}.`; return; }
+      const name = `${t.name} ${Notes.noteName(midi)}`;
+      // Brought up to peak at -6 dB, so a pad plays at a usable level.
+      const piece = WaveOps.slice(chans, a, Math.min(chans[0].length, b + Math.round(0.02 * buf.sampleRate)));
+      const p = WaveOps.peak(piece, 0, piece[0].length);
+      const g = p > 0 ? Math.pow(10, -6 / 20) / p : 1;
+      addPadSound(Samples.addChannels(piece.map((d) => d.map((v) => v * g)), buf.sampleRate, name), name);
+    } catch (e) { padMsg.textContent = "Couldn't capture it: " + (e && e.message ? e.message : e); }
+  });
+  renderPads();
+  function showPadsOpen(open) {
+    $("pads-toggle").setAttribute("aria-expanded", String(open));
+    $("pads-body").hidden = !open;
+    ui.padsOpen = open;
+  }
+  $("pads-toggle").addEventListener("click", () => { showPadsOpen($("pads-body").hidden); save(); });
+  showPadsOpen(ui.padsOpen !== false);
+
+  // --- The wave editor's Export menu: the selection, the parts between
+  // markers, and variations, as files (and the selection to the pads) ---
+  const wxMsg = $("wx-status");
+  function wxSay(text) { wxMsg.textContent = text; Announce.say(text); }
+  function showWaveExport() {
+    const scope = waveSel ? "selection" : "whole sound";
+    $("wx-save").textContent = `Save the ${scope} as a sound file`;
+    $("wx-pad").textContent = `Add the ${scope} to the pads`;
+    $("wx-vary").textContent = `Save variations of the ${scope} (.zip)`;
+    const o = openAudio();
+    const cues = o && o.c.audio.cues ? o.c.audio.cues.length : 0;
+    $("wx-markers").disabled = !cues;
+    $("wx-markers").textContent = cues ? `Save each part between the ${cues} marker${cues === 1 ? "" : "s"} (.zip)` : "Save each part between markers (add markers in Select first)";
+  }
+  $("wexport-menu").addEventListener("toggle", (e) => { if (e.newState === "open") { showWaveExport(); wxMsg.textContent = ""; } });
+  $("wx-save").addEventListener("click", () => {
+    const s = selectionSamples();
+    if (!s) return;
+    const f = fileFor(s.chans, s.rate);
+    const name = Wav.fileName(s.name, f.ext);
+    deliver(new Blob([f.bytes], { type: f.type }), name, `Saved ${name} (${loudnessOf(s.chans, s.rate)}).`, padMsg);
+    wxSay(`Saved ${name}: ${loudnessOf(s.chans, s.rate)}.`);
+  });
+  $("wx-pad").addEventListener("click", () => {
+    const s = selectionSamples();
+    if (!s) return;
+    $("pad-add-section").value = $("wx-pad-section").value;
+    addPadSound(Samples.addChannels(s.chans, s.rate, s.name), s.name);
+    wxSay(padMsg.textContent);
+  });
+  $("wx-markers").addEventListener("click", () => {
+    const o = openAudio();
+    const buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf || !o.c.audio.cues) return;
+    const a = o.c.audio, rate = buf.sampleRate, all = Samples.channels(buf);
+    const parts = WaveOps.sections(a.start || 0, a.end == null ? buf.duration : a.end, a.cues);
+    const files = parts.map((p, i) => {
+      const chans = WaveOps.slice(all, Math.round(p.from * rate), Math.round(p.to * rate));
+      const f = fileFor(chans, rate);
+      return { name: `${String(i + 1).padStart(2, "0")} ${Wav.fileName(p.name || `${o.c.name} ${i + 1}`, f.ext)}`, data: f.bytes, peak: Loudness.peakDb(chans) };
+    });
+    const name = Wav.fileName(`${o.c.name} parts`, ".zip");
+    deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), name, `Saved ${name}: ${files.length} parts.`, padMsg);
+    const loudest = Math.max(...files.map((f) => f.peak));
+    wxSay(`Saved ${name}: ${files.length} parts, the loudest peaking at ${Number.isFinite(loudest) ? loudest.toFixed(1) + " dB" : "silence"}.`);
+  });
+  $("wx-vary").addEventListener("click", () => {
+    const s = selectionSamples();
+    if (!s) return;
+    const vs = WaveOps.variations(s.chans, { count: Number($("wx-count").value) || 4, pitch: Number($("wx-pitch").value) || 0, volume: Number($("wx-volume").value) || 0 });
+    const sign = (v) => (v > 0 ? "+" : "") + v;
+    const files = vs.map((v, i) => {
+      const f = fileFor(v.chans, s.rate);
+      const label = i === 0 ? "original" : `v${i + 1} (${v.semitones < 0 ? "down" : "up"} ${Math.abs(v.semitones)} keys, ${sign(v.db)} dB)`;
+      return { name: `${String(i + 1).padStart(2, "0")} ${Wav.fileName(`${s.name} ${label}`, f.ext)}`, data: f.bytes };
+    });
+    const name = Wav.fileName(`${s.name} variations`, ".zip");
+    deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), name, `Saved ${name}: ${files.length} versions.`, padMsg);
+    wxSay(`Saved ${name}: the original and ${files.length - 1} variations.`);
+  });
+
+  // --- The Guide: a scale sheet and beginner's map, shown beside the studio ---
+  const guide = $("guide");
+  ROOTS.forEach((r, i) => $("g-root").add(new Option(r, i)));
+  for (const k of Object.keys(Song.SCALES)) $("g-scale").add(new Option(SCALE_NAMES[k], k));
+  const SCALE_ABOUT = {
+    none: "No scale: every key is allowed. Pick a scale to see which notes go together.",
+    major: "Major: bright and settled, the sound of most pop songs.",
+    minor: "Minor: darker, sadder or more serious.",
+    "pentatonic-major": "Major pentatonic: five notes that all sound good together, even played at random. A great place to start.",
+    "pentatonic-minor": "Minor pentatonic: five notes, bluesy and safe to improvise with.",
+    blues: "Blues: minor pentatonic plus one 'blue' note for a gritty edge.",
+    dorian: "Dorian: minor, but with a hopeful lift. Funk and jazz use it a lot.",
+  };
+  // What a chord does, from where it sits in the key and whether it's major or minor.
+  function chordFeel(c, i) {
+    if (i === 0) return "home: where songs like to end";
+    if (/dim/.test(c.name)) return "unstable, used to pass through";
+    if (i === 4) return "tension that wants to go home";
+    if (i === 3) return "lifting away from home";
+    return /m$/.test(c.name) ? "softer, a little sad" : "bright, a lift";
+  }
+  // Note names spelled the way the key is written: sharps in sharp keys
+  // (G, D, A, E, B major and their relative minors), flats otherwise.
+  const SHARPS = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  const FLATS = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
+  function spelling() {
+    const sc = song.key.scale;
+    // The major key with the same notes: a minor key's is 3 keys up, Dorian's 10.
+    const shift = /minor|blues/.test(sc) ? 3 : sc === "dorian" ? 10 : 0;
+    const major = (song.key.root + shift) % 12;
+    if (major === 6) return song.key.root === 6 ? SHARPS : FLATS; // F♯ / G♭: keep the root's own name
+    return [7, 2, 9, 4, 11].includes(major) ? SHARPS : major === 0 ? (song.key.root === 6 ? SHARPS : ROOTS) : FLATS;
+  }
+  const noteNameIn = (pc) => spelling()[pc];
+  // A chord's name spelled like the scale.
+  const chordName = (c) => noteNameIn(c.root) + c.name.slice(Notes.NAMES[c.root].length);
+  const PROGS = [
+    { name: "Pop anthem", degrees: [0, 4, 5, 3], about: "Countless hits loop these four." },
+    { name: "Emotional", degrees: [5, 3, 0, 4], about: "The same chords started from the sad one." },
+    { name: "Rock and blues", degrees: [0, 3, 4, 0], about: "Home, away, tension, home." },
+    { name: "Fifties doo-wop", degrees: [0, 5, 3, 4], about: "A classic slow-dance loop." },
+    { name: "Jazz turnaround", degrees: [1, 4, 0, 0], about: "Leads smoothly back home." },
+  ];
+  const keyChords = () => Chords.diatonic(song.key.root, song.key.scale === "none" ? "major" : song.key.scale);
+  // The keys you'd press: the computer key for each note in the keyboard's current octave.
+  const computerKeyFor = (pc) => {
+    for (const [code, off] of Object.entries(Notes.KEY_OFFSETS)) if (((kb.base + off) % 12 + 12) % 12 === pc && off < 12) return code.replace("Key", "");
+    return "";
+  };
+  function playChordDegrees(list) {
+    const t = sel();
+    ready().then(() => {
+      const synth = audio[t.id] && audio[t.id].synth;
+      if (!synth) return;
+      const chords = keyChords();
+      const beat = 60 / song.bpm;
+      let at = Engine.ctx.currentTime + 0.05;
+      for (const d of list) {
+        for (const m of Chords.voice(chords[d], kb.base + 6)) synth.playNote({ midi: m, vel: 0.7, len: 4, step: 0 }, at, beat * 1.8);
+        at += beat * 2;
+      }
+    });
+  }
+  function renderGuide() {
+    $("g-root").value = song.key.root;
+    $("g-scale").value = song.key.scale;
+    $("g-root").disabled = song.key.scale === "none";
+    $("g-scale-about").textContent = SCALE_ABOUT[song.key.scale] || "";
+    const sc = Song.SCALES[song.key.scale];
+    const notes = $("g-notes");
+    notes.textContent = "";
+    for (let i = 0; i < 12; i++) {
+      const pc = (song.key.root + i) % 12;
+      if (sc && !sc.includes(i)) continue;
+      const li = document.createElement("li");
+      li.className = i === 0 && sc ? "g-note root" : "g-note";
+      const key = computerKeyFor(pc);
+      li.innerHTML = "";
+      li.append(Object.assign(document.createElement("span"), { className: "g-note-name", textContent: noteNameIn(pc) }));
+      if (key) li.append(Object.assign(document.createElement("kbd"), { textContent: key }));
+      if (i === 0 && sc) li.append(Object.assign(document.createElement("span"), { className: "sr-only", textContent: " (the root)" }));
+      notes.append(li);
+    }
+    const chords = keyChords();
+    const list = $("g-chords");
+    list.textContent = "";
+    chords.forEach((c, i) => {
+      if (/dim/.test(c.name) && song.key.scale !== "none") { /* kept: still part of the scale */ }
+      const li = document.createElement("li");
+      const b = Object.assign(document.createElement("button"), { type: "button", className: "g-chord" });
+      const feel = chordFeel(c, i);
+      b.append(Object.assign(document.createElement("strong"), { textContent: `${c.roman} ${chordName(c)}` }), document.createTextNode(` ${feel}`));
+      b.setAttribute("aria-label", `${c.roman}, ${c.spoken}: ${feel}. Play it`);
+      b.addEventListener("click", () => playChordDegrees([i]));
+      li.append(b);
+      list.append(li);
+    });
+    const progs = $("g-progs");
+    progs.textContent = "";
+    for (const pr of PROGS) {
+      const li = document.createElement("li");
+      const names = pr.degrees.map((d) => chordName(chords[d])).join(" – ");
+      const romans = pr.degrees.map((d) => chords[d].roman).join(" – ");
+      const b = Object.assign(document.createElement("button"), { type: "button", className: "g-prog" });
+      b.append(Object.assign(document.createElement("strong"), { textContent: pr.name }), document.createTextNode(`: ${names} (${romans}). ${pr.about}`));
+      b.setAttribute("aria-label", `${pr.name}: ${names}. ${pr.about} Play it`);
+      b.addEventListener("click", () => playChordDegrees(pr.degrees));
+      li.append(b);
+      progs.append(li);
+    }
+    markScale();
+  }
+  // Marks the scale's notes (and its root) on the on-screen keyboard.
+  function markScale() {
+    const on = $("g-mark").checked && !guide.hidden;
+    const sc = Song.SCALES[song.key.scale];
+    for (const k of document.querySelectorAll("#keys [data-midi]")) {
+      const pc = ((Number(k.dataset.midi) - song.key.root) % 12 + 12) % 12;
+      k.classList.toggle("in-scale", on && !!sc && sc.includes(pc));
+      k.classList.toggle("scale-root", on && !!sc && pc === 0);
+    }
+  }
+  new MutationObserver(markScale).observe($("keys"), { childList: true });
+  function showGuide(open) {
+    guide.hidden = !open;
+    $("guide-btn").setAttribute("aria-expanded", String(open));
+    document.documentElement.classList.toggle("guide-open", open);
+    ui.guide = open;
+    save();
+    if (open) { renderGuide(); $("guide-h").focus(); }
+    else markScale();
+  }
+  $("guide-h").tabIndex = -1;
+  $("guide-btn").addEventListener("click", () => showGuide(guide.hidden));
+  $("guide-close").addEventListener("click", () => { showGuide(false); $("guide-btn").focus(); });
+  $("g-root").addEventListener("change", () => { song.key.root = Number($("g-root").value); renderSongPage(); renderGuide(); afterChange(keyWords()); });
+  $("g-scale").addEventListener("change", () => { song.key.scale = $("g-scale").value; renderSongPage(); renderGuide(); afterChange(keyWords()); });
+  $("g-mark").addEventListener("change", () => { ui.guideMark = $("g-mark").checked; save(); markScale(); });
+  $("g-mark").checked = ui.guideMark !== false;
+  if (ui.guide) { guide.hidden = false; $("guide-btn").setAttribute("aria-expanded", "true"); document.documentElement.classList.add("guide-open"); renderGuide(); }
+
   history.commit(historyJson());
   applyLayout();
   selectTrack(song.selected, false);

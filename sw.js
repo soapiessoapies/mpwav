@@ -45,6 +45,8 @@ const SHELL = [
   "src/state/zip.js",
   "src/state/midi-file.js",
   "src/state/song-info.js",
+  "src/state/pads.js",
+  "src/audio/loudness.js",
   "src/state/loops.js",
   "src/ui/announce.js",
   "src/ui/controls.js",

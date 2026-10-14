@@ -654,3 +654,36 @@ Code: `src/audio/wav.js` (WAV and AIFF encoders, normalize, dither),
 and `tracks`. The dialog remembers its choices (`sound-studio.export`).
 Not here: FLAC and MP3 (no encoder in the browser without a large library),
 and real-time formats.
+
+## Sound pads, sound-design exports and the Guide (v0.24.0)
+
+**Sound pads** (under the keyboard): your own sounds on keys, kept across
+songs in named sections (Percussion, Bass and Treble to start; rename, add,
+reorder or remove them). A pad comes from a sound file, from the open sound
+clip (or just its selection), or by capturing one note of the selected
+synth or drum track (rendered like an export, levelled to peak at -6 dB).
+Click a pad to hear it; its ⋯ menu renames it, moves it to another section,
+or adds it to the song at the cursor as an audio clip on a "Pads" track.
+The bank lives in `sound-studio.pads` (`src/state/pads.js`), and its sounds
+count as in use, so clearing unused sounds keeps them. Pads play one-shot;
+recording pad hits on steps isn't built (audio clips start on bar lines).
+
+**The wave editor's Export menu** (from a desktop editor's workflow):
+- Save the selection (or the whole sound) as a sound file.
+- Add the selection to the pads.
+- Save each part between the markers as its own file, in a .zip.
+- Variations: 2 to 12 copies, each a little higher or lower (pitch and
+  length move together, like tape) and louder or quieter, the original
+  first, in a .zip (`WaveOps.variations`).
+Files use the format picked in Home › Export.
+
+**Loudness:** every sound export reports its peak (dB) and integrated
+loudness in LUFS (ITU-R BS.1770 K-weighting with gating,
+`src/audio/loudness.js`).
+
+**The Guide** (top bar): a sheet beside the studio for beginners, following
+the song's key: the scale's notes with the computer key for each (and an
+option to mark them on the keyboard), the seven chords that fit with what
+each one does (click to hear), five chord patterns to try (click to hear),
+beat basics, things to try, and a few words explained. Notes are spelled the
+way the key is written (sharps in sharp keys).

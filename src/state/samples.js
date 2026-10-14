@@ -8,6 +8,7 @@
 //   buffer(id, rev)  the decoded AudioBuffer (reversed if asked), or null
 //   peaks(id)        a waveform outline: [min, max] pairs, or null
 //   info(id)         { name, duration, rate, channels } once loaded
+//   addChannels(chans, rate, name)  stores a new sound from samples, returns its id
 //   addEdited(id, chans)  stores an edited copy of sound `id` (new channels,
 //                    see src/audio/wave-ops.js) and returns the copy's id
 //   outline(id, rev, from, to, n)  a waveform outline of seconds from..to
@@ -171,6 +172,20 @@
     return next;
   }
 
+  // A new sound from raw samples (a selection saved for the pads, a captured
+  // synth note): stored as a WAV, ready to play straight away.
+  function addChannels(chans, rate, name) {
+    if (!chans.length || !chans[0].length) return null;
+    const buf = decoderCtx().createBuffer(chans.length, chans[0].length, rate);
+    chans.forEach((d, c) => buf.getChannelData(c).set(d.map((v) => Math.max(-1, Math.min(1, v)))));
+    const id = "snd-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const rec = { name: String(name || "Sound").slice(0, 40), type: "audio/wav", bytes: Wav.encode(buf) };
+    fresh.set(id, Date.now());
+    remember(id, rec, buf);
+    put(id, rec);
+    return id;
+  }
+
   // --- what's stored, and clearing what no song uses ---
   // Every stored sound as [id, bytes], read one at a time.
   async function stored() {
@@ -264,5 +279,5 @@
     }
   }
 
-  root.Samples = { add, addEdited, usage, tidy, load, buffer, peaks, outline: outlineOf, spectrum: spectrumOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
+  root.Samples = { add, addEdited, addChannels, usage, tidy, load, buffer, peaks, outline: outlineOf, spectrum: spectrumOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
 })(window);

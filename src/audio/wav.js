@@ -115,9 +115,10 @@
     return p > 0 ? Math.pow(10, targetDb / 20) / p : 1;
   };
 
-  // A file name from a song title: letters, numbers, spaces, dashes.
+  // A file name from a song title: letters, numbers, spaces, dashes, and
+  // + . , ( ) (never a dot at the end, which some systems drop).
   const fileName = (title, ext) =>
-    ((title || "").replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 60) || "mpwav song") + ext;
+    ((title || "").replace(/[^\p{L}\p{N} _+.,()-]+/gu, "").trim().slice(0, 60).replace(/[. ]+$/, "") || "mpwav song") + ext;
 
   const api = { encode, encodeAiff, peak, normalizeGain, fileName, DEPTHS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -85,6 +85,7 @@
     <div class="title-row">
       <p class="byline">by Phie &amp; Claude</p>
       <button id="save-btn" type="button" class="quiet" aria-keyshortcuts="Control+S">Save</button>
+      <button id="guide-btn" type="button" class="quiet" aria-expanded="false" aria-controls="guide">Guide</button>
       <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Home</button>
     </div>
   </header>
@@ -240,6 +241,7 @@
             <button type="button" class="menu-btn" popovertarget="clean-menu">Clean up</button>
             <button type="button" class="menu-btn" popovertarget="view-menu">View</button>
             <button type="button" class="menu-btn" popovertarget="clip-menu">Clip</button>
+            <button type="button" class="menu-btn" popovertarget="wexport-menu">Export</button>
           </div>
           <div id="sel-menu" class="menu" popover role="group" aria-label="Select">
             <h3 class="menu-title">Select</h3>
@@ -344,6 +346,20 @@
             <label class="inline">Level <input id="gen-db" type="number" inputmode="decimal" step="1" min="-48" max="0" value="-6"> dB</label>
             <button type="button" id="gen-tone">Insert a tone</button>
             <button type="button" id="gen-noise">Insert noise (hiss)</button>
+          </div>
+          <div id="wexport-menu" class="menu" popover role="group" aria-label="Export from this sound">
+            <h3 class="menu-title">Export</h3>
+            <p class="menu-note">Uses the format chosen in Home › Export (WAV 16-bit until you pick another).</p>
+            <button type="button" id="wx-save" data-scope>Save the selection as a sound file</button>
+            <label class="inline">Pad section <select id="wx-pad-section"></select></label>
+            <button type="button" id="wx-pad" data-scope>Add the selection to the pads</button>
+            <button type="button" id="wx-markers">Save each part between markers (.zip)</button>
+            <p class="menu-note">Variations: copies a little higher or lower and louder or quieter, so a sound that plays over and over isn't the same every time.</p>
+            <label class="inline">How many <input id="wx-count" type="number" inputmode="numeric" min="2" max="12" step="1" value="4"></label>
+            <label class="inline">Pitch up to ± <input id="wx-pitch" type="number" inputmode="decimal" min="0" max="12" step="0.5" value="1"> keys</label>
+            <label class="inline">Volume up to ± <input id="wx-volume" type="number" inputmode="decimal" min="0" max="12" step="0.5" value="2"> dB</label>
+            <button type="button" id="wx-vary" data-scope>Save variations (.zip)</button>
+            <p id="wx-status" class="menu-note" aria-live="polite"></p>
           </div>
           <div id="clip-menu" class="menu" popover role="group" aria-label="Clip: what it plays of the sound">
             <h3 class="menu-title">Clip</h3>
@@ -564,10 +580,96 @@
         </div>
         <div id="keys" class="keys" role="application" aria-roledescription="piano keyboard"
              aria-label="Piano keyboard" aria-describedby="keys-help"></div>
+        <section id="pads" class="pads" aria-labelledby="pads-h">
+          <div class="pads-head">
+            <h3 id="pads-h" class="pads-title"><button type="button" id="pads-toggle" class="disclosure" aria-expanded="true" aria-controls="pads-body">Sound pads</button></h3>
+            <button type="button" id="pad-new" class="menu-btn" popovertarget="pad-add-menu">+ Pad</button>
+            <button type="button" id="pad-section-add">+ Section</button>
+          </div>
+          <div id="pads-body">
+          <p class="help tip">Your own sounds on keys, kept for every song: a drum hit you like, a wave you made. Click a pad to hear it; its <span aria-hidden="true">⋯</span> button names it, moves it to another section, or adds it to the song at the cursor. Name the sections however helps you (Bass, Treble, Percussion…).</p>
+          <div id="pad-sections" class="pad-sections"></div>
+          <p id="pad-status" class="help" aria-live="polite"></p>
+          </div>
+        </section>
+        <input id="pad-file" type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a,.aif,.aiff,.flac" hidden>
+        <div id="pad-add-menu" class="menu" popover role="group" aria-label="Add a pad">
+          <h3 class="menu-title">Add a pad</h3>
+          <label class="inline">To <select id="pad-add-section"></select></label>
+          <button type="button" id="pad-from-file">From a sound file…</button>
+          <button type="button" id="pad-from-clip">From the sound clip that's open (its selection, if any)</button>
+          <label class="inline">Note <select id="pad-note"></select></label>
+          <button type="button" id="pad-from-synth">Capture the selected track's sound on that note</button>
+          <p class="menu-note">Capturing records one note of the track's sound, as it's set up now, into a pad.</p>
+        </div>
+        <div id="pad-menu" class="menu" popover data-own role="group" aria-label="Pad">
+          <h3 class="menu-title" id="pad-menu-h">Pad</h3>
+          <label class="inline">Name <input id="pad-name" type="text" maxlength="24" autocomplete="off"></label>
+          <label class="inline">Section <select id="pad-move"></select></label>
+          <button type="button" id="pad-play">Play it</button>
+          <button type="button" id="pad-place">Add it to the song at the cursor</button>
+          <button type="button" id="pad-remove">Remove the pad</button>
+        </div>
       </div>
     </section>
   </div>
 </main>
+<aside id="guide" class="guide" aria-labelledby="guide-h" hidden>
+  <div class="guide-head">
+    <h2 id="guide-h">Guide</h2>
+    <button type="button" id="guide-close" class="quiet">Hide</button>
+  </div>
+  <p class="help">New to making music? This sheet follows your song's key. Nothing here is a rule: it's a map for experimenting.</p>
+  <section aria-labelledby="g-scale-h">
+    <h3 id="g-scale-h">Your scale</h3>
+    <div class="guide-key">
+      <label class="inline">Key <select id="g-root"></select></label>
+      <label class="inline">Scale <select id="g-scale"></select></label>
+    </div>
+    <p id="g-scale-about" class="help"></p>
+    <ul id="g-notes" class="g-notes" aria-label="Notes in the scale"></ul>
+    <label class="check"><input type="checkbox" id="g-mark"> Mark these notes on the keyboard</label>
+  </section>
+  <section aria-labelledby="g-chords-h">
+    <h3 id="g-chords-h">Chords that fit</h3>
+    <p class="help">Each chord is three notes of the scale stacked up. Click one to hear it on the selected track.</p>
+    <ul id="g-chords" class="g-chords"></ul>
+  </section>
+  <section aria-labelledby="g-prog-h">
+    <h3 id="g-prog-h">Chord patterns to try</h3>
+    <p class="help">Most songs loop four chords. Play one of these, then hold each chord for a bar in a clip.</p>
+    <ul id="g-progs" class="g-progs"></ul>
+  </section>
+  <section aria-labelledby="g-beat-h">
+    <h3 id="g-beat-h">Beat basics</h3>
+    <ul class="g-list">
+      <li>A bar has 4 beats; a beat has 4 steps (16 steps a bar).</li>
+      <li><strong>Kick</strong> on beats 1 and 3 (steps 1 and 9), <strong>snare or clap</strong> on 2 and 4 (steps 5 and 13), <strong>hats</strong> on every other step. The Drum beats box has ready-made beats.</li>
+      <li>The <strong>bass</strong> usually plays the root of the chord (its first note), low on the keyboard.</li>
+      <li>BPM is speed: 70 to 90 feels relaxed, 120 to 130 dance, 160 to 175 drum and bass.</li>
+    </ul>
+  </section>
+  <section aria-labelledby="g-try-h">
+    <h3 id="g-try-h">Try this</h3>
+    <ul class="g-list">
+      <li>Stay inside the scale and nothing sounds wrong; step outside it for one note to add tension.</li>
+      <li>Make a melody from only 3 or 4 notes, and repeat it with one change the second time.</li>
+      <li>Copy a clip, then move every note up 7 keys: an instant harmony.</li>
+      <li>Leave gaps. Silence makes the notes around it stand out.</li>
+      <li>Change one thing at a time, and listen after each change.</li>
+    </ul>
+  </section>
+  <section aria-labelledby="g-words-h">
+    <h3 id="g-words-h">Words</h3>
+    <dl class="g-words">
+      <dt>Octave</dt><dd>The same note higher or lower: 12 keys apart.</dd>
+      <dt>Root</dt><dd>The note a scale or chord is named after, where it feels at home.</dd>
+      <dt>Scale</dt><dd>The set of notes a song mostly uses.</dd>
+      <dt>Chord</dt><dd>Notes played together; major ones sound bright, minor ones sad or serious.</dd>
+      <dt>Semitone</dt><dd>One key to the next on the keyboard, black keys included.</dd>
+    </dl>
+  </section>
+</aside>
 
 <dialog id="songs" class="home" aria-labelledby="songs-h">
   <div class="home-wrap">
@@ -875,6 +977,8 @@
 <script src="src/state/zip.js"></script>
 <script src="src/state/midi-file.js"></script>
 <script src="src/state/song-info.js"></script>
+<script src="src/state/pads.js"></script>
+<script src="src/audio/loudness.js"></script>
 <script src="src/state/loops.js"></script>
 <script src="src/ui/announce.js"></script>
 <script src="src/ui/controls.js"></script>

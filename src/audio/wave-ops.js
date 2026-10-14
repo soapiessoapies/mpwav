@@ -616,7 +616,53 @@
     return out;
   }
 
+  // Sound-design exports ---------------------------------------------------
+
+  // The parts of a sound between its markers (and its trim points): each
+  // { from, to, name } in seconds, in order. Markers outside the part kept
+  // are ignored; parts shorter than 10 ms are dropped. With no markers inside,
+  // the whole kept part is one section.
+  function sections(start, end, cues = []) {
+    const inside = [...cues].filter((q) => q.t > start + 0.005 && q.t < end - 0.005).sort((a, b) => a.t - b.t);
+    const cuts = [{ t: start, name: "" }, ...inside, { t: end, name: "" }];
+    const out = [];
+    for (let i = 0; i < cuts.length - 1; i++) {
+      if (cuts[i + 1].t - cuts[i].t < 0.01) continue;
+      out.push({ from: cuts[i].t, to: cuts[i + 1].t, name: cuts[i].name || "" });
+    }
+    return out;
+  }
+
+  // Variations of one sound, so a sound that plays again and again isn't the
+  // same every time: each copy is sped up or slowed down a little (pitch and
+  // length move together, like tape) and made a little louder or quieter.
+  //   count   how many (2..12)
+  //   pitch   most semitones up or down (0..12)
+  //   volume  most dB up or down (0..12)
+  // Returns [{ chans, semitones, db }]; the first copy is always the sound as
+  // it is, so the set includes the original.
+  function variations(chans, { count = 4, pitch = 1, volume = 2, random = Math.random } = {}) {
+    const n = Math.max(2, Math.min(12, Math.round(count)));
+    const out = [{ chans: chans.map((d) => Float32Array.from(d)), semitones: 0, db: 0 }];
+    const m = n - 1; // copies
+    for (let i = 1; i < n; i++) {
+      // Spread evenly from below to above, shuffled a little, so no two match;
+      // the one that would land in the middle (an odd count) goes a little up or down.
+      let t = m === 1 ? 1 : ((i - 1) / (m - 1)) * 2 - 1;
+      if (Math.abs(t) < 0.2) t = random() < 0.5 ? -0.4 : 0.4;
+      const k = Math.max(0, Math.min(12, pitch));
+      const semitones = Math.round(t * k * (0.7 + 0.3 * random()) * 100) / 100;
+      const db = Math.round((random() * 2 - 1) * Math.max(0, Math.min(12, volume)) * 10) / 10;
+      const len = chans[0].length;
+      const sped = semitones ? speed(chans, 0, len, Math.pow(2, semitones / 12)) : chans.map((d) => Float32Array.from(d));
+      const g = dbToGain(db);
+      out.push({ chans: sped.map((d) => d.map((v) => Math.max(-1, Math.min(1, v * g)))), semitones, db });
+    }
+    return out;
+  }
+
   const api = {
+    sections, variations,
     amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, echo, filter, speed, stretch, pitch,
     reverb, compress, eq, chorus, flanger, noiseProfile, denoise, deleteSilence, ramp, declick, spectrum, spectrumHz,
     tone, noise,
