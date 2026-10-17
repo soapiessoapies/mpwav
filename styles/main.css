@@ -1421,3 +1421,17 @@ fieldset:disabled { opacity: 0.55; }
 .g-map th { color: var(--muted); font-weight: 600; }
 .pads:has(#pads-toggle[aria-expanded="false"]) .pads-head > button:not(.disclosure) { display: none; }
 .pads:has(#pads-toggle[aria-expanded="false"]) { padding-top: 4px; }
+
+/* ---------- notice: says on screen what changed (slide, layout) ----------
+   The live region speaks it; this shows the same words for a few seconds. */
+.notice {
+  position: fixed; z-index: 60; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--sticky-bottom, 0px) + 16px);
+  max-width: min(92vw, 520px); padding: 10px 16px;
+  background: var(--panel); color: var(--text);
+  border: 2px solid var(--accent); border-radius: 12px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+  font-weight: 600; line-height: 1.35; text-align: center;
+  pointer-events: none;
+}
+.notice[hidden] { display: none; }

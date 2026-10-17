@@ -77,7 +77,7 @@
     return clip ? { t, clip, c: Song.content(song, clip) } : null;
   }
 
-  Announce.attach($("announcer"));
+  Announce.attach($("announcer"), $("notice"));
 
   // --- audio: a synth and a mixer channel per track, made on first use ---
   const audio = {}; // track id -> { synth, channel }
@@ -3433,11 +3433,20 @@
 
   // --- settings: layout, fullscreen, credits ---
   // The layout comes from the setting, or from the window's width on Auto.
+  // What the layout looks like, said when it changes so panels moving isn't a surprise.
+  const LAYOUT_NOTE = {
+    wide: "Desktop layout: panels side by side.",
+    medium: "Narrow layout: panels stack in one column.",
+    compact: "Phone layout: panels stack in one column, with the slides on their own row.",
+  };
+  let layoutShown = "", layoutReady = false; // nothing is said for the layout the page opens in
   function applyLayout() {
     const w = window.innerWidth;
     const want = ui.layout === "desktop" ? "wide" : ui.layout === "phone" ? "compact"
       : w >= 1000 ? "wide" : w <= 640 ? "compact" : "medium";
     const fit = ui.fit && want === "wide" ? "on" : "off";
+    if (layoutReady && layoutShown !== want) Announce.tell(LAYOUT_NOTE[want]);
+    layoutShown = want;
     // The slide switcher: in the transport bar on a desktop, on its own row under it otherwise.
     const bar = document.querySelector(".transport-bar"), nav = $("slides");
     if (want === "wide" && nav.parentElement !== bar) bar.insertBefore(nav, bar.querySelector(".tempo"));
@@ -3638,17 +3647,21 @@
     if (byHand && arrange.arranging) setArranging(false);
     if (byHand && s.page && s.id !== was) pages.select(s.page, false);
     // Make and Sound work on one clip: open the selected one, or the track's first.
+    let opened = "";
     if (byHand && (s.id === "make" || s.id === "sound") && !find(open)) {
       const p = pickedClip(), t = sel();
-      if (p) openClip(p.t, p.clip, false);
-      else if (t.clips.length) openClip(t, t.clips[0], false);
+      const c = p ? p.clip : t.clips[0];
+      if (c) {
+        openClip(p ? p.t : t, c, false);
+        opened = ` Opened ${Song.content(song, c).name} on ${(p ? p.t : t).name}.`;
+      }
     }
     arrange.refresh();
     renderEditor();
     timeline.render();
     roll.rebuild();
     requestAnimationFrame(() => { timeline.render(); drawZooms(); redrawWave(); });
-    if (byHand) Announce.say(`${s.name} slide: ${s.about}`);
+    if (byHand && s.id !== was) Announce.tell(`${s.name}: ${s.about}.${opened}`);
     save();
   }
   setSlide(ui.slide, false);
@@ -4165,6 +4178,7 @@
 
   history.commit(historyJson());
   applyLayout();
+  layoutReady = true;
   selectTrack(song.selected, false);
   showLoop();
   showRowsFold();

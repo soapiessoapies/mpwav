@@ -25,13 +25,16 @@ mpwav is for people who are blind or have low vision and want to start making mu
 
 ## What testing found, and what changed
 
-Testers had fun using mpwav. What they needed was a clearer way in, and smoother moves
-between editing jobs, so the process is split into accessible steps for people getting
-into sound design:
+Testers had fun using mpwav, and the audit partners didn't find it hard to understand.
+What tripped them up was getting results they didn't expect, because the page wasn't
+clear about what it was showing: the layout, or the format changing under them. So the
+process is split into clear, accessible steps for people getting into sound design, and
+the page now says what changed whenever it changes:
 
 | What it fixes | What we changed | Version |
 |---|---|---|
-| Hard to grasp at first | **Guided tour:** 12 steps, each ringing one real control, in an accessible dialog (focus stays in it, Esc ends it). It runs once on a first visit and replays from Settings › Tutorial | v0.9.0, v0.25.0 |
+| Unexpected results when the layout or a slide changed with no word about it | **A notice says what changed.** Switching slides shows and speaks what the slide is for, and which clip it opened ("Make: play and record ideas into one clip. Opened Lo-fi Chords on Chords."). Resizing the window, turning a phone or changing Settings › Layout says the new layout. It sits at the bottom of the screen for 4.5 seconds, above the pinned keyboard on phones | v0.26.0 |
+| A clearer way in | **Guided tour:** 12 steps, each ringing one real control, in an accessible dialog (focus stays in it, Esc ends it). It runs once on a first visit and replays from Settings › Tutorial | v0.9.0, v0.25.0 |
 | Too much on one screen, and jumping between editing jobs | **Slides:** Make, Arrange, Edit, Sound and Mix each show only the panels that job needs, plus All. Switch with the slide buttons or Alt + 1 to 6, while Play, Record and Undo stay put on every slide | v0.19.0 |
 | New to making music | **The Guide:** a drawer in the top bar with scale notes on the computer keys, chords that fit and what they do, 5 patterns to play, beat basics, tips and a glossary | v0.24.0 |
 | Coming from Ableton or Cool Edit | Their names for each panel as hover hints, and a mapping table plus shortcuts in the Guide | v0.25.0 |
