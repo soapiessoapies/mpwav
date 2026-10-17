@@ -83,7 +83,8 @@ src/audio   Web Audio engine, synths, effects, mixer
 src/ui      views: arrangement, sequencer, piano roll, mixer
 src/state   song model, undo, save/load
 styles/     CSS
-assets/     icons, samples
-docs/       audience statement, test notes, pivot write-up
+assets/     fonts (with their licenses), icons, poster art
+docs/       design doc and accessibility audit
+CREDITS.md  rights sheet: every source, its license and what it asks
 tests/
 ```
