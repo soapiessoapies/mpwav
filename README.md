@@ -4,12 +4,18 @@ An Ableton-inspired music studio in the browser: arrangement view, synths, and a
 One web app serves both screen sizes. Desktop gets the full arrangement view; phones get
 a focused loop/pattern maker. It installs as an app (PWA) on Windows and on phones.
 
-Built for **Creative Coding & Innovation**, Weeks 8–10.
+Built for **Creative Coding & Innovation** (CTEC 200), Weeks 8–9: Built For Them.
 
 ## Audience
 
-Anyone musically inclined, sighted or visually impaired, at a beginner-to-intermediate
-level of sound design.
+mpwav is for people who are blind or have low vision and want to start making music,
+often on the phone they already use with a screen reader, and with little or no music
+theory. They want to make a short song, a beat or a sound effect from scratch, hear it
+back, and save or share it, all without asking a sighted person for help. Most music apps
+are built for sighted, experienced producers: you drag small blocks and turn knobs on a
+screen sized for a mouse, many controls have no name a screen reader can say, and the
+accessible setups that do exist usually mean a desktop computer, add-on scripts and
+knowing the jargon first.
 
 ## Hypothesis
 
@@ -20,13 +26,15 @@ level of sound design.
 **Measured by (draft):** at least 4 of 5 testers make and play back a loop of 8 bars or more in under
 5 minutes on a phone, without help, including at least one tester using a screen reader.
 
-## Requirements from the brief
+## Requirements from the brief (Weeks 8–9, Built For Them)
 
-- Works on a phone
-- WCAG AA contrast, fully keyboard-navigable, screen-reader compatible
-- Live deployed MVP (URL)
-- Evidence from 5+ real users (not classmates)
-- A documented pivot with before-and-after
+- A 3-sentence audience statement: who they are, what they are trying to do, why existing tools fail them
+- Three user contexts (ideal, budget, chaotic real-world) and one change made for each
+- Works on a phone; WCAG AA contrast, keyboard navigable, screen-reader compatible
+- Live at a URL: https://soapiessoapies.github.io/mpwav/
+- Everything on both partner audit lists fixed
+- [CREDITS.md](CREDITS.md), a poster and a narrated demo video
+- Shown live at the critique, Monday Oct 19
 
 ## Running it
 

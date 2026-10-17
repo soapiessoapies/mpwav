@@ -9,7 +9,11 @@ As of 2026-10-07. Status: agreed direction, not built yet.
 
 mpwav will open on an Ableton-style timeline where every track's music sits in colored blocks that you place, stretch, copy and paste. It is a browser music studio for musically inclined beginners and intermediates, sighted or visually impaired, built for Creative Coding & Innovation.
 
-**The class brief requires:** it works on a phone, meets WCAG AA contrast, is fully keyboard-navigable and works with screen readers, ships as a live URL, and is tested by 5 people outside the class.
+**The class brief requires** (Weeks 8–9, Built For Them, as of 2026-10-17): a 3-sentence audience statement, three user contexts with one change for each, it works on a phone, meets WCAG AA contrast, is keyboard-navigable and works with screen readers, ships as a live URL, both partner audit lists fixed, CREDITS.md, a poster and a narrated demo video, shown at the critique on Oct 19.
+
+## Audience
+
+mpwav is for people who are blind or have low vision and want to start making music, often on the phone they already use with a screen reader, and with little or no music theory. They want to make a short song, a beat or a sound effect from scratch, hear it back, and save or share it, all without asking a sighted person for help. Most music apps are built for sighted, experienced producers: you drag small blocks and turn knobs on a screen sized for a mouse, many controls have no name a screen reader can say, and the accessible setups that do exist usually mean a desktop computer, add-on scripts and knowing the jargon first.
 
 **What exists today** ([live site](https://soapiessoapies.github.io/mpwav/)): four synth tracks (Lead, Bass, Pad, Hat), a mixing desk, a 16-step pattern grid with slots A–D, recording from the keyboard, a 16-bar arrangement grid, the Sound tab (synth, morph pad, Warp effects) and tabs for small screens. This design replaces the pattern grid and arrangement grid with one timeline; the sound and mixer parts stay.
 
