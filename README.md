@@ -17,6 +17,14 @@ screen sized for a mouse, many controls have no name a screen reader can say, an
 accessible setups that do exist usually mean a desktop computer, add-on scripts and
 knowing the jargon first.
 
+## Three user contexts
+
+| User | Their situation | What mpwav changed for them |
+|---|---|---|
+| **Ideal** | A VoiceOver or TalkBack user on a recent phone, with headphones and an hour free, who wants to finish a whole short song | **Nothing has to be dragged.** The keyboard is real buttons, step input writes notes at the cursor as keys are played, the wave editor takes typed Select from / to / Length, and every action is spoken through a live region |
+| **Budget** | An old Android phone or a shared school laptop, no admin rights, spotty wifi | **Nothing to install, no account, and it works offline.** It's one static site with no libraries. After the first visit the service worker serves it from the cache when the network takes over 3 seconds, and songs save on the device |
+| **Chaotic** | A low-vision user making a beat on their phone in a hallway between classes, 17 tabs open, no patience, interrupted halfway | **Nothing is lost when they leave.** Every change saves itself within a fifth of a second, and Undo goes back 100 steps. The phone layout also pins the keyboard and play bar, every color theme passes AA contrast, and text goes up to Extra large |
+
 ## Hypothesis
 
 > In the required form, users will be able to create fast, simple tunes for whatever sound
