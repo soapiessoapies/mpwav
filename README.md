@@ -31,7 +31,10 @@ Testers had fun using mpwav, and the audit partners didn't find it hard to under
 What tripped them up was getting results they didn't expect, because the page wasn't
 clear about what it was showing: the layout, or the format changing under them. So the
 process is split into clear, accessible steps for people getting into sound design, and
-the page now says what changed whenever it changes:
+the page now says what changed whenever it changes. Both accessibility audits were done
+(Week 8 and Week 9); in class we agreed this deliverable is freeform, so the findings are
+summed up here rather than itemized. Phie's own tests added one more goal: getting work out
+of mpwav faster, in whatever form it's needed next.
 
 | What it fixes | What we changed | Version |
 |---|---|---|
@@ -40,6 +43,7 @@ the page now says what changed whenever it changes:
 | Too much on one screen, and jumping between editing jobs | **Slides:** Make, Arrange, Edit, Sound and Mix each show only the panels that job needs, plus All. Switch with the slide buttons or Alt + 1 to 6, while Play, Record and Undo stay put on every slide | v0.19.0 |
 | New to making music | **The Guide:** a drawer in the top bar with scale notes on the computer keys, chords that fit and what they do, 5 patterns to play, beat basics, tips and a glossary | v0.24.0 |
 | Coming from Ableton or Cool Edit | Their names for each panel as hover hints, and a mapping table plus shortcuts in the Guide | v0.25.0 |
+| Getting work out efficiently (Phie's tests) | **Several export modes:** Home › Export makes the whole mix (WAV or AIFF, 16/24/32-bit, 44.1/48 kHz, normalize, dither, ring-out tail), stems as a .zip, MIDI, or song info as text, for the whole song, the loop or chosen bars. One clip exports on its own (a note clip comes with its MIDI). The wave editor's Export menu saves a selection, the parts between markers, or variations. Every sound export shows its peak and loudness (LUFS) | v0.22.0 to v0.24.0 |
 
 ## Hypothesis
 
