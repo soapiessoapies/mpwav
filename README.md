@@ -25,6 +25,19 @@ knowing the jargon first.
 | **Budget** | An old Android phone or a shared school laptop, no admin rights, spotty wifi | **Nothing to install, no account, and it works offline.** It's one static site with no libraries. After the first visit the service worker serves it from the cache when the network takes over 3 seconds, and songs save on the device |
 | **Chaotic** | A low-vision user making a beat on their phone in a hallway between classes, 17 tabs open, no patience, interrupted halfway | **Nothing is lost when they leave.** Every change saves itself within a fifth of a second, and Undo goes back 100 steps. The phone layout also pins the keyboard and play bar, every color theme passes AA contrast, and text goes up to Extra large |
 
+## What testing found, and what changed
+
+Testers had fun using mpwav. What they needed was a clearer way in, and smoother moves
+between editing jobs, so the process is split into accessible steps for people getting
+into sound design:
+
+| What it fixes | What we changed | Version |
+|---|---|---|
+| Hard to grasp at first | **Guided tour:** 12 steps, each ringing one real control, in an accessible dialog (focus stays in it, Esc ends it). It runs once on a first visit and replays from Settings › Tutorial | v0.9.0, v0.25.0 |
+| Too much on one screen, and jumping between editing jobs | **Slides:** Make, Arrange, Edit, Sound and Mix each show only the panels that job needs, plus All. Switch with the slide buttons or Alt + 1 to 6, while Play, Record and Undo stay put on every slide | v0.19.0 |
+| New to making music | **The Guide:** a drawer in the top bar with scale notes on the computer keys, chords that fit and what they do, 5 patterns to play, beat basics, tips and a glossary | v0.24.0 |
+| Coming from Ableton or Cool Edit | Their names for each panel as hover hints, and a mapping table plus shortcuts in the Guide | v0.25.0 |
+
 ## Hypothesis
 
 > In the required form, users will be able to create fast, simple tunes for whatever sound
