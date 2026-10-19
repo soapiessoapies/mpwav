@@ -767,3 +767,11 @@ CREDITS.md).
 - Next (planned): find a loaded sound's own pitch automatically; record from
   the microphone straight into an instrument; loop points and more recorded
   notes for long held notes.
+
+## Submission check (v0.27.1)
+
+Checked again on a 390 px phone with touch before handing in: no sideways
+scrolling at 320, 390 or 768 px on any slide, axe (WCAG 2.2 AA) clean on every
+slide and dialog, touch keys play, and recorded instruments load on the phone.
+One fix: after "Loading Piano: 3 of 12 notes", screen readers now also hear
+"Piano is ready".

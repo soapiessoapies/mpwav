@@ -137,6 +137,7 @@
     return Instruments.load(id, Samples.decode, (done, total) => {
       if (done < total && Date.now() - said > 1500) { said = Date.now(); Announce.say(`Loading ${inst.name}: ${done} of ${total} notes`); }
     }).then((zones) => {
+      if (said) Announce.say(`${inst.name} is ready`); // after "Loading…", say it finished
       for (const t of song.tracks) if (t.instrument === id) applySampler(t);
       renderKeySound();
       renderSoundPage();
