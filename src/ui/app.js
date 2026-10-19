@@ -39,7 +39,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, posterSeen: true, recentColors: ColorPick.recent(),
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, ppanel: ui.ppanel, posterSeen: true, recentColors: ColorPick.recent(),
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -653,10 +653,11 @@
       return;
     }
     if (inDialog(e.target)) return;
-    // Alt + 1 to 6: the slides.
-    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[1-6]$/.test(e.code)) {
+    // Alt + 1 to 5: the workspaces, in order; Alt + 0: All panels.
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[0-5]$/.test(e.code)) {
       e.preventDefault();
-      setSlide(Slides.LIST[Number(e.code.slice(5)) - 1].id, true);
+      const n = Number(e.code.slice(5));
+      setSlide(n ? Slides.STEPS[n - 1].id : "all", true);
       return;
     }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !typingInto(e.target) && shortcut(e)) { e.preventDefault(); return; }
@@ -1122,7 +1123,7 @@
     $("note-vel-out").textContent = same("vel") ? Math.round(first.vel * 100) + "%" : "mixed";
     noteLen.setAttribute("aria-valuetext", same("len") ? steps(first.len) : `mixed, ${steps(first.len)} on the first`);
     noteVel.setAttribute("aria-valuetext", same("vel") ? Math.round(first.vel * 100) + " percent" : "mixed");
-    // The notes' own color (for sorting them; shown on the Edit and Arrange slides).
+    // The notes' own color (for sorting them; shown in the Edit and Arrange workspaces).
     const nc = same("color") ? first.color || null : undefined;
     const ncName = nc === undefined ? "mixed" : nc ? ColorPick.nameOf(nc) : "key shades";
     noteColorBtn.style.setProperty("--sw", nc ? Colors.cssOf(nc) : "transparent");
@@ -1232,7 +1233,7 @@
         const n = selNotes.size;
         editNotes((c, note) => { if (color) note.color = color; else delete note.color; },
           (color ? `${n === 1 ? "Note" : n + " notes"} colored ${ColorPick.nameOf(color).toLowerCase()}` : `${n === 1 ? "Note" : n + " notes"} back to key shades`) +
-          (noteColorsShown() ? "" : ". Note colors show on the Edit and Arrange slides"));
+          (noteColorsShown() ? "" : ". Note colors show in the Edit and Arrange workspaces"));
       },
     });
   });
@@ -3479,8 +3480,9 @@
   });
   pages.select($(ui.page) ? ui.page : "tab-p-note", false);
   showTab(pages.current);
-  const pageIds = [...document.querySelectorAll(".pages [role=tab]")].map((t) => t.id);
+  const shownPages = () => [...document.querySelectorAll(".pages [role=tab]")].filter((t) => !t.hidden).map((t) => t.id);
   const turnPage = (dir) => {
+    const pageIds = shownPages();
     const i = (pageIds.indexOf(pages.current) + dir + pageIds.length) % pageIds.length;
     pages.select(pageIds.at(i), false);
     showTab(pageIds.at(i));
@@ -3800,10 +3802,24 @@
     document.documentElement.dataset.slide = s.id;
     slideNav.show(s.id);
     $("note-edit-h").textContent = s.id === "mix" ? "Mixer" : s.id === "sound" ? "Sound" : "Note Edit";
+    // The workspace header, and the Note Edit pages this workspace offers.
+    const step = Slides.STEPS.indexOf(s);
+    $("ws-num").textContent = step >= 0 ? String(step + 1) : "All";
+    $("ws-name").textContent = s.name;
+    $("ws-about").textContent = s.about[0].toUpperCase() + s.about.slice(1);
+    $("all-panels").setAttribute("aria-pressed", String(s.id === "all"));
+    for (const tab of document.querySelectorAll(".pages [role=tab]")) {
+      const off = !!s.pages && !s.pages.includes(tab.id);
+      tab.hidden = off;
+      if (off) $(tab.getAttribute("aria-controls")).hidden = true;
+    }
+    document.documentElement.dataset.onepage = String(!!s.pages && s.pages.length === 1);
+    showPhonePanel(s);
     if (byHand && arrange.arranging) setArranging(false);
     // Any change of slide opens its page (also when a new song moves you
     // there): leaving Mix that way used to keep the mixer showing.
     if (s.page && s.id !== was) pages.select(s.page, false);
+    else pages.refresh(); // the open page may not be offered here
     // Make and Sound work on one clip: open the selected one, or the track's first.
     let opened = "";
     if (byHand && (s.id === "make" || s.id === "sound") && !find(open)) {
@@ -3823,6 +3839,34 @@
     save();
   }
   setSlide(ui.slide, false);
+  $("all-panels").addEventListener("click", () => setSlide(ui.slide === "all" ? "make" : "all", true));
+  // Phones: a workspace with a work panel and Note Edit shows one of them at
+  // a time; which one is kept per workspace.
+  function showPhonePanel(s) {
+    const work = s.panels.includes("playbox") ? "playbox" : s.panels.includes("clip-editor") ? "clip-editor" : null;
+    const two = s.id !== "all" && !!work && s.panels.includes("note-edit");
+    const root = document.documentElement.dataset;
+    root.twopanels = String(two);
+    if (!two) return;
+    ui.ppanel = ui.ppanel && typeof ui.ppanel === "object" ? ui.ppanel : {};
+    const which = ui.ppanel[s.id] === "side" ? "side" : "work";
+    root.ppanel = which;
+    $("pp-work").textContent = work === "playbox" ? "Timeline" : "Clip";
+    $("pp-side").textContent = $("note-edit-h").textContent;
+    $("pp-work").setAttribute("aria-pressed", String(which === "work"));
+    $("pp-side").setAttribute("aria-pressed", String(which === "side"));
+  }
+  for (const [id, which] of [["pp-work", "work"], ["pp-side", "side"]]) {
+    $(id).addEventListener("click", () => {
+      ui.ppanel = ui.ppanel && typeof ui.ppanel === "object" ? ui.ppanel : {};
+      ui.ppanel[ui.slide] = which;
+      showPhonePanel(Slides.find(ui.slide));
+      timeline.render();
+      roll.rebuild();
+      Announce.say(`Showing ${$(id).textContent}`);
+      save();
+    });
+  }
   $("arrange-done").addEventListener("click", () => setArranging(false));
   $("arrange-reset").addEventListener("click", () => arrange.reset());
   const sideLeft = $("side-left");

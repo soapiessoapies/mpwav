@@ -26,6 +26,13 @@
   --c-lime: #c4e86b;
   --c-gold: #f2d16b;
   --c-coral: #ff9a7a;
+  /* Workspace colors (from the poster's family, spread apart so each step reads as its own place; text on them: --ws-ink) */
+  --ws-make: #ffb59a;
+  --ws-arrange: #8fb8ff;
+  --ws-edit: #7fe3cf;
+  --ws-sound: #c39bff;
+  --ws-mix: #ffdc7a;
+  --ws-ink: #1d1b55;
   --focus: #8fd0ff;
   --white-key: #eceff4;
   --white-key-ink: #1b1e25;
@@ -1269,10 +1276,14 @@ html[data-motion="off"] .tour-spot { transition: none; }
 
 .slides { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .slide-btn { min-height: 36px; padding: 0 12px; font-weight: 600; }
-.slide-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.slide-btn[aria-pressed="true"] { background: var(--ws-c, var(--accent)); color: var(--ws-ink); border-color: var(--ws-c, var(--accent)); }
+.slide-btn { display: inline-flex; align-items: center; gap: 5px; }
+.slide-num { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 9px; font-size: 0.74rem; font-weight: 800;
+  background: var(--ws-c); color: var(--ws-ink); }
+.slide-btn[aria-pressed="true"] .slide-num { background: var(--ws-ink); color: var(--ws-c); }
 /* Desktop: the switcher sits in the transport bar (app.js moves it there), between Redo and Tempo. */
 .transport-bar > .slides { margin-left: auto; flex-wrap: nowrap; gap: 3px; }
-.transport-bar > .slides .slide-btn { padding: 0 9px; }
+.transport-bar > .slides .slide-btn { padding: 0 7px 0 5px; }
 .transport-bar > .slides + .tempo { margin-left: 0; }
 [data-fit="on"] .transport-bar > .slides .slide-btn { min-height: 36px; }
 @media (max-width: 1799px) {
@@ -1297,7 +1308,7 @@ html[data-motion="off"] .tour-spot { transition: none; }
 
 /* Arrange and Edit: the timeline has the whole height. Edit puts the clip
    tools away and lets the clip labels fade back, so it reads as one song. */
-[data-slide="edit"] .playbox .tool-row { display: none; }
+[data-slide="edit"] .playbox .pb-menus { display: none; }
 /* Lighter and smaller, not see-through: faded text failed AA contrast. */
 [data-slide="edit"] .clip-name { font-weight: 400; font-size: 0.78rem; }
 [data-layout="compact"][data-slide="edit"] .tl-row:not(.collapsed) { height: var(--row-h); } /* phones: taller rows here */
@@ -1465,3 +1476,55 @@ fieldset:disabled { opacity: 0.55; }
 .cp-any input[type="color"] { width: 44px; height: 36px; padding: 2px; border-radius: 6px; }
 .cp-hex { width: 7.5em; font-family: inherit; }
 .cp-hex[aria-invalid="true"] { border-color: var(--rec); }
+
+/* ---------- Workspaces: each step has its own color (--ws-c) ---------- */
+.slide-btn[data-slide="make"], [data-slide="make"] .ws-head { --ws-c: var(--ws-make); }
+.slide-btn[data-slide="arrange"], [data-slide="arrange"] .ws-head { --ws-c: var(--ws-arrange); }
+.slide-btn[data-slide="edit"], [data-slide="edit"] .ws-head { --ws-c: var(--ws-edit); }
+.slide-btn[data-slide="sound"], [data-slide="sound"] .ws-head { --ws-c: var(--ws-sound); }
+.slide-btn[data-slide="mix"], [data-slide="mix"] .ws-head { --ws-c: var(--ws-mix); }
+[data-slide="make"] { --ws-now: var(--ws-make); }
+[data-slide="arrange"] { --ws-now: var(--ws-arrange); }
+[data-slide="edit"] { --ws-now: var(--ws-edit); }
+[data-slide="sound"] { --ws-now: var(--ws-sound); }
+[data-slide="mix"] { --ws-now: var(--ws-mix); }
+.ws-head {
+  display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 14px 4px 6px;
+  border: 2px solid var(--ws-c, var(--accent)); border-radius: 999px; background: var(--panel);
+}
+.ws-num { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--ws-c, var(--accent)); color: var(--ws-ink); font-weight: 800; }
+.ws-text { margin: 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-text strong { font-size: 1.05rem; }
+.ws-about { color: var(--muted); }
+.ws-about::before { content: "— "; }
+.ws-wave { flex: 1 1 60px; min-width: 40px; height: 12px; }
+.ws-wave path { fill: none; stroke: var(--ws-c, var(--accent)); stroke-width: 2.4; stroke-linecap: round; }
+/* Panels wear the workspace's color on their edge, so you always know where you are. */
+.studio .panel { border-color: color-mix(in srgb, var(--ws-now, var(--line)) 70%, var(--line)); }
+[data-slide="all"] .ws-num { font-size: 0.9rem; }
+[data-arrange="on"] .ws-head { display: none; }
+[data-layout="wide"] .ws-head { grid-area: bar; }
+[data-layout="compact"] .ws-head { padding: 2px 10px 2px 4px; }
+[data-layout="compact"] .ws-wave { display: none; }
+[data-layout="compact"] .ws-about { white-space: normal; }
+[data-layout="compact"] .ws-text { white-space: normal; font-size: 0.92rem; }
+/* Workspaces offer only their own Note Edit pages: no paging arrows, and no tab row at all for one page. */
+:root:not([data-slide="all"]) .page-arrow { display: none; }
+[data-onepage="true"] #note-edit .pager { display: none; }
+/* Phones: a workspace with two panels shows one at a time (data-ppanel). */
+.phone-panels { display: none; }
+[data-layout="compact"][data-twopanels="true"] .phone-panels { display: flex; gap: 6px; }
+.phone-panels button { flex: 1 1 0; min-height: 44px; font-weight: 700; }
+.phone-panels button[aria-pressed="true"] { background: var(--ws-now, var(--accent)); color: var(--ws-ink); border-color: var(--ws-now, var(--accent)); }
+[data-layout="compact"][data-twopanels="true"][data-ppanel="side"] #playbox,
+[data-layout="compact"][data-twopanels="true"][data-ppanel="side"] #clip-editor,
+[data-layout="compact"][data-twopanels="true"][data-ppanel="work"] #note-edit { display: none !important; }
+.color-menu.open { position: fixed; z-index: 50; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+/* Phones: the five workspace buttons share the width (the header shows the number). */
+[data-layout="compact"] .slide-num { display: none; }
+[data-layout="compact"] .slides .slide-btn { flex: 1 1 0; min-width: 0; padding: 0 4px; justify-content: center; }
+/* Phones: chords in one row that scrolls, so the pinned keyboard stays short. */
+[data-layout="compact"] .chord-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+[data-layout="compact"] .chord-label { display: none; }
+[data-layout="compact"] .chord-row > button { flex: none; }

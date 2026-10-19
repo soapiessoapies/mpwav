@@ -800,3 +800,31 @@ From the beta dev plan (Edits 1-4, shared doc "mpwav Beta: Dev Plan").
   slide change now opens its own Note Edit page), and a clip opened while its
   piano roll was hidden started scrolled above its notes (the roll now centres
   once it shows).
+
+## Beta step 2: clearer workspaces (v0.29.0)
+
+"Slides" are called **workspaces** everywhere now. Phie's direction: keep the
+poster's style, and change the colors so each workspace reads as its own place.
+
+- **Numbered switcher:** 1 Make, 2 Arrange, 3 Edit, 4 Sound, 5 Mix
+  (Alt + 1 to 5). Each button wears its workspace's color (`--ws-make` …
+  `--ws-mix`, from the poster's family, spread apart: peach, periwinkle, aqua,
+  violet, gold; text on them in `--ws-ink`, tested at 4.5:1). **All panels**
+  moved to Settings > Layout ("Show all panels at once", Alt + 0).
+- **Workspace header** (`#ws-head`): a rounded poster-style bar under the
+  transport with the number, name, what it's for, and the poster's wave line,
+  all in the workspace's color; panels' edges take the color too.
+- **Note Edit shows only that workspace's pages** (`Slides.LIST[].pages`):
+  Make: Note, Track · Arrange: Track, Song · Edit: Note · Sound: Sound, Shape,
+  Filter, Warp · Mix: Mix. The paging arrows go; a one-page workspace has no tab row.
+- **Fewer buttons on screen:** the Playing box's seven clip buttons are a
+  **Clip** menu beside Section and Tempo (one row less above the timeline);
+  the piano roll's Select all / Copy / Cut / Paste / Duplicate / Clear are a
+  **Notes** menu; the keyboard's Speak notes and Shortcuts are under **More**.
+- **Phones: one panel at a time.** A workspace with a work panel and Note
+  Edit shows a two-button switch (Clip or Timeline / Note Edit), kept per
+  workspace (`ui.ppanel`); the keyboard stays pinned. The switcher's five
+  buttons share the width, and the chords scroll in one row.
+- Measured on the demo song (phone page length): Make 2291 → 1536 px,
+  Arrange 1527 → 901, Edit 1856 → 1167, Sound 3279 → 1047.
+- The color palette also works without popover support (iOS before 17).

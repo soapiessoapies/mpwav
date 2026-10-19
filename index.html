@@ -75,7 +75,7 @@
   </div>
 
   <!-- Slides: one job at a time (All is everything at once) -->
-  <nav id="slides" class="slides" aria-label="Slides"></nav>
+  <nav id="slides" class="slides" aria-label="Workspaces"></nav>
 
   <!-- Title: top right -->
   <header class="title-block">
@@ -89,6 +89,19 @@
       <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Home</button>
     </div>
   </header>
+
+  <!-- The workspace you're in: its number, name and job, in its own color -->
+  <div id="ws-head" class="ws-head">
+    <span id="ws-num" class="ws-num" aria-hidden="true">1</span>
+    <p class="ws-text"><strong id="ws-name">Make</strong> <span id="ws-about" class="ws-about">play and record ideas into one clip</span></p>
+    <svg class="ws-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
+  </div>
+
+  <!-- Phones: one panel at a time (the keyboard stays pinned below) -->
+  <div id="phone-panels" class="phone-panels seg-btns" role="group" aria-label="Show panel">
+    <button type="button" id="pp-work" aria-pressed="true">Clip</button>
+    <button type="button" id="pp-side" aria-pressed="false">Note Edit</button>
+  </div>
 
   <!-- Window edit mode: a bar shown while arranging panels -->
   <div id="arrange-bar" class="arrange-bar" role="region" aria-label="Arranging panels" hidden>
@@ -118,6 +131,11 @@
           <button id="zoom-fit" type="button" class="fit-btn" aria-keyshortcuts="Backslash">Fit</button>
           <button id="rows-fold" type="button" class="fit-btn" aria-pressed="false">Collapse rows</button>
         </div>
+        <div class="toolbar pb-menus">
+          <button type="button" class="menu-btn" popovertarget="clip-menu">Clip</button>
+          <button type="button" class="menu-btn" popovertarget="sec-menu">Section</button>
+          <button type="button" class="menu-btn" popovertarget="tempo-menu">Tempo</button>
+        </div>
       </div>
       <p id="playbox-help" class="help tip">
         Drag a clip to move it and its right edge to stretch it (the loop repeats). Double-click or double-tap
@@ -125,21 +143,14 @@
         drag along it to set the loop. Split cuts the selected clip in two at the play cursor. With a keyboard: arrows move between clips, <kbd>Alt</kbd> + arrows move a clip,
         <kbd>Shift</kbd> + arrows stretch it, <kbd>Enter</kbd> opens it, <kbd>Delete</kbd> removes it.
       </p>
-      <div class="tool-row">
-      <div class="toolbar" role="group" aria-label="Clip">
-        <span class="toolbar-label" aria-hidden="true">Clip</span>
+      <div id="clip-menu" class="menu" popover role="group" aria-label="Clip (the selected clip)">
         <button type="button" id="clip-copy" aria-keyshortcuts="Control+C">Copy</button>
         <button type="button" id="clip-cut" aria-keyshortcuts="Control+X">Cut</button>
         <button type="button" id="clip-paste" aria-keyshortcuts="Control+V">Paste</button>
         <button type="button" id="clip-dup" aria-keyshortcuts="Control+D">Duplicate</button>
         <button type="button" id="clip-link" aria-keyshortcuts="Control+Shift+D">Linked copy</button>
-        <button type="button" id="clip-split" aria-describedby="clip-split-help">Split</button>
+        <button type="button" id="clip-split" aria-describedby="clip-split-help">Split at the play cursor</button>
         <button type="button" id="clip-delete" aria-keyshortcuts="Delete">Delete</button>
-      </div>
-      <div class="toolbar">
-        <button type="button" class="menu-btn" popovertarget="sec-menu">Section</button>
-        <button type="button" class="menu-btn" popovertarget="tempo-menu">Tempo</button>
-      </div>
       </div>
       <p id="clip-split-help" class="sr-only">Cuts the selected clip in two at the play cursor, on a bar line. Each half becomes its own clip.</p>
       <div id="sec-menu" class="menu" popover role="group" aria-label="Section (the loop range, every track)">
@@ -185,20 +196,20 @@
       <div id="clip-body">
         <p id="clip-status" class="loop-status"></p>
         <div class="tool-row notes-only">
-        <div class="toolbar" role="group" aria-label="Notes">
-          <span class="toolbar-label" aria-hidden="true">Notes</span>
+        <div class="pattern-tools">
+          <button type="button" class="menu-btn" popovertarget="notes-menu">Notes</button>
+          <label class="inline">New notes <select id="note-length"></select></label>
+          <button type="button" id="step-input" class="step-input" aria-pressed="false" aria-describedby="step-help">Step input</button>
+          <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
+        </div>
+        </div>
+        <div id="notes-menu" class="menu" popover role="group" aria-label="Notes (the selected notes)">
           <button type="button" id="notes-all" aria-keyshortcuts="Control+A">Select all</button>
           <button type="button" id="notes-copy" aria-keyshortcuts="Control+C">Copy</button>
           <button type="button" id="notes-cut" aria-keyshortcuts="Control+X">Cut</button>
           <button type="button" id="notes-paste" aria-keyshortcuts="Control+V">Paste</button>
           <button type="button" id="notes-dup" aria-keyshortcuts="Control+D">Duplicate</button>
-        </div>
-        <div class="pattern-tools">
-          <label class="inline">New notes <select id="note-length"></select></label>
-          <button type="button" id="step-input" class="step-input" aria-pressed="false" aria-describedby="step-help">Step input</button>
-          <button id="undo-take" type="button" class="quiet" disabled>Undo take</button>
-          <button id="clear" type="button" class="quiet">Clear</button>
-        </div>
+          <button id="clear" type="button">Clear the clip</button>
         </div>
         <p id="roll-help" class="help tip">
           Scroll up and down for higher and lower notes. Click an empty spot to add a note (drag right as you click to draw it longer);
@@ -432,7 +443,7 @@
           </div>
           <div class="note-pitch">
             <button type="button" id="note-color" class="cp-open" aria-haspopup="dialog" aria-describedby="note-color-help"><span class="cp-chip" aria-hidden="true"></span>Color: <span id="note-color-out" aria-hidden="true">key shades</span></button>
-            <span id="note-color-help" class="help tip">Color notes to sort them. Their colors show on the Edit and Arrange slides; elsewhere notes stay their key's shade.</span>
+            <span id="note-color-help" class="help tip">Color notes to sort them. Their colors show in the Edit and Arrange workspaces; elsewhere notes stay their key's shade.</span>
           </div>
           <section id="note-fx" class="note-fx" aria-labelledby="note-fx-h">
             <h3 id="note-fx-h">This note's sound</h3>
@@ -561,7 +572,6 @@
           <span id="oct-label" class="oct-label"></span>
           <button id="oct-up" type="button" aria-label="Octave up">+</button>
         </div>
-        <label class="check"><input type="checkbox" id="announce-notes"> Speak notes</label>
         <fieldset class="keys-mode">
           <legend class="sr-only">Computer keys</legend>
           <div class="seg">
@@ -569,8 +579,12 @@
             <input type="radio" name="keys-mode" id="keys-edit" value="edit"><label for="keys-edit">Keys edit</label>
           </div>
         </fieldset>
-        <button id="shortcuts-btn" type="button" class="quiet" aria-haspopup="dialog" aria-keyshortcuts="Shift+Slash">Shortcuts</button>
         <button id="panic" type="button" class="quiet" aria-label="Stop all notes">Stop<span class="wide-only"> all notes</span></button>
+        <button type="button" class="menu-btn quiet" popovertarget="keys-menu">More</button>
+        <div id="keys-menu" class="menu" popover role="group" aria-label="More keyboard options">
+          <label class="check"><input type="checkbox" id="announce-notes"> Speak notes as they play</label>
+          <button id="shortcuts-btn" type="button" aria-haspopup="dialog" aria-keyshortcuts="Shift+Slash">Shortcuts</button>
+        </div>
       </div>
       <div id="keys-body">
         <p id="keys-help" class="help tip">
@@ -678,11 +692,11 @@
     <table class="g-map">
       <thead><tr><th scope="col">You know</th><th scope="col">In mpwav</th></tr></thead>
       <tbody>
-        <tr><td>Arrangement view, Multitrack view</td><td>Playing box (the Arrange slide)</td></tr>
+        <tr><td>Arrangement view, Multitrack view</td><td>Playing box (the Arrange workspace)</td></tr>
         <tr><td>Detail view, MIDI clip editor</td><td>The clip editor's piano roll (Make)</td></tr>
         <tr><td>Edit view (waveform editor)</td><td>Open a sound clip (Sound): Select, Edit, Effects, Tone, Time and pitch, Generate, Clean up</td></tr>
-        <tr><td>Device view, instrument and effects</td><td>Note Edit › Sound and Shape (the Sound slide)</td></tr>
-        <tr><td>Mixer</td><td>The Mix slide: faders, pan, mute and solo</td></tr>
+        <tr><td>Device view, instrument and effects</td><td>Note Edit › Sound and Shape (the Sound workspace)</td></tr>
+        <tr><td>Mixer</td><td>The Mix workspace: faders, pan, mute and solo</td></tr>
         <tr><td>Cue list, locators</td><td>Markers (wave editor › Select), the loop bars</td></tr>
         <tr><td>Export Audio, Mixdown, Bounce</td><td>Home › Export: mix, stems, a clip, MIDI</td></tr>
         <tr><td>Drum Rack, sample slots</td><td>Drum tracks, and Sound pads under the keyboard</td></tr>
@@ -820,9 +834,10 @@
     <button id="shortcuts-close" type="button" class="quiet">Close</button>
   </div>
   <p class="help">The computer keys either <strong>play</strong> notes or <strong>edit</strong>: switch with Ctrl + E or the switch by the keyboard. Single-key shortcuts can be turned off in Settings.</p>
-    <h3>Slides</h3>
+    <h3>Workspaces</h3>
     <table><tbody>
-      <tr><th scope="row">Alt + 1 to 6</th><td>All, Make, Arrange, Edit, Sound, Mix: each slide shows only the panels for that job</td></tr>
+      <tr><th scope="row">Alt + 1 to 5</th><td>The workspaces: 1 Make, 2 Arrange, 3 Edit, 4 Sound, 5 Mix. Each shows only the panels for that job</td></tr>
+      <tr><th scope="row">Alt + 0</th><td>All panels at once (also in Settings, Layout)</td></tr>
     </tbody></table>
     <h3>Anywhere</h3>
     <table class="keys-table">
@@ -906,6 +921,8 @@
     </fieldset>
     <p class="help">Auto grows the text with your screen, so it stays readable on a big monitor.</p>
     <label class="check"><input type="checkbox" id="fit-screen"> Fit to the window: on desktop every panel stays on one screen and scrolls inside itself</label>
+    <button type="button" id="all-panels" aria-pressed="false" aria-describedby="all-panels-help" aria-keyshortcuts="Alt+0">Show all panels at once</button>
+    <p id="all-panels-help" class="help">Every panel on one screen, as mpwav was before workspaces. Pick a workspace (1 to 5) to go back to one job at a time.</p>
     <button type="button" id="arrange-btn" aria-keyshortcuts="Control+Shift+L">Arrange panels</button>
     <fieldset class="choice">
       <legend>Background</legend>

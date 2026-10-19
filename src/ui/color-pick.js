@@ -63,6 +63,19 @@
       if (e.newState !== "open" && opener && opener.isConnected) opener.focus();
     });
     document.body.append(menu);
+    // Older browsers (iOS before 17) have no popovers: show it as a fixed box,
+    // closed by Esc, a pick, or a tap outside.
+    if (typeof menu.showPopover !== "function") {
+      const close = () => {
+        if (!menu.classList.contains("open")) return;
+        menu.classList.remove("open");
+        if (opener && opener.isConnected) opener.focus();
+      };
+      menu.showPopover = () => menu.classList.add("open");
+      menu.hidePopover = close;
+      menu.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+      document.addEventListener("pointerdown", (e) => { if (!menu.contains(e.target) && e.target !== opener) close(); });
+    }
   }
 
   function open(btn, o) {

@@ -36,3 +36,39 @@ test("the stylesheet hides exactly the panels each slide leaves out", () => {
     }
   }
 });
+
+test("the switcher numbers the five steps; All is reached from Settings", () => {
+  assert.deepEqual(Slides.STEPS.map((s) => s.id), ["make", "arrange", "edit", "sound", "mix"]);
+  const html = read("index.html");
+  assert.ok(html.includes('id="all-panels"'), "Settings has Show all panels at once");
+});
+
+test("each workspace offers only its own Note Edit pages, and opens on one of them", () => {
+  const html = read("index.html");
+  for (const s of Slides.STEPS) {
+    assert.ok(Array.isArray(s.pages) && s.pages.length, s.id);
+    assert.ok(s.pages.includes(s.page), `${s.id} opens on a page it offers`);
+    for (const p of s.pages) assert.ok(html.includes(`id="${p}"`), `${s.id}: ${p}`);
+  }
+  assert.equal(Slides.find("all").pages, undefined, "All offers every page");
+});
+
+test("every workspace has its own color, and its text reads on it", () => {
+  const css = read("styles/main.css");
+  const hex = (name) => (css.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i")) || [])[1];
+  const lum = (h) => {
+    const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ink = hex("ws-ink");
+  const seen = new Set();
+  for (const s of Slides.STEPS) {
+    const c = hex("ws-" + s.id);
+    assert.ok(c, `--ws-${s.id} is set`);
+    assert.ok(!seen.has(c), `${s.id} has a color of its own`);
+    seen.add(c);
+    const r = (Math.max(lum(c), lum(ink)) + 0.05) / (Math.min(lum(c), lum(ink)) + 0.05);
+    assert.ok(r >= 4.5, `--ws-ink on --ws-${s.id}: ${r.toFixed(2)}:1`);
+    assert.ok(css.includes(`.slide-btn[data-slide="${s.id}"]`), `${s.id}'s button wears its color`);
+  }
+});
