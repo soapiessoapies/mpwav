@@ -775,3 +775,28 @@ scrolling at 320, 390 or 768 px on any slide, axe (WCAG 2.2 AA) clean on every
 slide and dialog, touch keys play, and recorded instruments load on the phone.
 One fix: after "Loading Piano: 3 of 12 notes", screen readers now also hear
 "Piano is ready".
+
+## Beta step 1: colors and two fixes (v0.28.0)
+
+From the beta dev plan (Edits 1-4, shared doc "mpwav Beta: Dev Plan").
+
+- **Quick colors + a palette:** the eight named track colors stay as quick
+  picks on the Track page; **Custom…** opens a palette (`src/ui/color-pick.js`):
+  24 more swatches, any color (the system picker), a hex box, and the last six
+  custom colors (kept in the saved view settings).
+- **Clip colors:** the swatch button by the clip's name gives a clip its own
+  color (its label and its notes' shades), or "Same as track". Linked copies
+  share it, like the name; copies, pastes and duplicates keep it.
+- **Note colors, for sorting:** Note Edit's Note page has Color for the
+  selected notes. Their colors show on the **Edit and Arrange** slides; on Make
+  and Sound every note stays its key's shade of the clip's color, so playing
+  stays readable. "Key shades" takes a note's color off.
+- **Readable on any color:** colors are a name or `#rrggbb` (`Song.cleanColor`).
+  Text on them is picked by `Colors.inkFor`, which now measures contrast
+  properly (dark ink, white, or black for mid tones), so every color, custom
+  ones included, passes 4.5:1. `tests/colors.test.js` checks a grid of every
+  color and every shade of the palette.
+- **Fixed:** opening a song while on Mix kept the mixer showing on Make (any
+  slide change now opens its own Note Edit page), and a clip opened while its
+  piano roll was hidden started scrolled above its notes (the roll now centres
+  once it shows).

@@ -86,8 +86,11 @@
           d.style.width = (len / total) * 100 + "%";
           d.style.top = ((hi - n.midi + pad) / rows) * 100 + "%";
           d.style.height = 100 / rows + "%";
-          d.style.background = Colors.noteColor(t.color, n.midi);
-          d.style.color = Colors.noteInk(t.color, n.midi);
+          // A note's own color shows where notes are sorted (Edit, Arrange);
+          // elsewhere every note is its key's shade of the clip's color.
+          const col = n.color && h.noteColors && h.noteColors() ? n.color : c.color || t.color;
+          d.style.background = Colors.noteColor(col, n.midi);
+          d.style.color = Colors.noteInk(col, n.midi);
           d.style.opacity = (0.5 + 0.5 * (n.vel || 0)).toFixed(2);
           if (len * stepPx >= 26 && rowPx >= 11) d.textContent = Notes.noteName(n.midi);
           box.append(d);
@@ -211,7 +214,7 @@
           type: "button", "aria-pressed": String(t.id === song.selected), "data-focus-key": "head-" + t.id,
           "aria-label": `${t.name} track` + (t.mute ? ", muted" : "") + (t.solo ? ", soloed" : ""),
         });
-        name.style.setProperty("--track", `var(--c-${t.color})`);
+        Colors.paint(name, t.color);
         name.innerHTML = '<span class="tl-swatch" aria-hidden="true"></span>';
         name.append(t.name);
         name.addEventListener("click", () => h.onSelectTrack(t.id));
@@ -227,7 +230,7 @@
             "data-clip": clip.id, "data-focus-key": "clip-" + clip.id, tabindex: clip === stopClip ? "0" : "-1",
           });
           if (sel && sel.id === clip.id) b.setAttribute("aria-current", "true");
-          b.style.setProperty("--track", `var(--c-${t.color})`);
+          Colors.paint(b, c.color || t.color);
           b.style.left = clip.start * barW() + "px";
           b.style.width = clip.length * barW() + "px";
           const label = el("span", "clip-name", { "aria-hidden": "true" });

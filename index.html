@@ -166,6 +166,7 @@
       <div class="panel-head">
         <h2 id="clip-h" title="The clip editor: a piano roll for notes, or a waveform editor for a sound (Ableton's Detail view, Cool Edit's Edit view)">Clip</h2>
         <label class="inline clip-name-field">Name <input id="clip-name" type="text" maxlength="40" autocomplete="off"></label>
+        <button type="button" id="clip-color" class="cp-open cp-mini" aria-haspopup="dialog" aria-label="Clip color"><span class="cp-chip" aria-hidden="true"></span></button>
         <label class="inline">Loop <select id="clip-bars"></select></label>
         <label class="inline">Plays for <input id="clip-len" type="number" inputmode="numeric" min="1" max="256" step="1" aria-describedby="clip-len-help"> bars</label>
         <span id="clip-len-help" class="sr-only">How many bars this clip covers on the timeline; past its loop it repeats. It stops at the next clip.</span>
@@ -429,6 +430,10 @@
             <button type="button" id="note-up">Key up</button>
             <button type="button" id="note-oct-up">Octave up</button>
           </div>
+          <div class="note-pitch">
+            <button type="button" id="note-color" class="cp-open" aria-haspopup="dialog" aria-describedby="note-color-help"><span class="cp-chip" aria-hidden="true"></span>Color: <span id="note-color-out" aria-hidden="true">key shades</span></button>
+            <span id="note-color-help" class="help tip">Color notes to sort them. Their colors show on the Edit and Arrange slides; elsewhere notes stay their key's shade.</span>
+          </div>
           <section id="note-fx" class="note-fx" aria-labelledby="note-fx-h">
             <h3 id="note-fx-h">This note's sound</h3>
             <p class="help tip">On top of the track's sound, for the selected notes only. Double-click a slider to put it back.</p>
@@ -472,6 +477,7 @@
         <fieldset class="choice">
           <legend>Color</legend>
           <div id="track-colors" class="seg"></div>
+          <button type="button" id="track-color-custom" class="cp-open" aria-haspopup="dialog"><span class="cp-chip" aria-hidden="true"></span>Custom…</button>
         </fieldset>
         <div class="note-pitch" role="group" aria-label="Order">
           <button type="button" id="track-up">Move up</button>
@@ -1015,6 +1021,7 @@
 <script src="src/ui/meter.js"></script>
 <script src="src/ui/mixer-view.js"></script>
 <script src="src/ui/colors.js"></script>
+<script src="src/ui/color-pick.js"></script>
 <script src="src/ui/piano-roll.js"></script>
 <script src="src/ui/zoombar.js"></script>
 <script src="src/ui/timeline.js"></script>

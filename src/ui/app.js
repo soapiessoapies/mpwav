@@ -39,7 +39,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, posterSeen: true,
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, posterSeen: true, recentColors: ColorPick.recent(),
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -60,6 +60,9 @@
   const song = Song.sanitize(library.load(songId));
   const ui = { announceNotes: false, page: "tab-p-note", keysOpen: true, layout: "auto", theme: "poster", metronome: false, countIn: true, keysMode: "play", singleKeys: true, midi: false, collapsed: [], panels: null, folded: [], sideLeft: false, look: "pixel", motion: true, fit: true, tips: false, sizes: null, size: "auto", slide: "all", ...uiSaved };
   let arrange = null; // window edit mode (set up near the end)
+  ColorPick.setRecent(ui.recentColors);
+  // Notes' own colors show where notes get sorted: the Edit and Arrange slides.
+  const noteColorsShown = () => ui.slide === "edit" || ui.slide === "arrange";
   // The Poster look arrived after some people had already been using mpwav:
   // they get it once too, and whatever they pick after that is kept.
   if (!uiSaved.posterSeen) ui.theme = "poster";
@@ -717,6 +720,7 @@
   // --- the playing box ---
   const timeline = Timeline.create($("timeline"), {
     song: () => song,
+    noteColors: noteColorsShown,
     selectedClip: () => (find(picked) || {}).clip || null,
     onSelectTrack: (id, announce) => selectTrack(id, announce !== false),
     onSelectClip(t, clip, announce) {
@@ -1032,7 +1036,8 @@
     $("clip-body").classList.toggle("audio", !!c.audio);
     fillBarsChoice(c);
     $("clip-h").textContent = "Clip: " + t.name;
-    $("clip-editor").style.setProperty("--track", `var(--c-${t.color})`);
+    Colors.paint($("clip-editor"), c.color || t.color);
+    renderClipColor(t, c);
     nameField.value = c.name;
     barsSel.value = c.bars;
     if (document.activeElement !== lenField) lenField.value = clip.length;
@@ -1049,13 +1054,35 @@
     }
     for (const n of [...selNotes]) if (!c.notes.includes(n)) selNotes.delete(n);
     roll.render({
-      c, color: t.color, name: c.name, steps: c.bars * Song.STEPS, selected: selNotes, snap: song.snap,
+      c, color: c.color || t.color, noteColors: noteColorsShown(), name: c.name, steps: c.bars * Song.STEPS, selected: selNotes, snap: song.snap,
       inKey: (m) => Song.inKey(song, m), keySig: `${song.key.root}:${song.key.scale}`,
       ...(t.kind === "drums" ? { rows: Drums.KIT.map((d) => d.midi), rowName: Drums.nameOf, inKey: null } : {}),
     });
     lengthSel.value = t.length;
     renderNotePage();
   }
+
+  // The clip's own color (its label and notes), or the track's.
+  const clipColorBtn = $("clip-color");
+  function renderClipColor(t, c) {
+    clipColorBtn.style.setProperty("--sw", Colors.cssOf(c.color || t.color));
+    clipColorBtn.setAttribute("aria-label", `Clip color: ${c.color ? ColorPick.nameOf(c.color) : "same as track"}`);
+    clipColorBtn.title = `Clip color: ${c.color ? ColorPick.nameOf(c.color) : "same as track"}`;
+  }
+  clipColorBtn.addEventListener("click", () => {
+    const o = find(open);
+    if (!o) return;
+    ColorPick.open(clipColorBtn, {
+      title: `${o.c.name}'s color`, current: o.c.color || null, quick: true, none: `Same as track (${ColorPick.nameOf(o.t.color)})`,
+      onPick(color) {
+        if (color) o.c.color = color;
+        else delete o.c.color;
+        renderEditor();
+        timeline.render();
+        afterChange(color ? `${o.c.name} is ${ColorPick.nameOf(color).toLowerCase()}` : `${o.c.name} has its track's color`);
+      },
+    });
+  });
 
   // --- Note page: the selected notes' length, loudness and pitch ---
   const noteLen = $("note-len"), noteVel = $("note-vel");
@@ -1095,6 +1122,13 @@
     $("note-vel-out").textContent = same("vel") ? Math.round(first.vel * 100) + "%" : "mixed";
     noteLen.setAttribute("aria-valuetext", same("len") ? steps(first.len) : `mixed, ${steps(first.len)} on the first`);
     noteVel.setAttribute("aria-valuetext", same("vel") ? Math.round(first.vel * 100) + " percent" : "mixed");
+    // The notes' own color (for sorting them; shown on the Edit and Arrange slides).
+    const nc = same("color") ? first.color || null : undefined;
+    const ncName = nc === undefined ? "mixed" : nc ? ColorPick.nameOf(nc) : "key shades";
+    noteColorBtn.style.setProperty("--sw", nc ? Colors.cssOf(nc) : "transparent");
+    noteColorBtn.classList.toggle("has-color", !!nc);
+    $("note-color-out").textContent = ncName;
+    noteColorBtn.setAttribute("aria-label", `Note color: ${ncName}`);
     renderNoteFx(list);
   }
 
@@ -1186,6 +1220,22 @@
   $("note-down").addEventListener("click", transpose(-1, "Down a key"));
   $("note-oct-up").addEventListener("click", transpose(12, "Up an octave"));
   $("note-oct-down").addEventListener("click", transpose(-12, "Down an octave"));
+  const noteColorBtn = $("note-color");
+  noteColorBtn.addEventListener("click", () => {
+    const o = find(open);
+    if (!o || !selNotes.size) return;
+    const list = [...selNotes];
+    const cur = list.every((n) => n.color === list[0].color) ? list[0].color || null : undefined;
+    ColorPick.open(noteColorBtn, {
+      title: list.length === 1 ? "This note's color" : `${list.length} notes' color`, current: cur, quick: true, none: "Key shades (no color of its own)",
+      onPick(color) {
+        const n = selNotes.size;
+        editNotes((c, note) => { if (color) note.color = color; else delete note.color; },
+          (color ? `${n === 1 ? "Note" : n + " notes"} colored ${ColorPick.nameOf(color).toLowerCase()}` : `${n === 1 ? "Note" : n + " notes"} back to key shades`) +
+          (noteColorsShown() ? "" : ". Note colors show on the Edit and Arrange slides"));
+      },
+    });
+  });
   $("note-delete").addEventListener("click", () => {
     const o = find(open);
     if (!o || !selNotes.size) return;
@@ -1410,7 +1460,7 @@
   function drawWave(o, dur) {
     const a = o.c.audio;
     waveEl.textContent = "";
-    waveEl.style.setProperty("--track", `var(--c-${o.t.color})`);
+    Colors.paint(waveEl, o.c.color || o.t.color);
     if (!dur) return;
     const view = viewOf(dur);
     const W = 1000, H = 100, n = 1000;
@@ -2596,11 +2646,27 @@
     });
     $("track-colors").append(input, label);
   }
+  // Custom…: the palette, for any color beyond the eight quick ones.
+  const trackCustom = $("track-color-custom");
+  trackCustom.addEventListener("click", () => ColorPick.open(trackCustom, {
+    title: `${sel().name}'s color`, current: sel().color,
+    onPick(color) {
+      if (!color) return;
+      sel().color = color;
+      selectTrack(song.selected, false);
+      afterChange(`${sel().name} is ${ColorPick.nameOf(color).toLowerCase()}`);
+    },
+  }));
 
   function renderTrackPage() {
     const t = sel();
     if (document.activeElement !== trackName) trackName.value = t.name;
     for (const c of Song.COLORS) $("track-color-" + c).checked = t.color === c;
+    const custom = Colors.isHex(t.color);
+    trackCustom.style.setProperty("--sw", custom ? t.color : "transparent");
+    trackCustom.classList.toggle("has-color", custom);
+    trackCustom.setAttribute("aria-pressed", String(custom));
+    trackCustom.setAttribute("aria-label", custom ? `Custom color: ${ColorPick.nameOf(t.color)}. Open the palette` : "Custom color: open the palette");
     const i = song.tracks.indexOf(t);
     $("track-up").disabled = i === 0;
     $("track-down").disabled = i === song.tracks.length - 1;
@@ -2766,7 +2832,7 @@
         r.setAttribute("width", Math.max(1, c.length * 10 - 1));
         r.setAttribute("height", 6);
         r.setAttribute("rx", 1.5);
-        r.setAttribute("fill", `var(--c-${t.color})`);
+        r.setAttribute("fill", Colors.cssOf(t.color));
         svg.append(r);
       }
     });
@@ -3481,7 +3547,7 @@
     const t = sel();
     const chip = $("note-edit-track");
     chip.textContent = t.name;
-    chip.style.setProperty("--track", `var(--c-${t.color})`);
+    Colors.paint(chip, t.color);
     presetSel.value = t.preset;
     morphPad.set(t.morph);
     controls.refresh(t.params);
@@ -3735,7 +3801,9 @@
     slideNav.show(s.id);
     $("note-edit-h").textContent = s.id === "mix" ? "Mixer" : s.id === "sound" ? "Sound" : "Note Edit";
     if (byHand && arrange.arranging) setArranging(false);
-    if (byHand && s.page && s.id !== was) pages.select(s.page, false);
+    // Any change of slide opens its page (also when a new song moves you
+    // there): leaving Mix that way used to keep the mixer showing.
+    if (s.page && s.id !== was) pages.select(s.page, false);
     // Make and Sound work on one clip: open the selected one, or the track's first.
     let opened = "";
     if (byHand && (s.id === "make" || s.id === "sound") && !find(open)) {

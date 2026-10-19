@@ -132,8 +132,9 @@
         d.style.top = yOf(n.midi) + "px";
         d.style.width = n.len * stepW() - 2 + "px";
         d.style.height = rowH() - 2 + "px";
-        d.style.background = Colors.noteColor(view.color, n.midi);
-        d.style.color = Colors.noteInk(view.color, n.midi);
+        const col = view.noteColors && n.color ? n.color : view.color;
+        d.style.background = Colors.noteColor(col, n.midi);
+        d.style.color = Colors.noteInk(col, n.midi);
         if (n.len * stepW() >= 34 && !view.rows) d.textContent = nameOf(n.midi);
         const vel = document.createElement("span");
         vel.className = "note-vel";
@@ -174,10 +175,18 @@
       if (h.onView) h.onView(); // the zoom bar follows the clip's length
     }
 
+    // A hidden roll (its panel not on this slide) can't scroll: centre it
+    // once it shows, or a clip opened from Mix starts above its notes.
+    let pendingCenter = null;
     function centerOn(midi) {
       cursor.midi = clampMidi(midi);
       placeCursor();
+      if (!el.clientHeight) { pendingCenter = cursor.midi; return; }
+      pendingCenter = null;
       el.scrollTop = yOf(midi) - el.clientHeight / 2 + rowH() / 2;
+    }
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(() => { if (pendingCenter != null && el.clientHeight) centerOn(pendingCenter); }).observe(el);
     }
 
     // Keeps the cursor on screen as it moves.

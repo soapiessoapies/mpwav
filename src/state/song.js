@@ -49,6 +49,9 @@
   const LENGTHS = [1, 2, 4, 8, 16]; // lengths offered for new notes, in steps
   const VEL = 0.85; // a new note's loudness
   const COLORS = ["orange", "mint", "sky", "violet", "rose", "lime", "gold", "coral"];
+  // A track or clip color: a named one above, or a custom "#rrggbb" (lower case).
+  // Anything else is null.
+  const cleanColor = (c) => (COLORS.includes(c) ? c : typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : null);
   const MAX_TRACKS = 12;
   // The longest song: about 33 minutes at 120 bpm. Without a limit, a typed
   // or imported bar number in the millions froze the timeline.
@@ -274,8 +277,10 @@
 
   // A content of its own with the same notes (for copies that aren't linked).
   function cloneContent(song, c, name) {
-    return makeContent(song, c.trackId, name || nextName(song, Song_track(song, c.trackId)), c.bars,
+    const out = makeContent(song, c.trackId, name || nextName(song, Song_track(song, c.trackId)), c.bars,
       c.notes.map((n) => ({ ...n })), c.audio);
+    if (c.color) out.color = c.color;
+    return out;
   }
 
   // A copy of a clip right after it (or the next free space): linked shares
@@ -293,7 +298,7 @@
   function copyClip(song, clip) {
     const c = content(song, clip);
     return { kind: "clip", name: c.name, bars: c.bars, notes: c.notes.map((n) => ({ ...n })), length: clip.length, offset: clip.offset,
-      ...(c.audio ? { audio: { ...c.audio } } : {}) };
+      ...(c.audio ? { audio: { ...c.audio } } : {}), ...(c.color ? { color: c.color } : {}) };
   }
 
   // Pastes a copied clip onto a track at the first free space from `bar`.
@@ -302,6 +307,7 @@
     if (!!data.audio !== (t.kind === "audio")) return null;
     const c = makeContent(song, t.id, data.name + (Object.values(song.contents).some((x) => x.trackId === t.id && x.name === data.name) ? " copy" : ""),
       data.bars, data.notes.map((n) => ({ ...n })), data.audio);
+    if (cleanColor(data.color)) c.color = cleanColor(data.color);
     const clip = addClip(song, t, freeBar(t, bar, data.length), data.length, c.id);
     clip.offset = data.offset % data.bars;
     return clip;
@@ -461,7 +467,7 @@
       id: newId(song, "t"), kind,
       name: cleanName(name) || (kind === "audio" ? `Audio ${song.tracks.length + 1}` : kind === "drums" ? "Drums" : `Track ${song.tracks.length + 1}`),
       preset: Presets.find(preset) ? preset : "init",
-      color: COLORS.includes(color) ? color : COLORS.find((c) => !used.has(c)) || COLORS[song.tracks.length % COLORS.length],
+      color: cleanColor(color) || COLORS.find((c) => !used.has(c)) || COLORS[song.tracks.length % COLORS.length],
     });
     song.tracks.push(t);
     return t;
@@ -572,6 +578,7 @@
     const added = [];
     for (const n of data.notes) {
       const m = addNote(c, step + n.step, n.midi, n.len, n.vel, n.fx);
+      if (m && cleanColor(n.color)) m.color = cleanColor(n.color);
       if (m) added.push(m);
     }
     return added;
@@ -810,6 +817,8 @@
         };
         const fx = cleanFx(n.fx);
         if (fx) out.fx = fx;
+        // A note's own color, to sort notes by (shown on the Edit and Arrange slides).
+        if (cleanColor(n.color)) out.color = cleanColor(n.color);
         return out;
       });
   }
@@ -873,7 +882,7 @@
             id: x.id, kind: cleanKind(x.kind),
             name: cleanName(x.name) || def.name || "Track",
             preset: Presets.find(x.preset) ? x.preset : def.preset || "init",
-            color: COLORS.includes(x.color) ? x.color : def.color || COLORS[i % COLORS.length],
+            color: cleanColor(x.color) || def.color || COLORS[i % COLORS.length],
             gridBase: def.gridBase, length: def.length,
           });
         });
@@ -908,6 +917,8 @@
           name: typeof c.name === "string" && c.name.trim() ? c.name.trim().slice(0, 40) : "Clip",
           notes: audio ? [] : cleanNotes(c.notes, bars, lenFor(c.trackId)),
         };
+        // A clip's own color (linked copies share it, like the name); none = the track's.
+        if (cleanColor(c.color)) out.contents[id].color = cleanColor(c.color);
         if (audio) out.contents[id].audio = audio;
       }
     }
@@ -916,7 +927,7 @@
       const s = saved.find((x) => x && x.id === t.id);
       if (!s) continue;
       if (Presets.find(s.preset)) t.preset = s.preset;
-      if (COLORS.includes(s.color)) t.color = s.color;
+      if (cleanColor(s.color)) t.color = cleanColor(s.color);
       t.params = Params.sanitize(s.params || Presets.find(t.preset).params);
       if (t.kind === "synth") t.sampler = cleanSampler(s.sampler);
       // One or the other: an instrument only when the track has no sound file of its own.
@@ -963,7 +974,7 @@
   }
 
   const api = {
-    VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
+    VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, cleanColor, VEL,
     MAX_TRACKS, BARS_MAX, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
     AUDIO_BARS_MAX, CUES_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
