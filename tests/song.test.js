@@ -579,3 +579,35 @@ test("a clip recorded live fills the free bars of the loop around the playhead",
   assert.equal(S.freeSpan(t, 4, loop), null); // a clip is already there
   assert.deepEqual(S.freeSpan(t, 10, { on: false }), { start: 10, length: 4 });
 });
+
+test("songs stop at BARS_MAX bars: huge bar numbers can't freeze the timeline", () => {
+  const s = S.createSong();
+  const t = lead(s);
+  const c = S.addClip(s, t, 0, 1);
+  // Moving or stretching toward a bar in the billions stops at the limit at once.
+  assert.equal(S.moveClip(t, c, 1e9), S.BARS_MAX - 1);
+  assert.equal(S.resizeClip(t, c, 1e9), 1, "already at the end: nothing to grow into");
+  S.moveClip(t, c, 0);
+  assert.equal(S.resizeClip(t, c, 1e9), S.BARS_MAX);
+  assert.equal(S.addClip(s, S.track(s, "bass"), S.BARS_MAX, 1), null, "no clip past the end");
+  // A full song can't grow by inserting or duplicating bars.
+  assert.equal(S.insertBars(s, 0, 1), false);
+  assert.equal(S.duplicateBars(s, 0, 1), false);
+  assert.equal(S.songBars(s), S.BARS_MAX);
+});
+
+test("sanitize keeps the loop, cursor, tempo changes and clips inside BARS_MAX", () => {
+  const s = S.createSong();
+  S.addClip(s, lead(s), 0, 1);
+  const raw = JSON.parse(JSON.stringify(s));
+  raw.loop = { on: true, start: 0, end: 1e9 };
+  raw.cursor = 5e8;
+  raw.tempos = [{ bar: 1e9, bpm: 100 }];
+  raw.tracks[0].clips.push({ id: "cz", contentId: raw.tracks[0].clips[0].contentId, start: 1e9, length: 1, offset: 0 });
+  const out = S.sanitize(raw);
+  assert.ok(out.loop.end <= S.BARS_MAX);
+  assert.ok(out.cursor < S.BARS_MAX);
+  assert.deepEqual(out.tempos, []);
+  assert.equal(lead(out).clips.length, 1, "the clip at bar a billion is dropped");
+  assert.ok(S.viewBars(out) <= S.BARS_MAX);
+});

@@ -299,8 +299,8 @@
     showSongStatus();
   }
   function setLoop(start, end, announce) {
-    start = Math.max(0, start);
-    end = Math.max(start + 1, end);
+    start = Math.min(Math.max(0, start), Song.BARS_MAX - 1);
+    end = Math.min(Math.max(start + 1, end), Song.BARS_MAX);
     song.loop = { on: true, start, end };
     showLoop();
     timeline.render();
@@ -2185,12 +2185,12 @@
   }
   $("sec-dup").addEventListener("click", () => {
     const words = range();
-    Song.duplicateBars(song, song.loop.start, song.loop.end);
+    if (!Song.duplicateBars(song, song.loop.start, song.loop.end)) { Announce.say(`Songs can be up to ${Song.BARS_MAX} bars long; that would go past it`); return; }
     afterSection(`Duplicated ${words}`);
   });
   $("sec-insert").addEventListener("click", () => {
     const bar = song.cursor;
-    Song.insertBars(song, bar, 1);
+    if (!Song.insertBars(song, bar, 1)) { Announce.say(`Songs can be up to ${Song.BARS_MAX} bars long; that would go past it`); return; }
     afterSection(`Inserted an empty bar at bar ${bar + 1}`);
   });
   $("sec-delete").addEventListener("click", () => {
@@ -3051,6 +3051,7 @@
     if (range === "bars") {
       const from = Math.round(Number($("export-from").value)), to = Math.round(Number($("export-to").value));
       if (!(from >= 1 && to >= from)) return { error: "Pick the bars to export: from a bar, to the same bar or a later one." };
+      if (to > Math.max(1, bars)) return { error: `The song is ${bars} bar${bars === 1 ? "" : "s"} long: pick bars up to ${Math.max(1, bars)}.` };
       return { from: from - 1, to, label: ` bars ${from}-${to}` };
     }
     return { from: 0, to: bars, label: "" };

@@ -1298,7 +1298,8 @@ html[data-motion="off"] .tour-spot { transition: none; }
 /* Arrange and Edit: the timeline has the whole height. Edit puts the clip
    tools away and lets the clip labels fade back, so it reads as one song. */
 [data-slide="edit"] .playbox .tool-row { display: none; }
-[data-slide="edit"] .clip-name { opacity: 0.55; }
+/* Lighter and smaller, not see-through: faded text failed AA contrast. */
+[data-slide="edit"] .clip-name { font-weight: 400; font-size: 0.78rem; }
 [data-layout="compact"][data-slide="edit"] .tl-row:not(.collapsed) { height: var(--row-h); } /* phones: taller rows here */
 
 /* Mix: the mixer across the whole width, with tall faders. */

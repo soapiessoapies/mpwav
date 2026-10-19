@@ -49,6 +49,9 @@
   const VEL = 0.85; // a new note's loudness
   const COLORS = ["orange", "mint", "sky", "violet", "rose", "lime", "gold", "coral"];
   const MAX_TRACKS = 12;
+  // The longest song: about 33 minutes at 120 bpm. Without a limit, a typed
+  // or imported bar number in the millions froze the timeline.
+  const BARS_MAX = 999;
   const ID_RE = /^[a-z0-9-]{1,20}$/;
   const SNAPS = [1, 2, 4, 8, 16]; // in steps: 1/16, 1/8, 1/4, 1/2, a bar
   const SWING_MAX = 0.5; // of a step
@@ -226,7 +229,7 @@
 
   // Is [start, start + length) clear of the track's other clips?
   function fits(t, start, length, ignore) {
-    if (start < 0 || length < 1) return false;
+    if (start < 0 || length < 1 || start + length > BARS_MAX) return false;
     return t.clips.every((c) => c === ignore || clipEnd(c) <= start || c.start >= start + length);
   }
 
@@ -346,12 +349,14 @@
   // --- sections: bars across every track ---
   // Inserts `n` empty bars at `bar`, splitting any clip that crosses it.
   function insertBars(song, bar, n) {
+    if (songBars(song) + n > BARS_MAX) return false;
     for (const t of song.tracks) {
       const crossing = clipAt(t, bar);
       if (crossing && crossing.start < bar) splitClip(song, t, crossing, bar);
       for (const c of t.clips) if (c.start >= bar) c.start += n;
     }
     shiftMarks(song, bar, n);
+    return true;
   }
 
   // Removes bars [start, end) from every track; what comes after moves left.
@@ -377,6 +382,7 @@
   // to each other, as they were in the original).
   function duplicateBars(song, start, end) {
     const n = end - start;
+    if (songBars(song) + n > BARS_MAX) return false;
     const pieces = [];
     for (const t of song.tracks) {
       for (const at of [start, end]) {
@@ -392,14 +398,15 @@
       const copy = addClip(song, t, c.start + n, c.length, made[c.contentId].id);
       copy.offset = c.offset;
     }
+    return true;
   }
 
   // Keeps the cursor and loop on the same music when bars are added (n > 0)
   // or taken away (n < 0) at bar `at`. A loop that ends exactly where bars
   // are added stays as it was (it doesn't swallow the new bars).
   function shiftMarks(song, at, n, floor = 0) {
-    const move = (b) => (b >= at ? Math.max(floor, b + n) : b);
-    const moveEnd = (b) => (b > at ? Math.max(floor, b + n) : b);
+    const move = (b) => Math.min(BARS_MAX - 1, b >= at ? Math.max(floor, b + n) : b);
+    const moveEnd = (b) => Math.min(BARS_MAX, b > at ? Math.max(floor, b + n) : b);
     song.cursor = move(song.cursor);
     const start = move(song.loop.start);
     song.loop.end = Math.max(start + 1, n > 0 ? moveEnd(song.loop.end) : move(song.loop.end));
@@ -411,7 +418,7 @@
 
   // Moves a clip as far toward `start` as it can go without overlapping.
   function moveClip(t, clip, start) {
-    start = Math.max(0, start);
+    start = Math.min(Math.max(0, start), BARS_MAX - clip.length);
     const step = start > clip.start ? 1 : -1;
     let at = clip.start;
     while (at !== start && fits(t, at + step, clip.length, clip)) at += step;
@@ -422,7 +429,7 @@
 
   // Stretches (or shortens) a clip from its right edge, stopping at the next clip.
   function resizeClip(t, clip, length) {
-    length = Math.max(1, length);
+    length = Math.min(Math.max(1, length), BARS_MAX - clip.start);
     let len = clip.length;
     const step = length > len ? 1 : -1;
     while (len !== length && fits(t, clip.start, len + step, clip)) len += step;
@@ -842,7 +849,7 @@
     out.bpm = clampBpm(input.bpm);
     if (Array.isArray(input.tempos)) {
       for (const m of input.tempos) {
-        if (m && Number.isInteger(m.bar) && m.bar > 0 && !out.tempos.some((x) => x.bar === m.bar)) {
+        if (m && Number.isInteger(m.bar) && m.bar > 0 && m.bar < BARS_MAX && !out.tempos.some((x) => x.bar === m.bar)) {
           out.tempos.push({ bar: m.bar, bpm: clampBpm(m.bpm), ramp: m.ramp === true });
         }
       }
@@ -941,9 +948,9 @@
     for (const id of Object.keys(out.contents)) if (!linkCount(out, id)) delete out.contents[id];
 
     if (out.tracks.some((t) => t.id === input.selected)) out.selected = input.selected;
-    out.cursor = Math.max(0, int(input.cursor, 0));
+    out.cursor = clamp(int(input.cursor, 0), 0, BARS_MAX - 1);
     const lp = input.loop && typeof input.loop === "object" ? input.loop : null;
-    if (lp && int(lp.start, -1) >= 0 && int(lp.end, -1) > lp.start) {
+    if (lp && int(lp.start, -1) >= 0 && int(lp.end, -1) > lp.start && lp.end <= BARS_MAX) {
       out.loop = { on: lp.on !== false, start: lp.start, end: lp.end };
     } else if (!v3) {
       out.loop = { on: true, start: 0, end: Math.max(1, songBars(out)) };
@@ -953,7 +960,7 @@
 
   const api = {
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, VEL,
-    MAX_TRACKS, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
+    MAX_TRACKS, BARS_MAX, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
     AUDIO_BARS_MAX, CUES_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
