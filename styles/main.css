@@ -1436,3 +1436,12 @@ fieldset:disabled { opacity: 0.55; }
   pointer-events: none;
 }
 .notice[hidden] { display: none; }
+
+/* The keyboard's Sound picker: the track's synth or a recorded instrument. */
+.key-sound[hidden] { display: none; }
+.key-sound select { max-width: 13em; }
+.key-sound select[aria-busy="true"] { cursor: progress; }
+/* Phones: the keyboard's controls stay on one row; the Sound picker gets a row of its own under them. */
+[data-layout="compact"] .keys-panel .panel-head:has(.key-sound:not([hidden])) { flex-wrap: wrap; }
+[data-layout="compact"] .key-sound { order: 10; flex: 1 0 100%; }
+[data-layout="compact"] .key-sound select { flex: 1; max-width: none; min-height: 40px; }

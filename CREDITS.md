@@ -20,8 +20,8 @@ Made for CTEC 200: Innovation and Creative Coding, Ringling College, Fall 2026.
 | All app code | `src/`, `index.html`, `styles/`, `sw.js`, `tools/`, `tests/` | Written for mpwav |
 | The poster look and lettering | `assets/art/mpwav-poster-title.jpg`, poster colors in `styles/` | Cropped from Phie's mpwav poster |
 | App icons | `assets/icons/` | Drawn by `tools/make-icons.js` |
-| Demo song, starter loops, drum beats, presets | `src/state/`, `src/audio/drums.js` | Written for mpwav. No samples or recordings from anyone else |
-| Every sound | Made live by the Web Audio API | The app ships no audio files. Sounds people add stay on their own device |
+| Demo song, starter loops, drum beats, presets | `src/state/`, `src/audio/drums.js` | Written for mpwav |
+| Every synth and drum sound | Made live by the Web Audio API | The app ships no audio files. Sounds people add stay on their own device. Recorded instruments are borrowed (below) |
 | The guided tour | `src/ui/tour.js` | Ported from Phie's own Critters project |
 | The paper-and-pixel look | `styles/look.css`, `src/ui/fill.js` | Modeled on Phie's own Bezier project |
 
@@ -35,6 +35,17 @@ No license has been chosen for our code yet, so for now all rights are reserved 
 | Pixelify Sans | 2021 The Pixelify Sans Project Authors | SIL Open Font License 1.1 | Same. Done: `assets/fonts/OFL-Pixelify-Sans.txt` |
 | Caveat Brush | 2015 Google Inc. | SIL Open Font License 1.1 | Same. Done: `assets/fonts/OFL-Caveat-Brush.txt` |
 
+## Recorded instruments (borrowed, loaded when picked)
+
+The keyboard's Sound menu plays recorded notes from the **tonejs-instruments** set by Nicholas Brosowsky ([github.com/nbrosowsky/tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments)), fetched from its GitHub Pages site the first time an instrument is picked, then kept in the browser for offline use. The app doesn't ship the files.
+
+| Instruments | Recorded by | License | What it asks of us |
+|---|---|---|---|
+| Bassoon, double bass, flute, French horn, harp, organ, piano, trombone, trumpet, tuba, violin, xylophone | Versilian Studios Chamber Orchestra 2 (VSCO 2 Community Edition) | CC BY 3.0, as the set lists it | Credit the set and the source. Done: this table, and `src/audio/instruments.js` |
+| Electric bass, electric guitar, saxophone | Karoryfer Samples | CC BY 3.0, as the set lists it | Same |
+| Acoustic guitar | University of Iowa Electronic Music Studios | CC BY 3.0, as the set lists it | Same |
+| Cello (flcellogrl), nylon guitar (quartertone), harmonium (donyaquick) | Freesound | CC BY 3.0, as the set lists it | Same |
+
 ## Methods and standards (ideas we used, no code copied)
 
 | What | Source | Terms |
@@ -42,7 +53,7 @@ No license has been chosen for our code yet, so for now all rights are reserved 
 | Reverb layout ("Freeverb") | Jezar at Dreampoint, 2000 | Released into the public domain. Our code is our own version of the layout |
 | Time stretch that keeps the pitch (WSOLA) | Verhelst & Roelands, 1993 | A published method. Ideas aren't copyrightable; our code is our own |
 | Loudness in LUFS | ITU-R BS.1770 | A public standard |
-| Drum note numbers, MIDI file format | General MIDI and Standard MIDI File specs (MIDI Association) | Public specs. They need no attribution, but we credit them anyway |
+| Drum note numbers, MIDI file format, instrument program numbers | General MIDI and Standard MIDI File specs (MIDI Association) | Public specs. They need no attribution, but we credit them anyway |
 | WAV and AIFF file formats | Microsoft/IBM RIFF and Apple AIFF specs | Public formats |
 | WCAG 2.2 AA | W3C | We follow the guidelines; nothing is copied |
 

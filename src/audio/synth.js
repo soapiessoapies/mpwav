@@ -166,11 +166,15 @@
     function makeSource(midi) {
       if (sample) {
         const src = ctx.createBufferSource();
-        src.buffer = sample.buffer;
-        src.playbackRate.value = Math.min(16, Math.max(1 / 16, Math.pow(2, (midi + p.octave * 12 - sample.root) / 12)));
+        const want = midi + p.octave * 12;
+        // A recorded instrument: the nearest of its notes, played whole.
+        const z = sample.zones ? root.Instruments.nearest(sample.zones, want) : null;
+        src.buffer = z ? z.buffer : sample.buffer;
+        src.playbackRate.value = Math.min(16, Math.max(1 / 16, Math.pow(2, (want - (z ? z.midi : sample.root)) / 12)));
         src.detune.value = p.detune;
-        src.sampleFrom = sample.from;
-        src.sampleLen = sample.len;
+        src.sampleFrom = z ? 0 : sample.from;
+        src.sampleLen = z ? z.buffer.duration : sample.len;
+        src.zoneGain = z && z.gain ? z.gain : 1;
         return src;
       }
       const freq = Notes.mtof(midi + p.octave * 12);
@@ -268,7 +272,7 @@
 
       const env = {
         start: when, attack: p.attack, decay: p.decay, sustain: p.sustain,
-        release: p.release, peak: VOICE_GAIN * velocity * (sample ? sample.gain : 1),
+        release: p.release, peak: VOICE_GAIN * velocity * (sample ? sample.gain * (src.zoneGain || 1) : 1),
       };
       Envelope.scheduleOn(vca.gain, env);
       // The filter envelope sweeps the cutoff up by `filterEnv` octaves,
@@ -362,7 +366,9 @@
 
     // The instrument: a sound file (pitched by key) or, with null, the oscillator.
     // s: { buffer (already reversed if it should be), root, start, end, gain (dB) }
+    // Or s: { zones: [{ midi, buffer }], gain } for a recorded instrument (src/audio/instruments.js).
     function setSample(s) {
+      if (s && Array.isArray(s.zones) && s.zones.length) { sample = { zones: s.zones, gain: Params.dbToGain(s.gain || 0) }; return; }
       if (!s || !s.buffer) { sample = null; return; }
       const dur = s.buffer.duration;
       const end = Math.min(dur, s.end == null ? dur : s.end), start = Math.min(s.start || 0, end);

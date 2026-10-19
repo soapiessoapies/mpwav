@@ -4,6 +4,11 @@
 // offline, the cached copy is used. SHELL is every file the app needs to
 // start; a test checks it lists everything index.html loads.
 const CACHE = "mpwav-v1";
+// Recorded instrument notes (src/audio/instruments.js) come from another
+// site and never change: kept in their own cache, used first, so an
+// instrument loaded once plays offline too.
+const INSTRUMENTS = "mpwav-instruments-v1";
+const INSTRUMENT_HOST = "https://nbrosowsky.github.io/tonejs-instruments/";
 const SHELL = [
   "./",
   "index.html",
@@ -27,6 +32,7 @@ const SHELL = [
   "src/audio/envelope.js",
   "src/audio/voices.js",
   "src/audio/engine.js",
+  "src/audio/instruments.js",
   "src/audio/synth.js",
   "src/audio/mixer.js",
   "src/audio/transport.js",
@@ -80,7 +86,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== INSTRUMENTS).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -92,6 +98,13 @@ const fromCache = (req) => caches.match(req, { ignoreSearch: true })
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+  if (req.method === "GET" && req.url.startsWith(INSTRUMENT_HOST)) {
+    e.respondWith(caches.open(INSTRUMENTS).then((c) => c.match(req).then((hit) => hit || fetch(req).then((res) => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
+    return;
+  }
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   const net = fetch(req).then((res) => {
     if (res.ok) {

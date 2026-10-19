@@ -36,6 +36,7 @@
   const node = typeof module !== "undefined" && module.exports;
   const Params = node ? require("../audio/params.js") : root.Params;
   const Presets = node ? require("./presets.js") : root.Presets;
+  const Instruments = node ? require("../audio/instruments.js") : root.Instruments;
 
   const VERSION = 3;
   const STEPS = 16; // per bar (sixteenth notes)
@@ -153,6 +154,7 @@
       id, name, preset, color,
       kind,          // "synth" (notes), "drums" (drum hits) or "audio" (sound files)
       sampler: null, // a synth track playing a sound file instead of its oscillator
+      instrument: null, // ...or a recorded instrument (src/audio/instruments.js), by id
       params: Params.sanitize(Presets.find(preset).params),
       clips: [], // { id, contentId, start, length, offset } in bars, sorted by start, never overlapping
       gridBase,  // lowest row shown in the clip editor (a C)
@@ -917,6 +919,8 @@
       if (COLORS.includes(s.color)) t.color = s.color;
       t.params = Params.sanitize(s.params || Presets.find(t.preset).params);
       if (t.kind === "synth") t.sampler = cleanSampler(s.sampler);
+      // One or the other: an instrument only when the track has no sound file of its own.
+      if (t.kind === "synth" && !t.sampler && Instruments.find(s.instrument)) t.instrument = s.instrument;
       const base = num(s.gridBase, t.gridBase);
       t.gridBase = clamp(base - (((base % 12) + 12) % 12), LOWEST, HIGHEST - 12);
       if (LENGTHS.includes(s.length)) t.length = s.length;

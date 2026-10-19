@@ -736,3 +736,34 @@ Ableton or Cool Edit and for beginners:
 - **The demo** is marked as C major (it always was), so the chord buttons
   and the Guide match it from the start.
 - axe (WCAG 2.2 AA) finds nothing in the Guide, the pads or the Export dialog.
+
+## Recorded instruments on the keyboard (v0.27.0)
+
+The keyboard's **Sound** menu sets what the selected synth track sounds like:
+its synth, its own sound file (from the Sound page), or one of 20 recorded
+instruments in five groups: Keys (piano, organ, harmonium, xylophone),
+Guitars and bass, Strings (violin, cello, double bass, harp), Woodwinds and
+Brass. The notes come from the free tonejs-instruments set (CC BY 3.0; see
+CREDITS.md).
+- **Small downloads:** each instrument loads 5 to 12 of its recorded notes
+  (about 1 to 3 MB), one every 8 semitones, so a key is never re-pitched by
+  more than 4 semitones (the French horn's recordings have a wider gap). A key
+  plays the nearest recorded note. Each note is evened out to the same peak,
+  so instruments sit at the synth's level.
+- **Offline:** the service worker keeps the notes in their own cache, so an
+  instrument used once plays offline. A song's instruments start loading as
+  it opens; the synth plays until they arrive, and a notice says if one
+  can't load.
+- **The synth's shaping steps aside:** picking an instrument (from the synth)
+  sets an instant attack, full sustain, a 0.6 s release and an open filter,
+  since the recordings carry their own attack and fade. Everything on Note
+  Edit still applies afterwards (warp, echo, reverb, volume, fine tune).
+- **Saved with the song** as `track.instrument`; share links carry it. MIDI
+  export names it with a General MIDI program change, so the track opens as
+  a violin (or a cello…) in other apps. Exports wait for the instruments to
+  load.
+- On phones the Sound menu gets a row of its own under the keyboard's
+  controls.
+- Next (planned): find a loaded sound's own pitch automatically; record from
+  the microphone straight into an instrument; loop points and more recorded
+  notes for long held notes.

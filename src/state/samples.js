@@ -279,5 +279,5 @@
     }
   }
 
-  root.Samples = { add, addEdited, addChannels, usage, tidy, load, buffer, peaks, outline: outlineOf, spectrum: spectrumOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
+  root.Samples = { decode, add, addEdited, addChannels, usage, tidy, load, buffer, peaks, outline: outlineOf, spectrum: spectrumOf, peak, channels, info, isMissing, exportAll, importAll, PEAKS };
 })(window);

@@ -112,12 +112,92 @@
   // --- uploaded sounds: a synth track's instrument, or an audio track's clips ---
   const soundSecs = (id) => (Samples.info(id) || {}).duration || 0;
   function applySampler(t) {
+    const s = t.kind === "synth" && t.sampler;
+    const inst = !s && t.kind === "synth" && t.instrument;
+    // The notes start downloading at once, even before sound is switched on.
+    if (inst && !Instruments.zones(inst)) loadInstrument(inst);
     const a = audio[t.id];
     if (!a) return;
-    const s = t.kind === "synth" && t.sampler;
+    if (inst) {
+      const zones = Instruments.zones(inst);
+      a.synth.setSample(zones ? { zones } : null); // the synth plays until the notes arrive
+      return;
+    }
     const buffer = s && Samples.buffer(s.sampleId, s.reverse);
     a.synth.setSample(buffer ? { ...s, buffer } : null);
   }
+
+  // --- recorded instruments (src/audio/instruments.js): fetched the first
+  // time a track uses one, then kept (and cached for offline by sw.js) ---
+  const instrumentFailed = new Set();
+  function loadInstrument(id) {
+    const inst = Instruments.find(id);
+    if (!inst || instrumentFailed.has(id)) return Promise.resolve(null);
+    let said = 0;
+    return Instruments.load(id, Samples.decode, (done, total) => {
+      if (done < total && Date.now() - said > 1500) { said = Date.now(); Announce.say(`Loading ${inst.name}: ${done} of ${total} notes`); }
+    }).then((zones) => {
+      for (const t of song.tracks) if (t.instrument === id) applySampler(t);
+      renderKeySound();
+      renderSoundPage();
+      return zones;
+    }, () => {
+      instrumentFailed.add(id); // don't keep asking while offline; picking it again retries
+      Announce.tell(`Couldn't load the ${inst.name}: it needs the internet the first time. The synth plays meanwhile.`);
+      renderKeySound();
+      return null;
+    });
+  }
+  // Every instrument the song uses, loaded (exports wait for this).
+  const instrumentsReady = () => Promise.all([...new Set(song.tracks.filter((t) => t.kind === "synth" && !t.sampler && t.instrument).map((t) => t.instrument))].map(loadInstrument));
+
+  // The Sound picker on the keyboard: the track's synth, its own sound file, or an instrument.
+  const keySound = $("key-sound");
+  (function buildKeySound() {
+    keySound.append(new Option("Synth", ""));
+    keySound.append(Object.assign(new Option("My sound file", "own"), { hidden: true }));
+    for (const g of Instruments.GROUPS) {
+      const og = document.createElement("optgroup");
+      og.label = g;
+      for (const i of Instruments.LIST.filter((x) => x.group === g)) og.append(new Option(i.name, i.id));
+      keySound.append(og);
+    }
+  })();
+  function renderKeySound() {
+    const t = sel();
+    keySound.closest("label").hidden = t.kind !== "synth";
+    keySound.options[0].textContent = "Synth: " + ((Presets.find(t.preset) || {}).name || "its own sound");
+    const own = keySound.querySelector('option[value="own"]');
+    own.hidden = own.disabled = !t.sampler;
+    const id = t.sampler ? "own" : t.instrument || "";
+    keySound.value = id;
+    const loading = t.instrument && !t.sampler && !Instruments.zones(t.instrument) && !instrumentFailed.has(t.instrument);
+    keySound.setAttribute("aria-busy", String(!!loading));
+  }
+  // Recorded notes carry their own attack and fade: the synth's shaping steps aside.
+  const NATURAL = { attack: 0.001, decay: 3, sustain: 1, release: 0.6, cutoff: 18000, resonance: 0.7, filterEnv: 0, filterType: "lowpass", octave: 0 };
+  keySound.addEventListener("change", () => {
+    const t = sel(), v = keySound.value;
+    if (v === "own") return;
+    if (!v) {
+      t.instrument = null;
+      applySampler(t);
+      renderSoundPage();
+      afterChange(`${t.name} plays its synth`);
+      return;
+    }
+    const inst = Instruments.find(v);
+    if (!t.instrument) t.params = Params.sanitize({ ...t.params, ...NATURAL });
+    t.instrument = v;
+    t.sampler = null;
+    instrumentFailed.delete(v);
+    if (audio[t.id]) audio[t.id].synth.load(live(t));
+    controls.refresh(t.params);
+    applySampler(t);
+    renderKeySound();
+    renderSoundPage();
+    afterChange(Instruments.zones(v) ? `${t.name} plays the ${inst.name}` : `${t.name} plays the ${inst.name}: loading its notes…`);
+  });
   // Decodes the song's sounds (from this browser's storage), then redraws
   // what shows them.
   // Every sound a saved song uses (and, with `withUndo`, every one an undo
@@ -1140,6 +1220,7 @@
       const info = Samples.info(id);
       if (job.mode === "sampler") {
         t.sampler = Song.cleanSampler({ sampleId: id, root: 60 });
+        t.instrument = null;
         applySampler(t);
         selectTrack(t.id, false);
         afterChange(`${t.name} now plays ${info.name}, at its own pitch on C4`);
@@ -1202,11 +1283,14 @@
     // The keyboard: chord buttons for notes, a key-to-drum legend for drums.
     document.querySelector(".chord-row").hidden = isAudio || isDrums;
     $("drum-keys").hidden = !isDrums;
+    renderKeySound();
     if (isAudio || isDrums) return;
     const s = t.sampler, info = s && Samples.info(s.sampleId);
-    $("inst-now").textContent = !s ? "The synth (pick a preset below)" : info ? `Sound file: ${info.name} (${info.duration.toFixed(2)} s)`
+    const inst = !s && t.instrument && Instruments.find(t.instrument);
+    $("inst-now").textContent = inst ? `Recorded ${inst.name}${Instruments.zones(inst.id) ? "" : " (loading…)"}: pick another on the keyboard's Sound menu`
+      : !s ? "The synth (pick a preset below)" : info ? `Sound file: ${info.name} (${info.duration.toFixed(2)} s)`
       : Samples.isMissing(s.sampleId) ? "Sound file (not in this browser: import the song file that has it)" : "Sound file (loading…)";
-    $("inst-synth").hidden = !s;
+    $("inst-synth").hidden = !s && !inst;
     $("inst-sample").hidden = !s;
     if (!s) return;
     $("inst-root").value = s.root;
@@ -1229,6 +1313,7 @@
   $("inst-synth").addEventListener("click", () => {
     const t = sel();
     t.sampler = null;
+    t.instrument = null;
     applySampler(t);
     renderSoundPage();
     afterChange(`${t.name} plays the synth again`);
@@ -2627,6 +2712,7 @@
     open = null;
     picked = null;
     applySong(Song.sanitize(data));
+    instrumentsReady(); // fetch the song's instruments now, not at the first note
     history.reset(historyJson());
     writeNow();
     renderSongList();
@@ -3088,6 +3174,8 @@
     }
     const opts = { from: r.from, to: r.to, sampleRate: Number($("export-rate").value), tail: $("export-tail").checked };
     go.disabled = true;
+    exportMsg.textContent = "Getting the instruments ready…";
+    await instrumentsReady();
     try {
       if (what === "clip") {
         // The clip's track alone, over the clip's bars: clips on a track never
@@ -4181,6 +4269,7 @@
   applyLayout();
   layoutReady = true;
   selectTrack(song.selected, false);
+  instrumentsReady();
   showLoop();
   showRowsFold();
   // Draw the zoom bars once the layout has settled (and again after fonts load).

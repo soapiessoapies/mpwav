@@ -549,6 +549,7 @@
     <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
       <div class="panel-head">
         <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
+        <label class="inline key-sound" title="What the keys sound like on the selected track: its synth, or a recorded instrument">Sound <select id="key-sound"></select></label>
         <div class="octave" role="group" aria-label="Octave">
           <button id="oct-down" type="button" aria-label="Octave down">−</button>
           <span id="oct-label" class="oct-label"></span>
@@ -984,6 +985,7 @@
 <script src="src/audio/envelope.js"></script>
 <script src="src/audio/voices.js"></script>
 <script src="src/audio/engine.js"></script>
+<script src="src/audio/instruments.js"></script>
 <script src="src/audio/synth.js"></script>
 <script src="src/audio/mixer.js"></script>
 <script src="src/audio/transport.js"></script>

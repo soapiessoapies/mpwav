@@ -12,6 +12,7 @@
 
   const node = typeof module !== "undefined" && module.exports;
   const Song = node ? require("./song.js") : root.Song;
+  const Instruments = node ? require("../audio/instruments.js") : root.Instruments;
 
   const PPQ = 96;                    // ticks per quarter note
   const TICKS = PPQ / 4;             // per step (a sixteenth)
@@ -61,6 +62,9 @@
       const ch = t.kind === "drums" ? 9 : MELODIC[channel++ % MELODIC.length];
       const name = text(t.name || t.id);
       const events = [[0, [0xff, 0x03, ...vlq(name.length), ...name], 0]];
+      // A recorded instrument opens as its General MIDI sound in other apps.
+      const inst = t.kind === "synth" && !t.sampler && t.instrument && Instruments.find(t.instrument);
+      if (inst) events.push([0, [0xc0 | ch, inst.program], 0]);
       for (let i = 0; i < steps; i++) {
         for (const n of Song.notesAtPos(song, t, from * Song.STEPS + i)) {
           const vel = Math.max(1, Math.min(127, Math.round((n.vel == null ? 0.85 : n.vel) * 127)));

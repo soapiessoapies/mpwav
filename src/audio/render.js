@@ -44,6 +44,7 @@
       synth.setKit(track.kind === "drums");
       const s = track.sampler;
       if (s) synth.setSample({ ...s, buffer: Samples.buffer(s.sampleId, s.reverse) });
+      else if (track.instrument && root.Instruments.zones(track.instrument)) synth.setSample({ zones: root.Instruments.zones(track.instrument) });
       return { track, synth };
     });
 
