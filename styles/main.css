@@ -107,7 +107,7 @@ kbd {
 .studio > * { min-width: 0; }
 /* layout: wide (Settings > Layout, or chosen from the window width) */
 [data-layout="wide"] .studio {
-    grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 560px);
+    grid-template-columns: minmax(0, 1fr) var(--side-w, clamp(320px, 24vw, 560px));
     grid-template-areas:
       "transport title"
       "bar bar"
@@ -117,7 +117,7 @@ kbd {
   }
 /* Settings > Arrange panels: the side column can sit on the left. */
 [data-layout="wide"][data-side="left"] .studio {
-    grid-template-columns: clamp(320px, 24vw, 560px) minmax(0, 1fr);
+    grid-template-columns: var(--side-w, clamp(320px, 24vw, 560px)) minmax(0, 1fr);
     grid-template-areas:
       "title transport"
       "bar bar"
@@ -415,7 +415,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
   display: grid;
   grid-template-columns: repeat(var(--cols, 30), 1fr);
   grid-template-rows: 60% 40%;
-  height: clamp(150px, 30vh, 240px);
+  height: var(--keys-h, clamp(150px, 30vh, 240px));
   touch-action: none; user-select: none; -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
@@ -478,7 +478,7 @@ input[type="range"]:focus-visible { outline-offset: 0; }
 [data-layout="compact"] .sound .state { display: none; } /* the dot shows on/off */
 [data-layout="compact"] .sound .dot { width: 12px; height: 12px; }
 [data-layout="compact"] .song-title { font-size: 1.25rem; }
-[data-layout="compact"] .keys { height: 140px; }
+[data-layout="compact"] .keys { height: var(--keys-h, 140px); }
 [data-layout="compact"] .key .hint { display: none; } /* no computer keys on a phone */
 [data-layout="compact"] .tl-row { height: 52px; }
 [data-layout="compact"] .cell { width: 34px; height: 30px; }
@@ -940,7 +940,7 @@ dialog .check { white-space: normal; align-items: flex-start; }
 [data-fit="on"] .note-edit .pager { margin-bottom: 8px; }
 [data-fit="on"] .note-edit > .page { flex: 1 1 0; min-height: 0; overflow-y: auto; align-content: start; padding: 2px 4px 2px 0; }
 [data-fit="on"] .keys-panel .panel-head { margin-bottom: 6px; }
-[data-fit="on"] .keys { height: clamp(84px, 13vh, 150px); }
+[data-fit="on"] .keys { height: var(--keys-h, clamp(84px, 13vh, 150px)); }
 
 /* ---------- Section and Tempo menus (popovers under their buttons) ---------- */
 .menu-btn { display: inline-flex; align-items: center; gap: 8px; }
@@ -974,7 +974,7 @@ dialog .check { white-space: normal; align-items: flex-start; }
 [data-fit="on"] .keys-panel .panel-head button, [data-fit="on"] .keys-panel .seg label { min-height: 36px; }
 [data-fit="on"] .keys-panel .panel-head h2 { margin-right: 0; }
 [data-fit="on"] .keys-panel .check { min-height: 36px; }
-[data-fit="on"] .keys { height: clamp(96px, 15vh, 160px); }
+[data-fit="on"] .keys { height: var(--keys-h, clamp(96px, 15vh, 160px)); }
 [data-fit="on"] #song-status,
 [data-fit="on"] #clip-status {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
@@ -1316,12 +1316,12 @@ html[data-motion="off"] .tour-spot { transition: none; }
 /* Mix: the mixer across the whole width, with tall faders. */
 [data-layout="wide"][data-slide="mix"] .studio,
 [data-layout="wide"][data-slide="sound"][data-sound="synth"] .studio {
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 560px);
+  grid-template-columns: minmax(0, 1fr) var(--side-w, clamp(320px, 24vw, 560px));
   grid-template-areas: "transport title" "bar bar" "main main" "side side" "bottom bottom";
 }
 [data-layout="wide"][data-side="left"][data-slide="mix"] .studio,
 [data-layout="wide"][data-side="left"][data-slide="sound"][data-sound="synth"] .studio {
-  grid-template-columns: clamp(320px, 24vw, 560px) minmax(0, 1fr);
+  grid-template-columns: var(--side-w, clamp(320px, 24vw, 560px)) minmax(0, 1fr);
   grid-template-areas: "title transport" "bar bar" "main main" "side side" "bottom bottom";
 }
 [data-fit="on"][data-slide="mix"] .studio,
@@ -1554,3 +1554,46 @@ fieldset:disabled { opacity: 0.55; }
 .item-menu-item.danger { color: var(--rec); }
 .item-menu hr { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--line); }
 .item-menu.open { position: fixed; z-index: 50; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+
+/* ---------- Panel sizes (v0.31): the column splitter and the keyboard's height bar ---------- */
+.col-split { display: none; }
+[data-layout="wide"] .col-split {
+  display: block; grid-area: side; justify-self: start; align-self: stretch; position: relative; z-index: 4;
+  width: 14px; margin-left: calc(-0.5 * var(--gap) - 7px); padding: 0; border: 0; border-radius: 7px;
+  background: transparent; cursor: col-resize; touch-action: none; min-height: 0;
+}
+[data-layout="wide"][data-side="left"] .col-split { justify-self: end; margin-left: 0; margin-right: calc(-0.5 * var(--gap) - 7px); }
+.col-split::before, .keys-split::before { content: ""; position: absolute; border-radius: 3px; background: var(--line); transition: background 0.12s; }
+.col-split::before { left: 5px; width: 4px; top: 12%; bottom: 12%; }
+.col-split::after, .keys-split::after { content: ""; position: absolute; border-radius: 4px; background: var(--ws-now, var(--accent)); }
+.col-split::after { left: 3px; width: 8px; top: calc(50% - 22px); height: 44px; }
+.col-split:hover::before, .col-split:focus-visible::before, .col-split.dragging::before,
+.keys-split:hover::before, .keys-split:focus-visible::before, .keys-split.dragging::before { background: var(--ws-now, var(--accent)); }
+.col-split:focus-visible, .keys-split:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+[data-arrange="on"] .col-split, .studio:has(#col-side.empty) .col-split,
+[data-slide="sound"][data-sound="audio"] .col-split { display: none !important; }
+.keys-panel { position: relative; }
+.keys-split {
+  position: absolute; left: 50%; top: -11px; transform: translateX(-50%); z-index: 6;
+  width: 96px; height: 20px; padding: 0; border: 0; background: transparent; cursor: row-resize; touch-action: none; min-height: 0;
+}
+.keys-split::before { left: 0; right: 0; top: 8px; height: 4px; }
+.keys-split::after { left: 30px; right: 30px; top: 6px; height: 8px; }
+.keys-panel:has(#keys-toggle[aria-expanded="false"]) .keys-split { display: none; }
+[data-layout="compact"] .keys-split { top: -10px; width: 120px; height: 24px; }
+[data-layout="compact"] .keys-split::before { top: 10px; }
+[data-layout="compact"] .keys-split::after { top: 8px; }
+/* A short keyboard on a phone: the chords and the pads row step aside. */
+[data-layout="compact"][data-keys-short="true"] .chord-row,
+[data-layout="compact"][data-keys-short="true"] #pads { display: none; }
+.ws-sizes { flex: none; min-width: 34px; min-height: 30px; padding: 0 6px; }
+[data-layout="compact"] .ws-sizes { display: none; }
+/* Wide screens: the columns clip what pokes out, so the bar sits just inside the panel's top edge. */
+[data-layout="wide"] .keys-split, [data-layout="medium"] .keys-split { top: 0; height: 16px; }
+[data-layout="wide"] .keys-split::before, [data-layout="medium"] .keys-split::before { top: 4px; }
+[data-layout="wide"] .keys-split::after, [data-layout="medium"] .keys-split::after { top: 2px; }
+/* A short keyboard on a big screen: its tools go in one row above the keys,
+   and the chords and pads step aside, so the panel really gets shorter. */
+[data-fit="on"][data-keys-short="true"] .keys-panel:has(#keys-toggle[aria-expanded="true"]) { display: block; }
+[data-fit="on"][data-keys-short="true"] .keys-panel .panel-head { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 6px; }
+[data-keys-short="true"] .keys-panel .chord-row, [data-keys-short="true"] .keys-panel #pads { display: none; }

@@ -96,6 +96,7 @@
     <p class="ws-text"><strong id="ws-name">Make</strong> <span id="ws-about" class="ws-about">play and record ideas into one clip</span></p>
     <svg class="ws-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
     <!-- What your changes go to: the track, the clip, a tiny live picture of it (selected notes lit), and its ⋯ -->
+    <button type="button" id="ws-sizes" class="ws-sizes quiet" aria-haspopup="menu" aria-label="Panel sizes" title="Panel sizes"><span aria-hidden="true">◫</span></button>
     <div id="ws-editing" class="ws-editing" role="group" aria-labelledby="ws-editing-label">
       <span id="ws-editing-label" class="sr-only">Editing</span>
       <button type="button" id="ws-mini" class="ws-mini" aria-describedby="ws-editing-text"><canvas id="ws-mini-canvas" width="120" height="28" aria-hidden="true"></canvas></button>
@@ -409,6 +410,9 @@
     </section>
   </div>
 
+  <!-- The bar between the work panel and Note Edit: drag it (or arrows) to share the width -->
+  <div id="col-split" class="col-split" role="separator" aria-orientation="vertical" tabindex="0" aria-controls="col-side"
+       aria-label="Width of Note Edit" aria-keyshortcuts="ArrowLeft ArrowRight Home End Enter" title="Drag to resize. Double-click to reset."></div>
   <div id="col-side" class="col col-side" data-col="side">
     <!-- Note Edit: paged settings for the selected notes and the selected track -->
     <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
@@ -570,6 +574,8 @@
   <div id="col-bottom" class="col col-bottom" data-col="bottom">
     <!-- Editor / inputs: the keyboard, along the bottom -->
     <section id="keys-section" class="panel keys-panel" aria-labelledby="keys-toggle">
+      <div id="keys-split" class="keys-split" role="separator" aria-orientation="horizontal" tabindex="0" aria-controls="keys"
+           aria-label="Height of the keyboard" aria-keyshortcuts="ArrowUp ArrowDown Home End Enter" title="Drag to resize. Double-click to reset."></div>
       <div class="panel-head">
         <h2><button id="keys-toggle" type="button" class="disclosure" aria-expanded="true" aria-controls="keys-body">Keyboard</button></h2>
         <label class="inline key-sound" title="What the keys sound like on the selected track: its synth, or a recorded instrument">Sound <select id="key-sound"></select></label>

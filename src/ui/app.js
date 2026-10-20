@@ -39,7 +39,7 @@
       localStorage.setItem(UI_KEY, JSON.stringify({
         announceNotes: ui.announceNotes, kbBase: kb.base, page: ui.page, keysOpen: ui.keysOpen, layout: ui.layout, theme: ui.theme,
         metronome: ui.metronome, countIn: ui.countIn, keysMode: ui.keysMode, singleKeys: ui.singleKeys, midi: ui.midi, collapsed: ui.collapsed,
-        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, ppanel: ui.ppanel, posterSeen: true, recentColors: ColorPick.recent(),
+        panels: ui.panels, folded: ui.folded, sideLeft: ui.sideLeft, look: ui.look, motion: ui.motion, fit: ui.fit, tips: ui.tips, sizes: ui.sizes, size: ui.size, slide: ui.slide, guide: ui.guide, guideMark: ui.guideMark, padsOpen: ui.padsOpen, ppanel: ui.ppanel, panelSizes: ui.panelSizes, posterSeen: true, recentColors: ColorPick.recent(),
         open: open, picked: picked, songId,
       }));
     } catch (e) { /* private window or storage blocked */ }
@@ -4017,6 +4017,7 @@
     document.documentElement.dataset.onepage = String(!!s.pages && s.pages.length === 1);
     showPhonePanel(s);
     renderEditing();
+    if (typeof applySizes === "function" && document.querySelector(".studio")) try { applySizes(true); } catch (e) { /* first run: set up below */ }
     if (byHand && arrange.arranging) setArranging(false);
     // Any change of slide opens its page (also when a new song moves you
     // there): leaving Mix that way used to keep the mixer showing.
@@ -4042,6 +4043,136 @@
   }
   setSlide(ui.slide, false);
   $("all-panels").addEventListener("click", () => setSlide(ui.slide === "all" ? "make" : "all", true));
+
+  // --- Panel sizes, per workspace: Note Edit's width and the keyboard's
+  // height (ui.panelSizes[slide] = { side, keys } in px; none = the default) ---
+  const studio = document.querySelector(".studio");
+  const KEYS_MIN = 64, KEYS_MAX = 280, SIDE_MIN = 280, MAIN_MIN = 480;
+  const sizesOf = (slide) => {
+    ui.panelSizes = ui.panelSizes && typeof ui.panelSizes === "object" ? ui.panelSizes : {};
+    return ui.panelSizes[slide] || (ui.panelSizes[slide] = {});
+  };
+  const sideLimits = () => {
+    const w = studio.clientWidth - 2 * parseFloat(getComputedStyle(studio).paddingLeft) - parseFloat(getComputedStyle(studio).columnGap || 0);
+    return { min: SIDE_MIN, max: Math.max(SIDE_MIN, Math.min(w * 0.5, w - MAIN_MIN)), total: w };
+  };
+  const sideNow = () => $("col-side").getBoundingClientRect().width;
+  function applySizes(refresh) {
+    const z = sizesOf(ui.slide);
+    if (z.side) studio.style.setProperty("--side-w", Math.round(Math.min(sideLimits().max, Math.max(SIDE_MIN, z.side))) + "px");
+    else studio.style.removeProperty("--side-w");
+    if (z.keys) document.documentElement.style.setProperty("--keys-h", Math.round(z.keys) + "px");
+    else document.documentElement.style.removeProperty("--keys-h");
+    document.documentElement.dataset.keysShort = String(!!z.keys && z.keys < 100);
+    requestAnimationFrame(() => {
+      showSizes();
+      if (refresh) { roll.rebuild(); drawZooms(); redrawWave(); }
+    });
+  }
+  function showSizes() {
+    const bar = $("col-split"), lim = sideLimits(), w = sideNow();
+    if (w && lim.total) {
+      const pct = Math.round((w / lim.total) * 100);
+      bar.setAttribute("aria-valuemin", String(Math.round((lim.min / lim.total) * 100)));
+      bar.setAttribute("aria-valuemax", String(Math.round((lim.max / lim.total) * 100)));
+      bar.setAttribute("aria-valuenow", String(pct));
+      bar.setAttribute("aria-valuetext", `Note Edit ${pct}% of the width, the work panel ${100 - pct}%`);
+    }
+    const kb = $("keys-split"), h = $("keys").getBoundingClientRect().height;
+    kb.setAttribute("aria-valuemin", String(KEYS_MIN));
+    kb.setAttribute("aria-valuemax", String(KEYS_MAX));
+    kb.setAttribute("aria-valuenow", String(Math.round(h)));
+    kb.setAttribute("aria-valuetext", `Keys ${Math.round(h)} pixels tall`);
+  }
+  function setSide(px, say) {
+    const lim = sideLimits();
+    sizesOf(ui.slide).side = px == null ? null : Math.round(Math.max(lim.min, Math.min(lim.max, px)));
+    applySizes(true);
+    if (say) requestAnimationFrame(() => Announce.say($("col-split").getAttribute("aria-valuetext") || "Default width"));
+    save();
+  }
+  function setKeys(px, say) {
+    sizesOf(ui.slide).keys = px == null ? null : Math.round(Math.max(KEYS_MIN, Math.min(KEYS_MAX, px)));
+    applySizes(false);
+    if (say) requestAnimationFrame(() => Announce.say(px == null ? "Keyboard back to its usual height" : $("keys-split").getAttribute("aria-valuetext")));
+    save();
+  }
+  // Dragging either bar (mouse, pen or touch).
+  function dragBar(bar, onMove) {
+    bar.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      e.preventDefault();
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add("dragging");
+      const move = (ev) => onMove(ev);
+      const end = () => {
+        bar.classList.remove("dragging");
+        bar.removeEventListener("pointermove", move);
+        bar.removeEventListener("pointerup", end);
+        bar.removeEventListener("pointercancel", end);
+        roll.rebuild(); drawZooms(); redrawWave();
+        save();
+      };
+      bar.addEventListener("pointermove", move);
+      bar.addEventListener("pointerup", end);
+      bar.addEventListener("pointercancel", end);
+    });
+  }
+  dragBar($("col-split"), (e) => {
+    const r = $("col-side").getBoundingClientRect();
+    const px = ui.sideLeft ? e.clientX - r.left : r.right - e.clientX;
+    const lim = sideLimits();
+    sizesOf(ui.slide).side = Math.round(Math.max(lim.min, Math.min(lim.max, px)));
+    applySizes(false);
+  });
+  let keysDrag = null;
+  $("keys-split").addEventListener("pointerdown", (e) => { keysDrag = { y: e.clientY, h: $("keys").getBoundingClientRect().height }; });
+  dragBar($("keys-split"), (e) => {
+    if (!keysDrag) return;
+    // The keyboard grows as the bar goes up (it sits on top of it).
+    sizesOf(ui.slide).keys = Math.round(Math.max(KEYS_MIN, Math.min(KEYS_MAX, keysDrag.h + (keysDrag.y - e.clientY))));
+    applySizes(false);
+  });
+  $("col-split").addEventListener("keydown", (e) => {
+    const lim = sideLimits(), w = sideNow();
+    const grow = ui.sideLeft ? 1 : -1; // Left makes Note Edit wider when it's on the right
+    const step = { ArrowLeft: -24 * grow, ArrowRight: 24 * grow, PageUp: -96 * grow, PageDown: 96 * grow }[e.key];
+    let to = step != null ? w - step : e.key === "Home" ? lim.min : e.key === "End" ? lim.max : undefined;
+    if (e.key === "Enter") to = null;
+    if (to === undefined) return;
+    e.preventDefault();
+    setSide(to, true);
+  });
+  $("keys-split").addEventListener("keydown", (e) => {
+    const h = $("keys").getBoundingClientRect().height;
+    const step = { ArrowUp: 12, ArrowDown: -12, PageUp: 48, PageDown: -48 }[e.key];
+    let to = step != null ? h + step : e.key === "Home" ? KEYS_MIN : e.key === "End" ? KEYS_MAX : undefined;
+    if (e.key === "Enter") to = null;
+    if (to === undefined) return;
+    e.preventDefault();
+    setKeys(to, true);
+  });
+  $("col-split").addEventListener("dblclick", () => setSide(null, true));
+  $("keys-split").addEventListener("dblclick", () => setKeys(null, true));
+  // Quick sizes, from the workspace header.
+  $("ws-sizes").addEventListener("click", () => {
+    const lim = sideLimits();
+    ItemMenu.open($("ws-sizes"), {
+      label: `Panel sizes in ${Slides.find(ui.slide).name}`,
+      items: [
+        { label: "Work panel wide", run: () => setSide(lim.min, true) },
+        { label: "Balanced", run: () => setSide(lim.total * 0.36, true) },
+        { label: "Note Edit wide", run: () => setSide(lim.max, true) },
+        "-",
+        { label: "Short keyboard", run: () => setKeys(80, true) },
+        { label: "Tall keyboard", run: () => setKeys(240, true) },
+        "-",
+        { label: "Reset sizes", run: () => { sizesOf(ui.slide).side = null; sizesOf(ui.slide).keys = null; applySizes(true); save(); Announce.say("Sizes back to the defaults"); } },
+      ],
+    });
+  });
+  window.addEventListener("resize", () => applySizes(false));
+  applySizes(false);
   // Phones: a workspace with a work panel and Note Edit shows one of them at
   // a time; which one is kept per workspace.
   function showPhonePanel(s) {

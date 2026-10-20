@@ -851,3 +851,22 @@ in a toolbar), and it wasn't always clear which clip or notes a change hit.
   selected notes lit, and a ⋯ for the selection (notes) or the clip. Clicking
   the picture opens the clip (or shows it on the timeline). Mix shows the track.
 - The track names column is a little wider (144 px) to fit the ⋯.
+
+## Beta step 4: resizable panels (v0.31.0)
+
+- **The column bar** (`#col-split`, a `separator`): between the work panel and
+  Note Edit on wide screens. Drag it, or Tab to it: Left/Right 24 px, Page
+  Up/Down 96 px, Home/End smallest/largest, Enter or a double-click resets.
+  Note Edit stays between 280 px and half the width; the work panel never
+  goes under 480 px. It reads "Note Edit 24% of the width, the work panel 76%".
+- **The keyboard bar** (`#keys-split`): on top of the keyboard, drag (or
+  Up/Down) to make the keys 64 to 280 px tall. Under 100 px the keyboard turns
+  **short**: its tools go in one row, and the chords and pads step aside. On a
+  phone this is how the pinned keyboard gets out of the way (453 → 216 px in
+  testing).
+- **Per workspace:** each workspace keeps its own sizes
+  (`ui.panelSizes[slide] = { side, keys }`), saved with the view settings.
+- **Quick sizes** (◫ in the workspace header): Work panel wide, Balanced, Note
+  Edit wide, Short keyboard, Tall keyboard, Reset sizes.
+- Under the hood: `--side-w` on `.studio` feeds the wide grid's side column,
+  and `--keys-h` the keys' height, in every layout.
