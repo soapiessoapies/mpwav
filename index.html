@@ -886,8 +886,12 @@
     <legend>1. What to export</legend>
     <div class="export-what">
       <label><input type="radio" name="export-what" value="song" checked> <span><strong>The whole song</strong> <span id="export-song-bars" class="muted"></span></span></label>
+      <label><input type="radio" name="export-what" value="tracks"> <span><strong>Tracks I pick</strong>: just the bass, just the drums… (the whole song's length, so they line up)</span></label>
       <label><input type="radio" name="export-what" value="clips"> <span><strong>Clips I pick</strong>: tick them below (Shift- or Ctrl-click clips on the timeline to pick several first)</span></label>
       <label><input type="radio" name="export-what" value="bars"> <span><strong>Some bars</strong>: the loop, or from bar to bar</span></label>
+    </div>
+    <div id="export-tracks-box" class="export-sub">
+      <div id="export-tracks" class="export-clips" role="group" aria-label="Tracks to export"></div>
     </div>
     <div id="export-clips-box" class="export-sub">
       <div class="toolbar">

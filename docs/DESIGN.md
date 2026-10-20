@@ -1056,3 +1056,7 @@ song file rather than a share link.
   page, found by the chaos tester).
 
 Sample Studio is complete. Next: v1.0, a full pass and a new zip.
+
+## Alpha (v1.0.0-alpha)
+
+Export gained **Tracks I pick** (one track or a few, over the whole song so they line up; also "Export this track…" in a track's ⋯). Full pass: a song built with every tool (starter loop, recorded piano, clip properties, an imported sound with wave edits, a slice kit, the mixer) exported every way. Transpose +12 doubled the pitch measure, swing and humanize changed the render, the bass alone differs from the mix, and the 24-bit/48 kHz preset holds. All 29 wave editor actions ran without errors, and song files and share links round-trip.

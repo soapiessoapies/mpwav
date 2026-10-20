@@ -1,7 +1,7 @@
 // mpwav's version, shown in Settings > Credits. Keep it the same as
 // package.json's "version" (a test checks).
 (function (root) {
-  const VERSION = "0.37.0";
+  const VERSION = "1.0.0-alpha";
   if (typeof module !== "undefined" && module.exports) module.exports = { VERSION };
   else root.STUDIO_VERSION = VERSION;
 })(typeof window !== "undefined" ? window : globalThis);

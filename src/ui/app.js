@@ -1568,6 +1568,8 @@
         { label: t.mute ? "Unmute" : "Mute", run: () => mix("mute", !t.mute, t.mute ? "unmuted" : "muted") },
         { label: t.solo ? "Unsolo" : "Solo", run: () => mix("solo", !t.solo, t.solo ? "unsoloed" : "soloed") },
         "-",
+        { label: "Export this track…", run: () => openExport(null, [t.id]), keepFocus: true },
+        "-",
         { label: "Move up", disabled: i === 0, run: () => { selectTrack(t.id, false); moveSelected(-1); } },
         { label: "Move down", disabled: i === song.tracks.length - 1, run: () => { selectTrack(t.id, false); moveSelected(1); } },
         "-",
@@ -3632,6 +3634,32 @@
   const setRadio = (name, v) => { const r = exportDlg.querySelector(`input[name="${name}"][value="${v}"]`); if (r) r.checked = true; };
   const PRESETS = { share: { format: "wav16", rate: "44100", normalize: true }, daw: { format: "wav24", rate: "48000", normalize: false } };
   const exportTicks = new Set(); // clip ids ticked in "Clips I pick"
+  const exportTrackTicks = new Set(); // track ids ticked in "Tracks I pick"
+  function buildTrackList() {
+    const box = $("export-tracks");
+    box.textContent = "";
+    for (const t of song.tracks) {
+      const lab = document.createElement("label");
+      lab.className = "export-check";
+      const cb = Object.assign(document.createElement("input"), { type: "checkbox", checked: exportTrackTicks.has(t.id) });
+      cb.dataset.track = t.id;
+      cb.addEventListener("change", () => { if (cb.checked) exportTrackTicks.add(t.id); else exportTrackTicks.delete(t.id); setRadio("export-what", "tracks"); syncExport(); });
+      const sw = document.createElement("span");
+      sw.className = "theme-swatch";
+      sw.style.background = Colors.cssOf(t.color);
+      sw.setAttribute("aria-hidden", "true");
+      const kind = t.kind === "audio" ? "sound files" : t.kind === "drums" ? "drums" : t.kit ? "slice kit" : "notes";
+      lab.append(cb, sw, document.createTextNode(` ${t.name} (${kind}, ${t.clips.length} clip${t.clips.length === 1 ? "" : "s"})` + (t.mute ? ", muted in the song" : "")));
+      box.append(lab);
+    }
+  }
+  const tickedTracks = () => song.tracks.filter((t) => exportTrackTicks.has(t.id));
+  // A copy of the song with only these tracks, all heard (muted or not).
+  const songOfTracks = (ids) => {
+    const copy = JSON.parse(JSON.stringify(song));
+    copy.tracks = copy.tracks.filter((t) => ids.includes(t.id)).map((t) => ({ ...t, mute: false, solo: false }));
+    return copy;
+  };
   const allClips = () => song.tracks.flatMap((t) => t.clips.map((clip) => ({ t, clip, c: Song.content(song, clip) })));
   const tickedClips = () => allClips().filter((x) => exportTicks.has(x.clip.id));
 
@@ -3668,6 +3696,14 @@
   function exportSpan() {
     const bars = Song.songBars(song);
     const what = radio("export-what");
+    if (what === "tracks") {
+      const tracks = tickedTracks();
+      if (!tracks.length) return { error: "Tick at least one track." };
+      const end = Math.max(0, ...tracks.flatMap((t) => t.clips.map(Song.clipEnd)));
+      if (!end) return { error: "Those tracks have no clips yet." };
+      // The song's start to its end, so tracks exported one by one still line up.
+      return { from: 0, to: Math.max(end, bars), tracks };
+    }
     if (what === "clips") {
       const list = tickedClips();
       if (!list.length) return { error: "Tick at least one clip." };
@@ -3694,8 +3730,9 @@
   function syncExport() {
     const what = radio("export-what"), how = radio("export-how"), preset = radio("export-preset");
     $("export-clips-box").hidden = what !== "clips";
+    $("export-tracks-box").hidden = what !== "tracks";
     $("export-bars-box").hidden = what !== "bars";
-    $("export-how-one").textContent = what === "clips" ? "the picked clips mixed together (other tracks silent)" : "everything mixed together";
+    $("export-how-one").textContent = what === "clips" ? "the picked clips mixed together (other tracks silent)" : what === "tracks" ? "the picked tracks mixed together (the others silent)" : "everything mixed together";
     $("export-how-each").textContent = what === "clips" ? "one sound file per clip, each over its own bars" : "one sound file per track, lined up to start together";
     $("export-audio").disabled = how === "midi";
     // A preset sets the detailed settings; changing them by hand is "My own settings".
@@ -3712,14 +3749,15 @@
     if (span.error) text = span.error;
     else {
       const bars = span.to - span.from;
-      const part = what === "clips" ? `${span.list.length} clip${span.list.length === 1 ? "" : "s"}` : what === "bars" ? `bars ${span.from + 1}–${span.to}` : `the whole song (${bars} bar${bars === 1 ? "" : "s"})`;
+      const part = what === "tracks" ? (span.tracks.length === 1 ? `the ${span.tracks[0].name} track` : `${span.tracks.length} tracks`) + ` (${bars} bar${bars === 1 ? "" : "s"})` :
+        what === "clips" ? `${span.list.length} clip${span.list.length === 1 ? "" : "s"}` : what === "bars" ? `bars ${span.from + 1}–${span.to}` : `the whole song (${bars} bar${bars === 1 ? "" : "s"})`;
       if (how === "midi") text = `${part}, as one MIDI file (a few KB).`;
       else {
         const bps = Number($("export-rate").value) * 2 * (fmt.endsWith("16") ? 2 : fmt.endsWith("24") ? 3 : 4);
         const ext = fmt.startsWith("aiff") ? "AIFF" : "WAV";
         if (how === "one") text = `${part}, as one ${ext} file, ${sizeText(spanSeconds(span.from, span.to) * bps)}.`;
         else {
-          const items = what === "clips" ? span.list : Song.audible(song);
+          const items = what === "clips" ? span.list : what === "tracks" ? span.tracks : Song.audible(song);
           const secs = what === "clips" ? span.list.reduce((a, x) => a + spanSeconds(x.clip.start, Song.clipEnd(x.clip)), 0) : items.length * spanSeconds(span.from, span.to);
           text = `${part}, as a .zip of ${items.length} ${ext} file${items.length === 1 ? "" : "s"}, ${sizeText(secs * bps)}.`;
         }
@@ -3729,15 +3767,18 @@
     $("export-go").disabled = !!span.error;
     try {
       localStorage.setItem(EXPORT_KEY, JSON.stringify({
-        what: what === "clips" ? "song" : what, how, preset, range: radio("export-range"), format: fmt, rate: $("export-rate").value,
+        what: what === "clips" || what === "tracks" ? "song" : what, how, preset, range: radio("export-range"), format: fmt, rate: $("export-rate").value,
         normalize: $("export-normalize").checked, dither: $("export-dither").checked, tail: $("export-tail").checked,
       }));
     } catch (e) { /* private window: just not remembered */ }
   }
 
   // Opens Export; `clips` (ids) start ticked and picked ("Clips I pick").
-  function openExport(clips) {
+  function openExport(clips, tracks) {
     const bars = Song.songBars(song);
+    exportTrackTicks.clear();
+    for (const id of tracks && tracks.length ? tracks : [song.selected]) exportTrackTicks.add(id);
+    buildTrackList();
     exportTicks.clear();
     const start = clips && clips.length ? clips : [...pickedMany, ...(find(picked) ? [picked.clipId] : [])];
     for (const id of start) exportTicks.add(id);
@@ -3751,7 +3792,7 @@
     if (exportPrefs.format) $("export-format").value = exportPrefs.format;
     if (exportPrefs.rate) $("export-rate").value = exportPrefs.rate;
     for (const k of ["normalize", "dither", "tail"]) if (typeof exportPrefs[k] === "boolean") $(`export-${k}`).checked = exportPrefs[k];
-    setRadio("export-what", clips && clips.length ? "clips" : exportPrefs.what === "bars" ? "bars" : "song");
+    setRadio("export-what", tracks && tracks.length ? "tracks" : clips && clips.length ? "clips" : exportPrefs.what === "bars" ? "bars" : "song");
     $("export-more").open = radio("export-preset") === "custom";
     exportMsg.textContent = "";
     syncExport();
@@ -3784,9 +3825,10 @@
     const range = { from: span.from, to: span.to };
     const base = what === "clips"
       ? (span.list.length === 1 ? `${span.list[0].t.name} - ${span.list[0].c.name}` : `${song.title} - ${span.list.length} clips`)
+      : what === "tracks" ? `${song.title} - ${span.tracks.length === 1 ? span.tracks[0].name : span.tracks.length + " tracks"}`
       : song.title + (span.label || "");
     if (how === "midi") {
-      const src = what === "clips" ? songOf(span.list) : song;
+      const src = what === "clips" ? songOf(span.list) : what === "tracks" ? songOfTracks(span.tracks.map((t) => t.id)) : song;
       if (!src.tracks.some((t) => t.kind !== "audio")) { exportMsg.textContent = "There are only sound-file clips here: no notes to export as MIDI."; return; }
       const name = Wav.fileName(base, ".mid");
       deliver(new Blob([MidiFile.encode(src, range)], { type: "audio/midi" }), name, done(name), exportMsg);
@@ -3800,8 +3842,8 @@
     const progress = (label) => (f) => { exportMsg.textContent = `${label}… ${Math.round(f * 100)}%`; };
     try {
       if (how === "one") {
-        const src = what === "clips" ? songOf(span.list) : song;
-        const tracks = what === "clips" ? src.tracks : undefined;
+        const src = what === "clips" ? songOf(span.list) : what === "tracks" ? songOfTracks(span.tracks.map((t) => t.id)) : song;
+        const tracks = what === "clips" || what === "tracks" ? src.tracks : undefined;
         exportMsg.textContent = "Rendering…";
         const buffer = await Render.renderSong(src, live, { ...opts, ...range, ...(tracks ? { tracks } : {}), onProgress: progress("Rendering") });
         const gain = normalize ? Wav.normalizeGain(buffer) : 1;
@@ -3812,6 +3854,7 @@
         // A file each: per clip (each over its own bars), or per track.
         const jobs = what === "clips"
           ? span.list.map((x) => ({ name: `${x.t.name} - ${x.c.name}`, src: songOf([x]), range: { from: x.clip.start, to: Song.clipEnd(x.clip) } }))
+          : what === "tracks" ? span.tracks.map((t) => { const src = songOfTracks([t.id]); return { name: t.name, src, tracks: src.tracks, range }; })
           : Song.audible(song).map((t) => ({ name: t.name, src: song, tracks: [t], range }));
         if (!jobs.length) throw new Error("every track is muted");
         const buffers = [];
