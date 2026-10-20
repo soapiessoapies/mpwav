@@ -360,3 +360,28 @@ test("spectrum: a tone lights up the row its pitch is in, and silence is dark", 
   assert.equal(W.spectrumHz(0, rows, rate), 50);
   assert.equal(Math.round(W.spectrumHz(rows, rows, rate)), 4000);
 });
+
+test("voice clean-up: trims the silent ends, keeps the words, levels them, lowers the hiss", () => {
+  const W = require("../src/audio/wave-ops.js");
+  const rate = 16000, n = rate * 3;
+  const d = new Float32Array(n);
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296 - 0.5; };
+  for (let i = 0; i < n; i++) {
+    const t = i / rate;
+    const speaking = t > 1 && t < 2;
+    d[i] = 0.004 * rnd() + (speaking ? 0.3 * Math.sin(2 * Math.PI * 220 * t) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 3 * t)) : 0);
+  }
+  const r = W.voiceCleanup([d], rate);
+  const secs = r.chans[0].length / rate;
+  assert.ok(secs > 1 && secs < 1.4, `kept the words and a little room: ${secs.toFixed(2)} s`);
+  assert.ok(Math.abs(r.move(1.5) - (1.5 - (3 - secs) / 2)) < 0.2, "times move with the trim");
+  const pk = Math.max(...r.chans[0].map(Math.abs));
+  assert.ok(pk > 0.85 && pk <= 0.9, `peak at -1 dB: ${pk}`);
+  // The quiet room at the very start is quieter than before (relative to the words).
+  const rms = (x, a, b) => Math.sqrt(x.slice(a, b).reduce((s, v) => s + v * v, 0) / (b - a));
+  const before = rms(d, Math.round(0.9 * rate), Math.round(0.98 * rate)) / rms(d, Math.round(1.4 * rate), Math.round(1.6 * rate));
+  const after = rms(r.chans[0], 200, Math.round(0.08 * rate)) / rms(r.chans[0], Math.round(0.5 * secs * rate) - 1600, Math.round(0.5 * secs * rate) + 1600);
+  assert.ok(after < before, `hiss lower against the words: ${before.toFixed(4)} -> ${after.toFixed(4)}`);
+  assert.ok(r.steps.length >= 3, r.steps.join("; "));
+});

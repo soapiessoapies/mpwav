@@ -1709,7 +1709,10 @@
     const laneEl = lane && lane.querySelector(".tl-lane");
     const bw = parseFloat(getComputedStyle(tlEl.querySelector(".tl")).getPropertyValue("--bar-w")) || 60;
     const bar = laneEl ? Math.max(0, Math.floor((e.clientX - laneEl.getBoundingClientRect().left) / bw)) : song.cursor;
-    addSoundFiles(files, { mode: t.kind === "audio" ? "clip" : "sampler", trackId: t.id, bar });
+    addSoundFiles(files, { mode: t.kind === "audio" ? "clip" : "sampler", trackId: t.id, bar }).then(() => {
+      // One sound dropped on a sound-file row: straight to editing it.
+      if (t.kind === "audio" && files.length === 1 && find(open) && find(open).c.audio && ui.slide !== "sound" && ui.slide !== "all") setSlide("sound", true);
+    });
   });
 
   // --- Sound page: the instrument (synth or a sound file) ---
@@ -2190,6 +2193,82 @@
     o.c.audio = Song.cleanAudio(a) || a;
     afterChange(done.where === "" ? done.say : `${done.say}: ${sel ? selWords(sel) : "the whole sound"}`);
   }
+
+  // --- voice-overs: record from the microphone, and clean a take up in one go ---
+  $("voice-clean").addEventListener("click", () => {
+    const o = openAudio();
+    const buf = o && Samples.buffer(o.c.audio.sampleId);
+    if (!buf) return;
+    const rate = buf.sampleRate;
+    waveSel = null; // the whole take
+    editSound((chans) => {
+      const r = WaveOps.voiceCleanup(chans, rate);
+      return { chans: r.chans, move: r.move, where: "", say: "Cleaned up the voice: " + r.steps.join(", ") + ". Undo takes it back" };
+    });
+  });
+  let voiceRec = null; // { rec, stream, chunks, started, timer }
+  const voiceBtn = $("voice-rec");
+  function voiceLabel() {
+    const secs = voiceRec ? Math.floor((performance.now() - voiceRec.started) / 1000) : 0;
+    const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    voiceBtn.textContent = voiceRec ? `Stop recording ${time}` : "Record voice";
+    $("voice-rec2").textContent = voiceRec ? `Stop ${time}` : "Record a take";
+    for (const b of [voiceBtn, $("voice-rec2")]) b.setAttribute("aria-pressed", String(!!voiceRec));
+  }
+  async function startVoice() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+      Announce.tell("This browser can't record from a microphone. Record on your phone's voice memo app and drop the file on the timeline instead.");
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false } });
+    } catch (e) {
+      Announce.tell("mpwav can't use the microphone: allow it in the browser's address bar (or the phone's settings), then try again.");
+      return;
+    }
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => finishVoice(chunks, rec.mimeType);
+    voiceRec = { rec, stream, chunks, started: performance.now(), timer: setInterval(voiceLabel, 500) };
+    rec.start(250);
+    voiceLabel();
+    Announce.tell("Recording your voice. Press Stop recording when you're done.");
+  }
+  function stopVoice() {
+    if (!voiceRec) return;
+    const v = voiceRec;
+    voiceRec = null;
+    clearInterval(v.timer);
+    try { v.rec.stop(); } catch (e) { /* already stopped */ }
+    v.stream.getTracks().forEach((tr) => tr.stop());
+    voiceLabel();
+  }
+  async function finishVoice(chunks, type) {
+    if (!chunks.length) { Announce.tell("Nothing was recorded"); return; }
+    const ext = /mp4|aac/.test(type || "") ? "m4a" : /ogg/.test(type || "") ? "ogg" : "webm";
+    const takes = Object.values(song.contents).filter((c) => /^Voice take/.test(c.name)).length;
+    const file = new File([new Blob(chunks, { type: type || "audio/webm" })], `Voice take ${takes + 1}.${ext}`, { type: type || "audio/webm" });
+    // On the selected audio track, or a Voice track (made if there isn't one).
+    let t = sel().kind === "audio" ? sel() : song.tracks.find((x) => x.kind === "audio" && /voice/i.test(x.name));
+    if (!t) {
+      t = Song.addTrack(song, { kind: "audio", name: "Voice" });
+      if (!t) { Announce.tell(`${Song.MAX_TRACKS} tracks is the most a song can have: pick an audio track first`); return; }
+      syncAudio();
+      rebuildMixer();
+    }
+    await addSoundFiles([file], { mode: "clip", trackId: t.id, bar: song.cursor });
+    const o = find(open);
+    if (o && o.c.audio) {
+      selectTrack(t.id, false);
+      setSlide("sound", true);
+      Announce.tell(`Voice take on ${t.name} at bar ${o.clip.start + 1}. Clean up voice tidies it in one go.`);
+    }
+  }
+  voiceBtn.addEventListener("click", () => (voiceRec ? stopVoice() : startVoice()));
+  // The same from the wave editor, so a second take is one click from the first.
+  $("voice-rec2").addEventListener("click", () => (voiceRec ? stopVoice() : startVoice()));
 
   // --- copy, cut and paste a stretch (in this sound, or into another clip's) ---
   function waveCopy(cut) {

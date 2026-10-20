@@ -661,8 +661,65 @@
     return out;
   }
 
+  // One click for a spoken take (a voice-over): trims the silent ends (keeping
+  // a breath of room), takes out rumble below 80 Hz, reduces the steady
+  // background noise (learned from the quietest quarter second, if it's
+  // quiet enough to be room noise), evens the level to just under full
+  // (-1 dB) and fades the edges so nothing clicks. Returns { chans, move,
+  // steps: [words] }; move(t) maps old seconds to new ones (the trim).
+  function voiceCleanup(chans, rate) {
+    const steps = [];
+    const n = chans[0].length;
+    const hi = peak(chans, 0, n);
+    if (!n || hi < 1e-4) return { chans: chans.map((d) => Float32Array.from(d)), move: (t) => t, steps: ["it's silent: nothing to clean"] };
+    // Loudness per 10 ms.
+    const hop = Math.max(1, Math.round(rate * 0.01));
+    const frames = Math.floor(n / hop);
+    const lvl = new Float32Array(frames);
+    for (let f = 0; f < frames; f++) {
+      let sum = 0;
+      for (const d of chans) for (let i = f * hop; i < (f + 1) * hop; i++) sum += d[i] * d[i];
+      lvl[f] = Math.sqrt(sum / (hop * chans.length));
+    }
+    const peakLvl = Math.max(...lvl);
+    const loud = (f) => lvl[f] > peakLvl * 0.03; // within about 30 dB of the loudest
+    let first = 0, last = frames - 1;
+    while (first < frames && !loud(first)) first++;
+    while (last > first && !loud(last)) last--;
+    const pad = Math.round(0.12 / 0.01); // 120 ms of room either side
+    const a = Math.max(0, (first - pad) * hop), b = Math.min(n, (last + 1 + pad) * hop);
+    let out = chans.map((d) => d.slice(a, b));
+    if (a > 0 || b < n) steps.push(`trimmed ${((n - (b - a)) / rate).toFixed(2)} s of silence from the ends`);
+    out = filter(out, 0, out[0].length, rate, "high", 80);
+    steps.push("took out rumble under 80 Hz");
+    // The quietest quarter second, as the room's noise (only if it's quiet: not a word).
+    const win = Math.round(0.25 / 0.01);
+    if (frames > win * 3) {
+      let best = Infinity, at = -1;
+      for (let f = 0; f + win <= frames; f += 2) {
+        let s = 0;
+        for (let k = f; k < f + win; k++) s += lvl[k];
+        if (s < best) { best = s; at = f; }
+      }
+      const quiet = best / win;
+      if (quiet > 1e-5 && quiet < peakLvl * 0.1) {
+        // Learned from the original (the quietest stretch is often in the trimmed-off ends).
+        const prof = noiseProfile(chans, at * hop, (at + win) * hop, rate);
+        if (prof) { out = denoise(out, 0, out[0].length, prof, 0.6); steps.push("reduced the background noise"); }
+      }
+    }
+    out = normalize(out, 0, out[0].length).chans;
+    out = scale(out, 0, out[0].length, dbToGain(-1));
+    steps.push("evened the level to -1 dB");
+    const edge = Math.min(Math.round(rate * 0.01), Math.floor(out[0].length / 4));
+    out = fade(out, 0, edge, "in");
+    out = fade(out, out[0].length - edge, out[0].length, "out");
+    const shift = a / rate, len = (b - a) / rate;
+    return { chans: out, move: (t) => Math.max(0, Math.min(len, t - shift)), steps };
+  }
+
   const api = {
-    sections, variations,
+    sections, variations, voiceCleanup,
     amplify, normalize, fade, silence, reverse, remove, slice, insert, mix, fit, echo, filter, speed, stretch, pitch,
     reverb, compress, eq, chorus, flanger, noiseProfile, denoise, deleteSilence, ramp, declick, spectrum, spectrumHz,
     tone, noise,

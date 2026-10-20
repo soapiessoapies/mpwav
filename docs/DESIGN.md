@@ -1060,3 +1060,10 @@ Sample Studio is complete. Next: v1.0, a full pass and a new zip.
 ## Alpha (v1.0.0-alpha)
 
 Export gained **Tracks I pick** (one track or a few, over the whole song so they line up; also "Export this track…" in a track's ⋯). Full pass: a song built with every tool (starter loop, recorded piano, clip properties, an imported sound with wave edits, a slice kit, the mixer) exported every way. Transpose +12 doubled the pitch measure, swing and humanize changed the render, the bass alone differs from the mix, and the 24-bit/48 kHz preset holds. All 29 wave editor actions ran without errors, and song files and share links round-trip.
+
+## Voice-overs in fewer steps (v1.0.1-alpha)
+
+- **Record voice** (Playing box) and **Record a take** (wave editor) record from the microphone (MediaRecorder) into a sound clip at the play cursor, on the selected audio track or a Voice track made for it, then open it in Sound.
+- **Clean up voice** (first in the wave editor) does in one step what took four menus: trims the silent ends (keeping 120 ms of room), takes out rumble under 80 Hz, reduces background noise learned from the quietest quarter second, evens the level to -1 dB and fades the edges (`WaveOps.voiceCleanup`, tested). Undo takes it back.
+- One sound file dropped on a sound-file row opens straight in Sound.
+- Record, stop, clean up and export just the voice: 6 clicks, without leaving the Sound workspace.

@@ -128,6 +128,8 @@
       <div class="panel-head">
         <h2 id="playbox-h" title="The arrangement: tracks and clips along a timeline (Ableton's Arrangement view, Cool Edit's Multitrack view)">Playing box</h2>
         <button id="new-clip" type="button" class="quiet">New clip</button>
+        <button id="voice-rec" type="button" class="quiet" aria-pressed="false" aria-describedby="voice-rec-help">Record voice</button>
+        <span id="voice-rec-help" class="sr-only">Records from your microphone into a sound clip at the play cursor, then opens it to clean up.</span>
         <button id="loops-btn" type="button" class="quiet" aria-haspopup="dialog">Loops</button>
         <div class="loop-range" role="group" aria-label="Loop">
           <label for="loop-start">Loop bars</label>
@@ -244,6 +246,9 @@
         <div id="wave-editor" class="wave-editor audio-only">
           <!-- Select a stretch of the sound, then change just that stretch -->
           <div class="tool-row wave-select">
+            <button type="button" id="voice-rec2" aria-pressed="false" aria-describedby="voice-rec-help">Record a take</button>
+            <button type="button" id="voice-clean" aria-describedby="voice-clean-help">Clean up voice</button>
+            <span id="voice-clean-help" class="sr-only">For a spoken take: trims the silent ends, takes out rumble and background hiss, evens the level and fades the edges. Undo takes it back.</span>
             <button type="button" id="wave-hear">Hear it</button>
             <span id="wave-time" class="wave-time" aria-hidden="true">0:00.000</span>
             <div class="wave-fields" role="group" aria-label="Selection">
