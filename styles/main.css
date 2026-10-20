@@ -1499,6 +1499,15 @@ fieldset:disabled { opacity: 0.55; }
 .ws-about { color: var(--muted); }
 .ws-about::before { content: "— "; }
 .ws-wave { flex: 1 1 60px; min-width: 40px; height: 12px; }
+/* The Editing strip: what your changes go to. */
+.ws-editing { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
+.ws-mini { flex: none; padding: 2px; min-height: 0; border-radius: 6px; line-height: 0; background: var(--panel-2); border-color: var(--ws-c, var(--line)); }
+.ws-mini canvas { width: 120px; height: 28px; display: block; }
+.ws-mini:disabled { opacity: 1; cursor: default; }
+.ws-editing-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; max-width: 34ch; }
+[data-layout="compact"] .ws-head { flex-wrap: wrap; border-radius: 18px; }
+[data-layout="compact"] .ws-editing { flex: 1 1 100%; padding: 2px 0 4px 4px; }
+[data-layout="compact"] .ws-editing-text { flex: 1 1 auto; max-width: none; }
 .ws-wave path { fill: none; stroke: var(--ws-c, var(--accent)); stroke-width: 2.4; stroke-linecap: round; }
 /* Panels wear the workspace's color on their edge, so you always know where you are. */
 .studio .panel { border-color: color-mix(in srgb, var(--ws-now, var(--line)) 70%, var(--line)); }
@@ -1528,3 +1537,20 @@ fieldset:disabled { opacity: 0.55; }
 [data-layout="compact"] .chord-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
 [data-layout="compact"] .chord-label { display: none; }
 [data-layout="compact"] .chord-row > button { flex: none; }
+.notice.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; text-align: left; }
+.notice.has-action[hidden] { display: none; }
+.notice-action { flex: none; min-height: 36px; }
+/* ⋯ buttons (src/ui/item-menu.js) */
+.more-btn { min-width: 32px; min-height: 32px; padding: 0 6px; font-weight: 800; line-height: 1; letter-spacing: 1px; }
+.tl-head .more-btn { flex: none; min-width: 26px; min-height: 28px; padding: 0 2px; margin-left: auto; }
+.clip-more { position: absolute; top: 4px; z-index: 3; width: 26px; min-width: 26px; min-height: 24px; padding: 0;
+  background: var(--panel); color: var(--text); border: 1px solid var(--text); border-radius: 6px; }
+.notes-more { position: absolute; z-index: 3; width: 28px; min-width: 28px; min-height: 24px; padding: 0;
+  background: var(--panel); color: var(--text); border: 1px solid var(--text); border-radius: 6px; }
+.item-menu { min-width: 220px; }
+.item-menu-head { margin: 0 0 4px; padding: 0 4px; color: var(--muted); font-size: 0.85rem; font-weight: 700; }
+.item-menu-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 38px; text-align: left; }
+.item-menu-item kbd { color: var(--muted); font-size: 0.78rem; border: 0; background: none; padding: 0; }
+.item-menu-item.danger { color: var(--rec); }
+.item-menu hr { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--line); }
+.item-menu.open { position: fixed; z-index: 50; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }

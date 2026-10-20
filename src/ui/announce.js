@@ -23,13 +23,37 @@
     timer = setTimeout(() => { el.textContent = text; }, 30);
   }
 
-  function tell(text) {
+  // opts.action = { label, run }: a button in the notice (Undo after a
+  // delete). The notice then stays up longer, and while it's hovered or has focus.
+  function tell(text, opts = {}) {
     say(text);
     if (!box) return;
     clearTimeout(hideTimer);
-    box.textContent = text;
+    box.textContent = "";
+    const words = document.createElement("span");
+    words.textContent = text;
+    words.setAttribute("aria-hidden", "true"); // already spoken by the live region
+    box.append(words);
+    const act = opts.action;
+    box.classList.toggle("has-action", !!act);
+    if (act) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "notice-action";
+      b.textContent = act.label;
+      b.setAttribute("aria-label", `${act.label}: ${text}`);
+      b.addEventListener("click", () => { box.hidden = true; act.run(); });
+      box.append(b);
+    }
     box.hidden = false;
-    hideTimer = setTimeout(() => { box.hidden = true; }, 4500);
+    const hide = () => {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        if (box.matches(":hover, :focus-within")) return hide();
+        box.hidden = true;
+      }, act ? 8000 : 4500);
+    };
+    hide();
   }
 
   root.Announce = { attach, say, tell };

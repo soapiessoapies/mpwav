@@ -63,6 +63,7 @@ const SHELL = [
   "src/ui/mixer-view.js",
   "src/ui/colors.js",
   "src/ui/color-pick.js",
+  "src/ui/item-menu.js",
   "src/ui/piano-roll.js",
   "src/ui/zoombar.js",
   "src/ui/timeline.js",

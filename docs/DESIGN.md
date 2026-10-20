@@ -828,3 +828,26 @@ poster's style, and change the colors so each workspace reads as its own place.
 - Measured on the demo song (phone page length): Make 2291 → 1536 px,
   Arrange 1527 → 901, Edit 1856 → 1167, Sound 3279 → 1047.
 - The color palette also works without popover support (iOS before 17).
+
+## Beta step 3: ⋯ menus and the Editing strip (v0.30.0)
+
+Phie's teacher couldn't find how to delete (it was only a key, or a button off
+in a toolbar), and it wasn't always clear which clip or notes a change hit.
+
+- **⋯ menus** (`src/ui/item-menu.js`, one builder for all of them): on the
+  selected clip (top-right corner on the timeline), the selected track (by its
+  name), and the selected notes (beside them in the piano roll). Right-click,
+  a long press on a phone, and the Menu key / Shift+F10 open the same menu.
+  Clip: Open, Copy, Cut, Paste at cursor, Duplicate, Linked copy, Snip at play
+  cursor, Color…, Rename…, Delete. Track: Rename…, Color…, Mute, Solo, Move up
+  or down, Delete track. Notes: Copy, Cut, Paste at cursor, Duplicate, Select
+  all, Snip at cursor (`Song.snipNotes`), Color…, Delete. Real menus: arrows,
+  Enter, Esc, focus goes back.
+- **Delete shows Undo:** deleting a clip, notes or a track puts "Deleted …"
+  in the notice at the bottom with an **Undo** button (`Announce.tell(text,
+  { action })`); it stays while hovered or focused.
+- **The Editing strip** at the right of the workspace header: track › clip ·
+  its bars or "n notes selected", a tiny live picture of the clip with the
+  selected notes lit, and a ⋯ for the selection (notes) or the clip. Clicking
+  the picture opens the clip (or shows it on the timeline). Mix shows the track.
+- The track names column is a little wider (144 px) to fit the ⋯.

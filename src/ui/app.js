@@ -750,6 +750,8 @@
     onDeleteClip(t, clip) {
       deleteClip(t, clip, `Deleted ${Song.content(song, clip).name}`);
     },
+    onClipMore: (t, clip, btn) => ItemMenu.open(btn, clipMenu(t, clip)),
+    onTrackMore: (t, btn) => ItemMenu.open(btn, trackMenu(t, btn)),
     onCursor(bar) {
       song.cursor = bar;
       timeline.render();
@@ -807,6 +809,11 @@
 
   // After a finished edit (a button, a shortcut, the end of a drag): redraw,
   // and save right away so it's its own undo step.
+  // A delete says so on screen too, with Undo right there (no keys needed).
+  function deleted(text) {
+    afterChange();
+    Announce.tell(text, { action: { label: "Undo", run: undo } });
+  }
   function afterChange(text) {
     timeline.render();
     renderEditor();
@@ -853,6 +860,7 @@
   const selNotes = new Set(); // notes selected in the open clip (the Note page edits them)
 
   const roll = PianoRoll.create($("roll"), {
+    onNotesMore: (btn) => ItemMenu.open(btn, notesMenu()),
     onAdd(step, midi) {
       const o = find(open);
       if (!o) return null;
@@ -1070,19 +1078,21 @@
     clipColorBtn.setAttribute("aria-label", `Clip color: ${c.color ? ColorPick.nameOf(c.color) : "same as track"}`);
     clipColorBtn.title = `Clip color: ${c.color ? ColorPick.nameOf(c.color) : "same as track"}`;
   }
-  clipColorBtn.addEventListener("click", () => {
-    const o = find(open);
-    if (!o) return;
-    ColorPick.open(clipColorBtn, {
-      title: `${o.c.name}'s color`, current: o.c.color || null, quick: true, none: `Same as track (${ColorPick.nameOf(o.t.color)})`,
+  function pickClipColor(t, c, anchor) {
+    ColorPick.open(anchor, {
+      title: `${c.name}'s color`, current: c.color || null, quick: true, none: `Same as track (${ColorPick.nameOf(t.color)})`,
       onPick(color) {
-        if (color) o.c.color = color;
-        else delete o.c.color;
+        if (color) c.color = color;
+        else delete c.color;
         renderEditor();
         timeline.render();
-        afterChange(color ? `${o.c.name} is ${ColorPick.nameOf(color).toLowerCase()}` : `${o.c.name} has its track's color`);
+        afterChange(color ? `${c.name} is ${ColorPick.nameOf(color).toLowerCase()}` : `${c.name} has its track's color`);
       },
     });
+  }
+  clipColorBtn.addEventListener("click", () => {
+    const o = find(open);
+    if (o) pickClipColor(o.t, o.c, clipColorBtn);
   });
 
   // --- Note page: the selected notes' length, loudness and pitch ---
@@ -1090,6 +1100,7 @@
   const steps = (n) => `${n} step${n > 1 ? "s" : ""}`;
 
   function renderNotePage() {
+    renderEditing();
     const list = [...selNotes];
     const o = find(open);
     $("note-controls").hidden = !list.length;
@@ -1243,7 +1254,128 @@
     const n = selNotes.size;
     Song.removeNotes(o.c, [...selNotes]);
     selNotes.clear();
-    afterChange(`Deleted ${n} note${n > 1 ? "s" : ""}`);
+    deleted(`Deleted ${n} note${n > 1 ? "s" : ""}`);
+  });
+
+  // --- the ⋯ menus (src/ui/item-menu.js): simple edits on screen ---
+  function openFromMenu(t, clip) {
+    openClip(t, clip, true);
+    if (ui.slide === "arrange" || ui.slide === "mix" || (ui.slide === "edit" && t.kind === "audio")) setSlide(t.kind === "audio" ? "sound" : "make", true);
+  }
+  function clipMenu(t, clip) {
+    picked = { trackId: t.id, clipId: clip.id };
+    showActions();
+    const c = Song.content(song, clip);
+    const hasClip = clipboard && clipboard.kind === "clip";
+    const at = () => $("timeline").querySelector(`[data-clip="${clip.id}"]`) || clipColorBtn;
+    return {
+      label: c.name,
+      items: [
+        { label: "Open", keys: "Enter", run: () => openFromMenu(t, clip), keepFocus: true },
+        "-",
+        { label: "Copy", keys: "Ctrl+C", run: () => clipCopy(false) },
+        { label: "Cut", keys: "Ctrl+X", run: () => clipCopy(true), keepFocus: true },
+        { label: "Paste at cursor", keys: "Ctrl+V", disabled: !hasClip, run: () => clipPaste(), keepFocus: true },
+        { label: "Duplicate", keys: "Ctrl+D", run: () => clipDuplicate(false), keepFocus: true },
+        { label: "Linked copy", run: () => clipDuplicate(true), keepFocus: true },
+        { label: "Snip at play cursor", run: clipSplit },
+        "-",
+        { label: "Color…", run: () => pickClipColor(t, c, at()), keepFocus: true },
+        { label: "Rename…", run: () => { openFromMenu(t, clip); requestAnimationFrame(() => nameField.focus()); }, keepFocus: true },
+        "-",
+        { label: "Delete", keys: "Del", danger: true, run: () => deleteClip(t, clip, `Deleted ${c.name}`), keepFocus: true },
+      ],
+    };
+  }
+  function trackMenu(t, btn) {
+    const i = song.tracks.indexOf(t);
+    const toTrackPage = (focusId) => {
+      selectTrack(t.id, false);
+      if ($("tab-p-track").hidden) setSlide("arrange", true);
+      pages.select("tab-p-track", false);
+      if (document.documentElement.dataset.twopanels === "true") $("pp-side").click();
+      requestAnimationFrame(() => $(focusId).focus());
+    };
+    const mix = (key, on, said) => { t[key] = on; applyMix(); mixerView.refresh(); afterChange(`${t.name} ${said}`); };
+    return {
+      label: `${t.name} track`,
+      items: [
+        { label: "Rename…", run: () => toTrackPage("track-name"), keepFocus: true },
+        { label: "Color…", keepFocus: true, run: () => ColorPick.open(btn, {
+          title: `${t.name}'s color`, current: t.color, quick: true,
+          onPick(color) {
+            if (!color) return;
+            t.color = color;
+            selectTrack(song.selected, false);
+            afterChange(`${t.name} is ${ColorPick.nameOf(color).toLowerCase()}`);
+          },
+        }) },
+        { label: t.mute ? "Unmute" : "Mute", run: () => mix("mute", !t.mute, t.mute ? "unmuted" : "muted") },
+        { label: t.solo ? "Unsolo" : "Solo", run: () => mix("solo", !t.solo, t.solo ? "unsoloed" : "soloed") },
+        "-",
+        { label: "Move up", disabled: i === 0, run: () => { selectTrack(t.id, false); moveSelected(-1); } },
+        { label: "Move down", disabled: i === song.tracks.length - 1, run: () => { selectTrack(t.id, false); moveSelected(1); } },
+        "-",
+        { label: "Delete track", danger: true, disabled: song.tracks.length <= 1, keepFocus: true, run: () => { selectTrack(t.id, false); removeSelectedTrack(); } },
+      ],
+    };
+  }
+  function notesMenu() {
+    const o = find(open);
+    const n = selNotes.size;
+    const hasNotes = clipboard && clipboard.kind === "notes";
+    const at = roll.cursor.step;
+    const crossing = !!o && [...selNotes].some((x) => x.step < at && at < x.step + x.len);
+    return {
+      label: n === 1 ? "1 note" : `${n} notes`,
+      items: [
+        { label: "Copy", keys: "Ctrl+C", disabled: !n, run: () => notesCopy(false) },
+        { label: "Cut", keys: "Ctrl+X", disabled: !n, run: () => notesCopy(true) },
+        { label: "Paste at cursor", keys: "Ctrl+V", disabled: !hasNotes, run: () => notesPaste() },
+        { label: "Duplicate", keys: "Ctrl+D", disabled: !n, run: notesDuplicate },
+        { label: "Select all", keys: "Ctrl+A", run: notesSelectAll },
+        { label: "Snip at cursor", disabled: !crossing, run: () => {
+          const made = Song.snipNotes(o.c, [...selNotes], at);
+          for (const m of made) selNotes.add(m);
+          afterChange(`Snipped ${plural(made.length, "note")} at step ${(at % 16) + 1}`);
+        } },
+        "-",
+        { label: "Color…", disabled: !n, keepFocus: true, run: () => {
+          if (document.documentElement.dataset.twopanels === "true") $("pp-side").click();
+          pages.select("tab-p-note", false);
+          $("note-color").click();
+        } },
+        "-",
+        { label: "Delete", keys: "Del", danger: true, disabled: !n, run: () => $("note-delete").click() },
+      ],
+    };
+  }
+  ItemMenu.attach($("timeline"), (target) => {
+    const b = target.closest(".clip");
+    if (b) {
+      const t = Song.track(song, b.closest(".tl-lane").dataset.track);
+      const clip = t && t.clips.find((x) => x.id === b.dataset.clip);
+      if (!clip) return null;
+      const m = clipMenu(t, clip);
+      timeline.render();
+      return m;
+    }
+    const head = target.closest(".tl-head");
+    if (head) {
+      const t = Song.track(song, head.closest(".tl-row").dataset.track);
+      return t ? trackMenu(t, head.querySelector(".more-btn") || head) : null;
+    }
+    return null;
+  });
+  ItemMenu.attach($("roll"), (target) => {
+    const o = find(open);
+    if (!o || o.c.audio) return null;
+    const d = target.closest(".note");
+    if (d) {
+      const note = o.c.notes[Number(d.dataset.i)];
+      if (note && !selNotes.has(note)) { selNotes.clear(); selNotes.add(note); renderEditor(); }
+    }
+    return selNotes.size ? notesMenu() : null;
   });
 
   // --- adding sound files: a clip on an audio track, or a synth track's instrument ---
@@ -2280,7 +2412,8 @@
     if (open && open.clipId === clip.id) closeClip();
     Song.removeClip(song, t, clip);
     picked = null;
-    afterChange(text);
+    if (/^Deleted /.test(text)) deleted(text);
+    else afterChange(text);
     const next = t.clips[i] || t.clips[i - 1];
     if (next) timeline.focusClip(next);
   }
@@ -2337,7 +2470,74 @@
   });
 
   // Which buttons can do something right now
+  // --- the Editing strip (in the workspace header): what changes go to ---
+  // Make, Edit and Sound work on the open clip (else the picked one);
+  // Arrange on the picked clip; Mix on the selected track.
+  function renderEditing() {
+    const box = $("ws-editing");
+    if (!box) return;
+    // (runs during startup too, before later helpers are set up)
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const slide = ui.slide;
+    const o = slide === "arrange" ? find(picked) : find(open) || find(picked);
+    const t = o ? o.t : sel();
+    const mini = $("ws-mini"), cv = $("ws-mini-canvas");
+    let words, label;
+    if (slide === "mix" || !o) {
+      words = slide === "mix" ? `${t.name} track` : `${t.name} · no clip picked`;
+      label = slide === "mix" ? `Editing the ${t.name} track` : `Editing the ${t.name} track; no clip picked`;
+    } else {
+      const span = o.clip.length === 1 ? `bar ${o.clip.start + 1}` : `bars ${o.clip.start + 1}–${Song.clipEnd(o.clip)}`;
+      const isOpen = find(open) && find(open).clip === o.clip;
+      const n = isOpen && !o.c.audio ? selNotes.size : 0;
+      words = `${t.name} › ${o.c.name} · ${n ? plural(n, "note") + " selected" : span}`;
+      label = `Editing ${o.c.name} on ${t.name}, ${span}` + (n ? `, ${plural(n, "note")} selected` : "");
+    }
+    $("ws-editing-text").textContent = words;
+    mini.setAttribute("aria-label", o && slide !== "mix" ? `${label}. Open it` : label);
+    mini.disabled = !o || slide === "mix";
+    // The picture: the clip's notes in its color, the selected ones lit.
+    const g = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    const color = o ? o.c.color || t.color : t.color;
+    const rgb = Colors.shades(color)[0];
+    if (o && slide !== "mix" && !o.c.audio && o.c.notes.length) {
+      const notes = o.c.notes, loop = o.c.bars * Song.STEPS;
+      const lo = Math.min(...notes.map((x) => x.midi)), hi = Math.max(...notes.map((x) => x.midi));
+      const rows = Math.max(hi - lo + 1, 6), rh = H / rows;
+      const isOpen = find(open) && find(open).clip === o.clip;
+      for (const x of notes) {
+        const lit = isOpen && selNotes.has(x);
+        g.fillStyle = lit ? "#ffffff" : `rgba(${rgb.join(",")},${selNotes.size && isOpen ? 0.55 : 1})`;
+        g.fillRect((x.step / loop) * W, (hi - x.midi) * rh + (rows - (hi - lo + 1)) * rh / 2, Math.max(2, (x.len / loop) * W - 1), Math.max(2, rh - 1));
+        if (lit) { g.strokeStyle = `rgb(${rgb.join(",")})`; g.lineWidth = 1; g.strokeRect((x.step / loop) * W + 0.5, (hi - x.midi) * rh + (rows - (hi - lo + 1)) * rh / 2 + 0.5, Math.max(2, (x.len / loop) * W - 1) - 1, Math.max(2, rh - 1) - 1); }
+      }
+    } else {
+      // A sound file, a track, or nothing yet: a band in the color.
+      g.fillStyle = `rgba(${rgb.join(",")},${o ? 0.9 : 0.35})`;
+      if (o && o.c.audio) for (let i = 0; i < 30; i++) { const h = (0.25 + 0.75 * Math.abs(Math.sin(i * 1.7))) * H * 0.8; g.fillRect(i * 4, (H - h) / 2, 3, h); }
+      else g.fillRect(0, H / 2 - 3, W, 6);
+    }
+    // Its ⋯: the selected notes', else the clip's.
+    box.querySelector(".more-btn")?.remove();
+    if (o && slide !== "mix") {
+      const isOpen = find(open) && find(open).clip === o.clip;
+      const notes = isOpen && !o.c.audio && selNotes.size;
+      const editingMore = ItemMenu.moreButton(notes ? `${plural(selNotes.size, "selected note")}` : `${o.c.name} clip`);
+      editingMore.addEventListener("click", () => ItemMenu.open(editingMore, notes ? notesMenu() : clipMenu(o.t, o.clip)));
+      box.append(editingMore);
+    }
+  }
+  $("ws-mini").addEventListener("click", () => {
+    const o = ui.slide === "arrange" ? pickedClip() : find(open) || pickedClip();
+    if (!o) return;
+    if (ui.slide === "arrange" || ui.slide === "edit") { timeline.focusClip(o.clip); return; }
+    openClip(o.t, o.clip, true);
+  });
+
   function showActions() {
+    renderEditing();
     const p = pickedClip();
     for (const id of ["clip-copy", "clip-cut", "clip-dup", "clip-link", "clip-split", "clip-delete"]) $(id).disabled = !p;
     $("clip-paste").disabled = !(clipboard && clipboard.kind === "clip");
@@ -2694,7 +2894,7 @@
   };
   $("track-up").addEventListener("click", () => moveSelected(-1));
   $("track-down").addEventListener("click", () => moveSelected(1));
-  $("track-remove").addEventListener("click", () => {
+  function removeSelectedTrack() {
     const t = sel();
     if (open && open.trackId === t.id) closeClip();
     if (picked && picked.trackId === t.id) picked = null;
@@ -2702,8 +2902,9 @@
     syncAudio();
     rebuildMixer();
     selectTrack(song.selected, false);
-    afterChange(`Removed ${t.name}. Undo brings it back.`);
-  });
+    deleted(`Deleted the ${t.name} track`);
+  }
+  $("track-remove").addEventListener("click", removeSelectedTrack);
   $("track-add-audio").addEventListener("click", () => {
     const t = Song.addTrack(song, { kind: "audio" });
     if (!t) { Announce.say(`${Song.MAX_TRACKS} tracks is the most a song can have`); return; }
@@ -3815,6 +4016,7 @@
     }
     document.documentElement.dataset.onepage = String(!!s.pages && s.pages.length === 1);
     showPhonePanel(s);
+    renderEditing();
     if (byHand && arrange.arranging) setArranging(false);
     // Any change of slide opens its page (also when a new song moves you
     // there): leaving Mix that way used to keep the mixer showing.

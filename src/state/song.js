@@ -584,6 +584,23 @@
     return added;
   }
 
+  // Snips notes that run across `step` in two there: the first part keeps the
+  // note, the second is a new note with the same pitch, loudness, sound and
+  // color. Returns the new notes.
+  function snipNotes(c, notes, step) {
+    const made = [];
+    for (const n of notes) {
+      if (!(n.step < step && step < n.step + n.len)) continue;
+      const m = { step, midi: n.midi, len: n.step + n.len - step, vel: n.vel };
+      n.len = step - n.step;
+      if (n.fx) m.fx = { ...n.fx };
+      if (n.color) m.color = n.color;
+      c.notes.push(m);
+      made.push(m);
+    }
+    return made;
+  }
+
   // Duplicates notes right after themselves (after the last one ends).
   function duplicateNotes(c, notes) {
     const first = Math.min(...notes.map((n) => n.step));
@@ -981,7 +998,7 @@
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName, freeSpan,
     freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, splitApart, insertBars, deleteBars, duplicateBars,
-    copyNotes, pasteNotes, duplicateNotes, setTempo, removeTempo, bpmAt, stepSeconds,
+    copyNotes, pasteNotes, duplicateNotes, snipNotes, setTempo, removeTempo, bpmAt, stepSeconds,
     STAMPS, repeatNotes, stampNotes, arpeggiate,
     noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,
     localStep, notesAtPos, songBars, viewBars, playRange, audible,

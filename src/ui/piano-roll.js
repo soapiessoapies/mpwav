@@ -144,6 +144,20 @@
         d.append(vel, grip);
         notesLayer.append(d);
       });
+      // ⋯ beside the selected notes: their edits, on screen (no keys needed).
+      if (h.onNotesMore && view.selected.size) {
+        const sel = [...view.selected];
+        const right = Math.max(...sel.map((n) => xOf(n.step) + n.len * stepW()));
+        const top = Math.min(...sel.map((n) => yOf(n.midi)));
+        const more = ItemMenu.moreButton(sel.length === 1 ? `${nameOf(sel[0].midi)} note` : `${sel.length} notes`);
+        more.classList.add("notes-more");
+        more.style.left = right + 2 + "px";
+        more.style.top = Math.max(0, top - 2) + "px";
+        more.addEventListener("pointerdown", (e) => e.stopPropagation());
+        more.addEventListener("keydown", (e) => { if (e.key !== "Tab") e.stopPropagation(); });
+        more.addEventListener("click", (e) => { e.stopPropagation(); h.onNotesMore(more); });
+        notesLayer.append(more);
+      }
       placeCursor();
     }
 

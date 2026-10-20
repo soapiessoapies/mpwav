@@ -95,6 +95,12 @@
     <span id="ws-num" class="ws-num" aria-hidden="true">1</span>
     <p class="ws-text"><strong id="ws-name">Make</strong> <span id="ws-about" class="ws-about">play and record ideas into one clip</span></p>
     <svg class="ws-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
+    <!-- What your changes go to: the track, the clip, a tiny live picture of it (selected notes lit), and its ⋯ -->
+    <div id="ws-editing" class="ws-editing" role="group" aria-labelledby="ws-editing-label">
+      <span id="ws-editing-label" class="sr-only">Editing</span>
+      <button type="button" id="ws-mini" class="ws-mini" aria-describedby="ws-editing-text"><canvas id="ws-mini-canvas" width="120" height="28" aria-hidden="true"></canvas></button>
+      <span id="ws-editing-text" class="ws-editing-text"></span>
+    </div>
   </div>
 
   <!-- Phones: one panel at a time (the keyboard stays pinned below) -->
@@ -998,7 +1004,7 @@
 </dialog>
 
 <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-<div id="notice" class="notice" aria-hidden="true" hidden></div>
+<div id="notice" class="notice" role="group" aria-label="Notice" hidden></div>
 <input type="file" id="sound-input" accept="audio/*,.wav,.mp3,.ogg,.m4a,.flac,.aif,.aiff" hidden>
 
 <script src="src/version.js"></script>
@@ -1039,6 +1045,7 @@
 <script src="src/ui/mixer-view.js"></script>
 <script src="src/ui/colors.js"></script>
 <script src="src/ui/color-pick.js"></script>
+<script src="src/ui/item-menu.js"></script>
 <script src="src/ui/piano-roll.js"></script>
 <script src="src/ui/zoombar.js"></script>
 <script src="src/ui/timeline.js"></script>

@@ -21,7 +21,7 @@
 (function (root) {
   "use strict";
 
-  const HEAD = 116; // width of the track names column (fold arrow + name)
+  const HEAD = 144; // width of the track names column (fold arrow + name, and ⋯ on the selected track)
   // px per bar, zoomed all the way out / in. 24 keeps every bar button and
   // one-bar clip a big enough target (WCAG 2.5.8); the zoom bar scrolls the rest.
   const MIN_BW = 24, MAX_BW = 240;
@@ -219,6 +219,12 @@
         name.append(t.name);
         name.addEventListener("click", () => h.onSelectTrack(t.id));
         head.append(name);
+        // ⋯ : the track's edits (rename, color, mute, delete…).
+        if (h.onTrackMore && t.id === song.selected) { // the selected track's (right-click works on any)
+          const more = moreBtn(`${t.name} track`, "tmore-" + t.id);
+          more.addEventListener("click", () => h.onTrackMore(t, more));
+          head.append(more);
+        }
 
         const lane = el("div", "tl-lane", { role: "group", "aria-label": `${t.name} clips` });
         lane.dataset.track = t.id;
@@ -245,6 +251,14 @@
           }
           b.append(el("span", "clip-grip", { "aria-hidden": "true" }));
           lane.append(b);
+          // ⋯ on the selected clip's top-right corner: its edits, no keys needed.
+          if (h.onClipMore && sel && sel.id === clip.id) {
+            const more = moreBtn(`${c.name} clip`, "cmore-" + clip.id);
+            more.classList.add("clip-more");
+            more.style.left = Math.max(clip.start * barW(), (clip.start + clip.length) * barW() - 30) + "px";
+            more.addEventListener("click", () => h.onClipMore(t, clip, more));
+            lane.append(more);
+          }
         }
         row.append(head, lane);
         tl.append(row);
@@ -259,6 +273,14 @@
 
       if (hadFocus) scroller.querySelector(`[data-focus-key="${hadFocus}"]`)?.focus();
       if (h.onView) h.onView(); // the zoom bar follows the song's length
+    }
+
+    // A ⋯ button that never starts a drag or a new clip under it.
+    function moreBtn(label, key) {
+      const b = ItemMenu.moreButton(label);
+      b.dataset.focusKey = key;
+      for (const ev of ["pointerdown", "dblclick"]) b.addEventListener(ev, (e) => e.stopPropagation());
+      return b;
     }
 
     // --- finding things from events ---

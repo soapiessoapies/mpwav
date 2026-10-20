@@ -611,3 +611,19 @@ test("sanitize keeps the loop, cursor, tempo changes and clips inside BARS_MAX",
   assert.equal(lead(out).clips.length, 1, "the clip at bar a billion is dropped");
   assert.ok(S.viewBars(out) <= S.BARS_MAX);
 });
+
+test("snip: notes running across a step are cut in two there, keeping their sound and color", () => {
+  const s = S.createSong();
+  const t = S.track(s, "lead");
+  const c = S.content(s, S.addClip(s, t, 0, 1));
+  const long = S.addNote(c, 0, 60, 8, 0.7, { tune: 20 });
+  long.color = "#123456";
+  const short = S.addNote(c, 0, 64, 2, 0.7);
+  const made = S.snipNotes(c, [long, short], 4);
+  assert.equal(made.length, 1, "only the note that crosses step 4");
+  assert.deepEqual([long.step, long.len], [0, 4]);
+  assert.deepEqual([made[0].step, made[0].len, made[0].midi, made[0].vel], [4, 4, 60, 0.7]);
+  assert.equal(made[0].fx.tune, 20);
+  assert.equal(made[0].color, "#123456");
+  assert.equal(short.len, 2);
+});
