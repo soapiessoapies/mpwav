@@ -425,6 +425,11 @@
     </div>
     <p class="help tip">Add MP3 or WAV files (or drop them anywhere on this panel) and pick one. Cut it into slices: click the wave and press M (or double-click), drag a cut to move it, or let Cut for me find the hits, the gaps, the bars or equal parts. Sending slices to pads, the keys and the timeline comes next.</p>
     <p id="ss-status" class="help" aria-live="polite"></p>
+    <!-- Phones: the library or the cutting, one at a time -->
+    <div id="ss-views" class="phone-panels ss-views" role="group" aria-label="Show">
+      <button type="button" id="ss-v-sounds" aria-pressed="true">Sounds</button>
+      <button type="button" id="ss-v-cut" aria-pressed="false">Cut</button>
+    </div>
     <div class="ss-body">
       <div class="ss-lib">
         <label for="ss-search" class="sr-only">Find a sound</label>
@@ -465,6 +470,7 @@
         <div id="ss-wave" class="ss-wave" tabindex="0" role="application" aria-roledescription="waveform"><canvas id="ss-canvas" aria-hidden="true"></canvas></div>
         <div id="ss-zoombar"></div>
         <p id="ss-time" class="ss-time" aria-hidden="true"></p>
+        <p class="help tip">With the wave focused: arrows move the cursor (Shift: a second), [ and ] jump to the cuts, M cuts, Alt + arrows move the nearest cut, Delete removes it, 1 to 9 play a slice, Space or Enter plays from the cursor.</p>
         <section class="ss-slices-box" aria-labelledby="ss-slices-h">
           <h3 id="ss-slices-h">Slices <span id="ss-slices-count" class="muted"></span></h3>
           <p class="help tip">Each slice plays from the list (or keys 1 to 9 with the wave focused). Its ⋯ names, reverses, fades or changes the loudness of just that slice: the sound file itself never changes.</p>
@@ -791,6 +797,15 @@
       <li>Change one thing at a time, and listen after each change.</li>
     </ul>
   </section>
+  <section aria-labelledby="g-sample-h">
+    <h3 id="g-sample-h">Sampling</h3>
+    <ol class="g-list">
+      <li>Open <strong>6 Sample</strong> and add an MP3 or WAV file (or drop it on the panel).</li>
+      <li>Cut it into slices: <strong>Cut for me › At each hit</strong> works for drums and words; or click the wave and press M.</li>
+      <li>Play each slice from the list (or 1 to 9). Its ⋯ reverses, fades or names it.</li>
+      <li><strong>Send slices › To the keys</strong>: now each key plays a slice, and a clip plays them back in order. Move the notes around to remix the sound.</li>
+    </ol>
+  </section>
   <section aria-labelledby="g-pro-h">
     <h3 id="g-pro-h">Coming from Ableton or Cool Edit?</h3>
     <table class="g-map">
@@ -802,8 +817,10 @@
         <tr><td>Device view, instrument and effects</td><td>Note Edit › Sound and Shape (the Sound workspace)</td></tr>
         <tr><td>Mixer</td><td>The Mix workspace: faders, pan, mute and solo</td></tr>
         <tr><td>Cue list, locators</td><td>Markers (wave editor › Select), the loop bars</td></tr>
-        <tr><td>Export Audio, Mixdown, Bounce</td><td>Home › Export: mix, stems, a clip, MIDI</td></tr>
+        <tr><td>Export Audio, Mixdown, Bounce</td><td>Export (by Save, Ctrl + Shift + E): the song, picked clips or bars, as one file, a file each, or MIDI</td></tr>
         <tr><td>Drum Rack, sample slots</td><td>Drum tracks, and Sound pads under the keyboard</td></tr>
+        <tr><td>Simpler slicing, Slice to new MIDI track</td><td>Sample Studio (6 Sample): cut a sound, then Send slices › To the keys</td></tr>
+        <tr><td>Clip envelopes, MIDI effects on a clip</td><td>Note Edit › Clip: properties (Transpose, Swing, Humanize…) and styles</td></tr>
       </tbody>
     </table>
     <p class="help">The usual keys work: Space play and stop, Ctrl + Z and Ctrl + Y undo and redo, Ctrl + C, X and V, Ctrl + A select all, Ctrl + S save. <kbd>?</kbd> lists every shortcut.</p>
@@ -961,6 +978,19 @@
     <table><tbody>
       <tr><th scope="row">Alt + 1 to 6</th><td>The workspaces: 1 Make, 2 Arrange, 3 Edit, 4 Sound, 5 Mix, 6 Sample. Each shows only the panels for that job</td></tr>
       <tr><th scope="row">Alt + 0</th><td>All panels at once (also in Settings, Layout)</td></tr>
+      <tr><th scope="row">Ctrl + Shift + E</th><td>Export</td></tr>
+      <tr><th scope="row">Ctrl + Alt + C / V</th><td>Copy and paste a clip's style (its properties and color)</td></tr>
+      <tr><th scope="row">Menu key or Shift + F10</th><td>The ⋯ menu of the focused clip, track or notes (right-click and a long press do the same)</td></tr>
+    </tbody></table>
+    <h3>Sample Studio (with the wave focused)</h3>
+    <table><tbody>
+      <tr><th scope="row">Space or Enter</th><td>Play or stop the sound from the cursor</td></tr>
+      <tr><th scope="row">Left / Right</th><td>Move the cursor (Shift: a second at a time); [ and ] jump to the previous or next cut</td></tr>
+      <tr><th scope="row">M</th><td>Cut at the cursor (a double-click does too)</td></tr>
+      <tr><th scope="row">Alt + Left / Right</th><td>Move the cut nearest the cursor</td></tr>
+      <tr><th scope="row">Delete</th><td>Remove the cut nearest the cursor</td></tr>
+      <tr><th scope="row">1 to 9</th><td>Play that slice</td></tr>
+      <tr><th scope="row">+ and −</th><td>Zoom in and out</td></tr>
     </tbody></table>
     <h3>Anywhere</h3>
     <table class="keys-table">

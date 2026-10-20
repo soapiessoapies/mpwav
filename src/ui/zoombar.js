@@ -31,8 +31,17 @@
 
     function draw() {
       const { start, end, total } = h.get();
+      if (!total) return;
+      // The values first: a screen reader needs them even while the bar is hidden.
+      const words = `${h.unit(Math.floor(start) + 1)} to ${h.unit(Math.ceil(end))} of ${h.total ? h.total(total) : total}`;
+      for (const [elx, now] of [[thumb, start], [hStart, start], [hEnd, end]]) {
+        elx.setAttribute("aria-valuemin", "0");
+        elx.setAttribute("aria-valuemax", String(total));
+        elx.setAttribute("aria-valuenow", String(Math.round(now)));
+        elx.setAttribute("aria-valuetext", words);
+      }
       const w = track.clientWidth;
-      if (!w || !total) return;
+      if (!w) return;
       let left = (start / total) * w, width = ((end - start) / total) * w;
       if (width < MIN_THUMB) { left = Math.max(0, Math.min(w - MIN_THUMB, left - (MIN_THUMB - width) / 2)); width = MIN_THUMB; }
       width = Math.min(width, w - left);
@@ -41,13 +50,6 @@
       // The ends sit on the thumb's edges (siblings, so no control is nested in another).
       hStart.style.left = left + "px";
       hEnd.style.left = left + width - hEnd.offsetWidth + "px";
-      const words = `${h.unit(Math.floor(start) + 1)} to ${h.unit(Math.ceil(end))} of ${h.total ? h.total(total) : total}`;
-      for (const [elx, now] of [[thumb, start], [hStart, start], [hEnd, end]]) {
-        elx.setAttribute("aria-valuemin", "0");
-        elx.setAttribute("aria-valuemax", String(total));
-        elx.setAttribute("aria-valuenow", String(Math.round(now)));
-        elx.setAttribute("aria-valuetext", words);
-      }
     }
 
     // --- dragging ---
@@ -112,6 +114,9 @@
     });
 
     window.addEventListener("resize", draw);
+    // Any change of its width (a panel resized, Fit turned off) redraws it, so
+    // the thumb never sticks out past the track.
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => draw()).observe(track);
     return { draw };
   }
 

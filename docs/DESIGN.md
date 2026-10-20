@@ -1034,3 +1034,25 @@ keeps working whatever happens to the cuts later.
 Kits play live and in exports (`render.js`), count as the song's sounds
 (saved in song files, kept by the tidy-up), and mark a song as needing a
 song file rather than a share link.
+
+## Sample Studio, step 4 of 4: polish (v0.37.0)
+
+- **Phones:** Sounds / Cut views, one at a time (`data-ssview`); picking or
+  adding a sound goes straight to Cut. Cut handles are bigger on phones, and a
+  finger within 20 px of a cut grabs it (8 px with a mouse).
+- **Keys on the wave:** Space (as well as Enter) plays or stops the sound from
+  the cursor while you're in the panel, instead of the song; [ and ] jump to
+  the previous or next cut; Alt + arrows move the cut nearest the cursor
+  (Shift: further). These are in the panel's tip and in the shortcuts list.
+- **Screen readers:** moving the cursor says the time, and "now in slice 3 of
+  8" when it crosses into another slice; the wave's label says the slice too.
+- **Guide:** a Sampling section (four steps), and the Ableton / Cool Edit map
+  has Sample Studio, clip properties and the new Export.
+- **Tour:** a Workspaces step (all six, Alt + 1 to 6) and an Export step;
+  Home's step no longer says Export lives there.
+- **Fixed:** zoom bars set their slider values even while hidden (a hidden
+  one had none, an accessibility error), and redraw whenever their width
+  changes (with Fit turned off, the Sample Studio's thumb stuck out past the
+  page, found by the chaos tester).
+
+Sample Studio is complete. Next: v1.0, a full pass and a new zip.

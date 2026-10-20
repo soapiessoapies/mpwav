@@ -197,7 +197,7 @@
       }
       saveLib();
       renderList();
-      if (last) pick(last);
+      if (last) { pick(last); if (phone()) setView2("cut"); } // on a phone, straight to cutting it
       const msg = (added ? `Added ${added} sound${added === 1 ? "" : "s"}` : "Nothing added") +
         (failed.length ? `. Couldn't read ${failed.join(", ")}: is it a sound file (MP3, WAV, OGG, M4A, FLAC)?` : "");
       $("ss-status").textContent = msg;
@@ -221,7 +221,26 @@
       addFiles(e.dataTransfer.files);
     });
     $("ss-search").addEventListener("input", renderList);
+    // Phones: Sounds (the library) or Cut (the wave and slices).
+    function setView2(v, say) {
+      panel.dataset.ssview = v;
+      $("ss-v-sounds").setAttribute("aria-pressed", String(v !== "cut"));
+      $("ss-v-cut").setAttribute("aria-pressed", String(v === "cut"));
+      if (v === "cut") requestAnimationFrame(() => { draw(); zoom.draw(); });
+      if (say) h.say(v === "cut" ? "Showing the wave and slices" : "Showing the sounds");
+    }
+    $("ss-v-sounds").addEventListener("click", () => setView2("sounds", true));
+    $("ss-v-cut").addEventListener("click", () => setView2("cut", true));
+    const phone = () => document.documentElement.dataset.layout === "compact";
     $("ss-search").addEventListener("keydown", (e) => e.stopPropagation());
+    // Space on the library's buttons or the slices plays the picked sound, not the song.
+    panel.addEventListener("keydown", (e) => {
+      if (e.key !== " " || e.target.closest("input, select, textarea, #ss-wave") || !pickedId) return;
+      if (e.target.closest("button") && !e.target.closest(".ss-list, .ss-slices")) return; // Space presses other buttons
+      e.preventDefault();
+      e.stopPropagation();
+      playing ? stop() : play(cursor);
+    });
 
     // --- the picked sound: its name, the waveform, play ---
     async function pick(id, focusWave) {
@@ -237,8 +256,9 @@
       draw();
       zoom.draw();
       if (h.picked) h.picked();
-      if (focusWave) h.say(inf ? `${nameOf(id)}, ${seconds(inf.duration)}. The wave has focus: Enter plays, arrows move the cursor.` : `${nameOf(id)} isn't in this browser`);
-      if (focusWave && inf) $("ss-wave").focus();
+      if (focusWave && phone()) setView2("cut");
+      if (focusWave) h.say(inf ? `${nameOf(id)}, ${seconds(inf.duration)}. The wave has focus: Space plays, arrows move the cursor, M cuts.` : `${nameOf(id)} isn't in this browser`);
+      if (focusWave && inf) requestAnimationFrame(() => $("ss-wave").focus());
     }
     function renderHead() {
       const inf = pickedId && Samples.info(pickedId);
@@ -246,8 +266,15 @@
       $("ss-meta").textContent = inf ? `${seconds(inf.duration)} · ${inf.channels === 1 ? "mono" : "stereo"} · ${(inf.rate / 1000).toFixed(1)} kHz` : "";
       for (const id of ["ss-play", "ss-zoom-in", "ss-zoom-out", "ss-fit", "ss-cut", "ss-auto-btn", "ss-send"]) $(id).disabled = !inf;
       $("ss-clear").disabled = !inf || !cutsNow().length;
-      $("ss-wave").setAttribute("aria-label", inf ? `${nameOf(pickedId)} waveform. Cursor at ${clock(cursor)} of ${clock(inf.duration)}. Enter plays from the cursor; arrows move it, Shift for a second; plus and minus zoom.` : "Waveform: pick a sound first");
+      $("ss-wave").setAttribute("aria-label", inf ? `${nameOf(pickedId)} waveform. Cursor at ${clock(cursor)} of ${clock(inf.duration)}${sliceWords()}. Space plays from the cursor; arrows move it; M cuts; 1 to 9 play a slice.` : "Waveform: pick a sound first");
       showTime(cursor);
+    }
+    // "in slice 3 of 8" for the cursor, when there are cuts.
+    function sliceWords() {
+      const sl = slicesNow();
+      if (sl.length < 2) return "";
+      const i = sl.findIndex((s) => cursor >= s.from && cursor < s.to);
+      return i < 0 ? "" : `, in slice ${i + 1} of ${sl.length}`;
     }
     function showTime(t) {
       const inf = pickedId && Samples.info(pickedId);
@@ -297,7 +324,8 @@
         if (x < -2 || x > W + 2) continue;
         g.fillStyle = color;
         g.fillRect(x - 1, 0, 2, H);
-        g.fillRect(x - 5, H - 10, 10, 10); // a handle to drag
+        const hs = phone() ? 18 : 10; // a handle to drag (bigger for fingers)
+        g.fillRect(x - hs / 2, H - hs, hs, hs);
       }
       g.fillStyle = ink;
       g.fillRect(Math.round(xOf(cursor)) - 1, 0, 2, H);
@@ -317,7 +345,8 @@
       const r = $("ss-wave").getBoundingClientRect();
       // On a cut (within 8 px): drag it.
       const px = (t) => r.left + ((t - view.from) / (view.to - view.from)) * r.width;
-      const near = cutsNow().map((c, i) => ({ i, d: Math.abs(px(c) - e.clientX) })).filter((x) => x.d <= 8).sort((a, b) => a.d - b.d)[0];
+      const reach = e.pointerType === "touch" ? 20 : 8; // fingers are wider than a pointer
+      const near = cutsNow().map((c, i) => ({ i, d: Math.abs(px(c) - e.clientX) })).filter((x) => x.d <= reach).sort((a, b) => a.d - b.d)[0];
       if (near) {
         $("ss-wave").setPointerCapture(e.pointerId);
         const e0 = entry(true);
@@ -486,7 +515,27 @@
       if (!inf) return;
       const span = view.to - view.from;
       let to = null;
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") to = cursor + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 1 : Math.max(0.01, span / 50));
+      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.altKey) {
+        // Move the cut nearest the cursor (Shift: further).
+        e.preventDefault();
+        e.stopPropagation();
+        const cuts = cutsNow();
+        if (!cuts.length) { h.say("No cuts to move: press M to cut"); return; }
+        const i = cuts.map((c, k) => [Math.abs(c - cursor), k]).sort((a, b) => a[0] - b[0])[0][1];
+        const by = (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 0.1 : Math.max(0.002, span / 200));
+        const at = Math.max(0.011, Math.min(durNow() - 0.011, cuts[i] + by));
+        change((en) => { en.cuts[i] = at; }, `Cut at ${clock(at)}`);
+        cursor = at;
+        renderHead();
+        draw();
+        return;
+      }
+      if (e.key === "[" || e.key === "]") {
+        const cuts = cutsNow();
+        const next = e.key === "]" ? cuts.find((c) => c > cursor + 0.0005) : [...cuts].reverse().find((c) => c < cursor - 0.0005);
+        to = next != null ? next : e.key === "]" ? inf.duration : 0;
+      } else if (e.key === " ") { e.preventDefault(); e.stopPropagation(); playing ? stop() : play(cursor); return; }
+      else if (e.key === "ArrowLeft" || e.key === "ArrowRight") to = cursor + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 1 : Math.max(0.01, span / 50));
       else if (e.key === "Home") to = 0;
       else if (e.key === "End") to = inf.duration;
       else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); playing ? stop() : play(cursor); return; }
@@ -498,11 +547,14 @@
       if (to == null) return;
       e.preventDefault();
       e.stopPropagation();
+      const before = sliceWords();
       cursor = Math.max(0, Math.min(inf.duration, to));
       if (cursor < view.from || cursor > view.to) { const half = span / 2; setView(cursor - half, cursor + half); }
       renderHead();
+      renderSlices();
       draw();
-      h.say(clock(cursor));
+      const now = sliceWords();
+      h.say(clock(cursor) + (now !== before && now ? now.replace(/^, in/, ", now in") : ""));
     });
 
     // Plays from `from` (to `to`, for a slice), with a slice's own settings.

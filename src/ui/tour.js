@@ -27,6 +27,11 @@
       text: "Starts and stops the song. Space does the same from anywhere.",
     },
     {
+      el: "#slides",
+      title: "Workspaces",
+      text: "One job at a time: 1 Make, 2 Arrange, 3 Edit, 4 Sound, 5 Mix, and 6 Sample to cut sound files into slices. Alt + 1 to 6 switch.",
+    },
+    {
       el: "#playbox",
       title: "The timeline",
       text: "Each row is a track and each coloured block is a clip: a loop of notes. " +
@@ -70,7 +75,12 @@
     {
       el: "#songs-btn",
       title: "Home",
-      text: "Your songs: start a new one, open the demo, save a song file, or Export the song as sound files, stems or MIDI to share.",
+      text: "Your songs: start a new one, open the demo, or save a song file to keep.",
+    },
+    {
+      el: "#export-btn",
+      title: "Export",
+      text: "Turn the whole song, the clips you pick, or some bars into a sound file, a file each, or MIDI. Ctrl + Shift + E opens it too.",
     },
     {
       el: "#guide-btn",
