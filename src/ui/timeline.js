@@ -264,8 +264,8 @@
         const stopClip = shown.find((x) => sel && x.id === sel.id) || shown[0];
         for (const clip of shown) {
           const c = Song.content(song, clip);
-          const b = el("button", "clip" + (sel && sel.id === clip.id ? " selected" : ""), {
-            type: "button", "aria-label": clipLabel(song, t, clip),
+          const b = el("button", "clip" + (sel && sel.id === clip.id ? " selected" : "") + (h.isPickedToo && h.isPickedToo(clip.id) ? " picked-too" : ""), {
+            type: "button", "aria-label": clipLabel(song, t, clip) + (h.isPickedToo && h.isPickedToo(clip.id) ? ", picked" : ""),
             "data-clip": clip.id, "data-focus-key": "clip-" + clip.id, tabindex: clip === stopClip ? "0" : "-1",
           });
           if (sel && sel.id === clip.id) b.setAttribute("aria-current", "true");
@@ -416,7 +416,7 @@
           mode: e.target.closest(".clip-grip") ? "resize" : "move",
           start0: hit.clip.start, length0: hit.clip.length, changed: false,
         };
-        h.onSelectClip(hit.t, hit.clip, false);
+        h.onSelectClip(hit.t, hit.clip, false, e.shiftKey || e.ctrlKey || e.metaKey); // Shift/Ctrl: pick several
         return;
       }
       const lane = e.target.closest(".tl-lane");

@@ -81,10 +81,13 @@
   <header class="title-block">
     <label for="song-title" class="sr-only">Song title</label>
     <input id="song-title" class="song-title" type="text" maxlength="80" autocomplete="off" spellcheck="false">
-    <svg class="title-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
-    <div class="title-row">
+    <div class="title-sub">
+      <svg class="title-wave" viewBox="0 0 120 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 Q 7 0, 12 5 T 22 5 T 32 5 T 42 5 T 52 5 Q 59 -1, 66 5 T 80 5 T 94 5 Q 99 2, 104 5 T 114 5 L 118 5"/></svg>
       <p class="byline">by Phie &amp; Claude</p>
+    </div>
+    <div class="title-row">
       <button id="save-btn" type="button" class="quiet" aria-keyshortcuts="Control+S">Save</button>
+      <button id="export-btn" type="button" class="quiet" aria-haspopup="dialog" aria-keyshortcuts="Control+Shift+E">Export</button>
       <button id="guide-btn" type="button" class="quiet" aria-expanded="false" aria-controls="guide">Guide</button>
       <button id="songs-btn" type="button" class="quiet" aria-haspopup="dialog">Home</button>
     </div>
@@ -784,11 +787,12 @@
           <button type="button" id="export-file" aria-keyshortcuts="Control+S">Save song file</button>
           <button type="button" id="save-as" hidden>Save as…</button>
           <button type="button" id="export-wav" aria-describedby="export-wav-help" aria-haspopup="dialog">Export…</button>
+          <button type="button" id="song-info">Song info (.txt)</button>
           <button type="button" id="song-dup">Duplicate</button>
           <button type="button" id="share-link" aria-describedby="share-help">Copy share link</button>
         </div>
         <p id="share-help" class="help">A link with the whole song inside: anyone who opens it gets their own copy. Songs that use sound files are shared as a song file instead.</p>
-        <p id="export-wav-help" class="help tip">Export makes files from the song: the mix as a WAV or AIFF sound file, stems (a file per track), MIDI notes, or a text summary.</p>
+        <p id="export-wav-help" class="help tip">Export makes sound files (or MIDI) from the whole song, the clips you pick, or some bars. It's also in the transport bar (Ctrl + Shift + E). Song info is a text summary of the tracks, clips, tempo and key.</p>
         <p id="export-status" class="help" aria-live="polite"></p>
       </section>
       <h3 class="home-h">Your songs</h3>
@@ -802,50 +806,68 @@
     <h2 id="export-h">Export</h2>
     <button id="export-close" type="button" class="quiet">Close</button>
   </div>
-  <p class="help">Turn the song into files to share, keep or open in other apps. Nothing here changes the song.</p>
+  <p class="help">Two questions: what to export, and how. Nothing here changes the song.</p>
   <fieldset class="choice">
-    <legend>What to export</legend>
+    <legend>1. What to export</legend>
     <div class="export-what">
-      <label><input type="radio" name="export-what" value="mix" checked> <span><strong>Mix</strong>: the whole song as one sound file, every track with its effects and mix</span></label>
-      <label><input type="radio" name="export-what" value="stems"> <span><strong>Stems</strong>: one sound file per track, lined up to start together, in a .zip</span></label>
-      <label><input type="radio" name="export-what" value="clip"> <span><strong>Clip</strong>: <span id="export-clip-name">the selected clip</span> on its own, as a sound file (its notes as MIDI too, for a note clip)</span></label>
-      <label><input type="radio" name="export-what" value="midi"> <span><strong>MIDI</strong>: the notes, for other music apps and notation (.mid)</span></label>
-      <label><input type="radio" name="export-what" value="info"> <span><strong>Song info</strong>: a text summary of the tracks, clips, tempo and key (.txt)</span></label>
+      <label><input type="radio" name="export-what" value="song" checked> <span><strong>The whole song</strong> <span id="export-song-bars" class="muted"></span></span></label>
+      <label><input type="radio" name="export-what" value="clips"> <span><strong>Clips I pick</strong>: tick them below (Shift- or Ctrl-click clips on the timeline to pick several first)</span></label>
+      <label><input type="radio" name="export-what" value="bars"> <span><strong>Some bars</strong>: the loop, or from bar to bar</span></label>
     </div>
-  </fieldset>
-  <fieldset class="choice" id="export-range-box">
-    <legend>Which bars</legend>
-    <div class="export-what">
-      <label><input type="radio" name="export-range" value="all" checked> <span id="export-range-all">The whole song</span></label>
-      <label><input type="radio" name="export-range" value="loop"> <span id="export-range-loop">The loop</span></label>
+    <div id="export-clips-box" class="export-sub">
+      <div class="toolbar">
+        <button type="button" id="export-clips-all" class="quiet">Tick all</button>
+        <button type="button" id="export-clips-none" class="quiet">Tick none</button>
+      </div>
+      <div id="export-clips" class="export-clips" role="group" aria-label="Clips to export"></div>
+    </div>
+    <div id="export-bars-box" class="export-sub export-what">
+      <label><input type="radio" name="export-range" value="loop" checked> <span id="export-range-loop">The loop</span></label>
       <label class="export-bars"><input type="radio" name="export-range" value="bars"> <span>Bars</span>
         <input id="export-from" type="number" min="1" step="1" value="1" aria-label="From bar"> <span aria-hidden="true">to</span>
         <input id="export-to" type="number" min="1" step="1" value="8" aria-label="To bar"></label>
     </div>
   </fieldset>
-  <fieldset class="choice" id="export-audio">
-    <legend>Sound file</legend>
-    <div class="export-row">
-      <label for="export-format">Format</label>
-      <select id="export-format">
-        <option value="wav16">WAV, 16-bit (plays anywhere)</option>
-        <option value="wav24">WAV, 24-bit (for editing more)</option>
-        <option value="wav32">WAV, 32-bit float (never clips)</option>
-        <option value="aiff16">AIFF, 16-bit (Apple apps)</option>
-        <option value="aiff24">AIFF, 24-bit</option>
-      </select>
+  <fieldset class="choice">
+    <legend>2. How</legend>
+    <div class="export-what">
+      <label><input type="radio" name="export-how" value="one" checked> <span><strong>One sound file</strong>: <span id="export-how-one">everything mixed together</span></span></label>
+      <label><input type="radio" name="export-how" value="each"> <span><strong>A file each</strong>: <span id="export-how-each">one sound file per track, lined up to start together</span>, in a .zip</span></label>
+      <label><input type="radio" name="export-how" value="midi"> <span><strong>Notes only</strong>: MIDI, for other music apps and notation (.mid)</span></label>
     </div>
-    <div class="export-row">
-      <label for="export-rate">Sample rate</label>
-      <select id="export-rate">
-        <option value="44100">44.1 kHz (music)</option>
-        <option value="48000">48 kHz (video)</option>
-      </select>
-    </div>
-    <label class="export-check"><input type="checkbox" id="export-normalize"> Normalize: as loud as it can go without clipping (peaks at -1 dB)</label>
-    <label class="export-check"><input type="checkbox" id="export-dither" checked> Dither (16-bit only): keeps quiet fades smooth</label>
-    <label class="export-check"><input type="checkbox" id="export-tail" checked> Let echoes and reverb ring out after the last bar (off: stop on the bar line, for a loop that repeats cleanly)</label>
   </fieldset>
+  <fieldset class="choice" id="export-audio">
+    <legend>3. Sound quality</legend>
+    <div class="export-what">
+      <label><input type="radio" name="export-preset" value="share" checked> <span><strong>For sharing</strong>: WAV, 16-bit, 44.1 kHz, as loud as it can go without clipping</span></label>
+      <label><input type="radio" name="export-preset" value="daw"> <span><strong>For another music app</strong>: WAV, 24-bit, 48 kHz, levels as they are</span></label>
+      <label><input type="radio" name="export-preset" value="custom"> <span><strong>My own settings</strong> (below)</span></label>
+    </div>
+    <details id="export-more" class="export-more">
+      <summary>More settings</summary>
+      <div class="export-row">
+        <label for="export-format">Format</label>
+        <select id="export-format">
+          <option value="wav16">WAV, 16-bit (plays anywhere)</option>
+          <option value="wav24">WAV, 24-bit (for editing more)</option>
+          <option value="wav32">WAV, 32-bit float (never clips)</option>
+          <option value="aiff16">AIFF, 16-bit (Apple apps)</option>
+          <option value="aiff24">AIFF, 24-bit</option>
+        </select>
+      </div>
+      <div class="export-row">
+        <label for="export-rate">Sample rate</label>
+        <select id="export-rate">
+          <option value="44100">44.1 kHz (music)</option>
+          <option value="48000">48 kHz (video)</option>
+        </select>
+      </div>
+      <label class="export-check"><input type="checkbox" id="export-normalize" checked> Normalize: as loud as it can go without clipping (peaks at -1 dB)</label>
+      <label class="export-check"><input type="checkbox" id="export-dither" checked> Dither (16-bit only): keeps quiet fades smooth</label>
+      <label class="export-check"><input type="checkbox" id="export-tail" checked> Let echoes and reverb ring out after the last bar (off: stop on the bar line, for a loop that repeats cleanly)</label>
+    </details>
+  </fieldset>
+  <p id="export-summary" class="export-summary" aria-live="polite"></p>
   <div class="toolbar">
     <button type="button" id="export-go" class="primary">Export</button>
   </div>

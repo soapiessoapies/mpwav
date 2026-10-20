@@ -919,3 +919,31 @@ and fixed:
 - The Clip page follows the clip picked on the timeline; long track names show
   in full on hover; the pixel tab "Clip" read "Olip" in bold (selected tabs are
   600 now); the property On switch is 24 px.
+
+## Beta step 6: a simpler export (v0.33.0)
+
+Export is two questions now, then a sound-quality preset:
+
+1. **What:** the whole song · **clips I pick** (a ticked list grouped by track;
+   Shift- or Ctrl-click clips on the timeline to pick several first, shown
+   with a dashed outline and read as "picked") · some bars (the loop, or from
+   bar to bar).
+2. **How:** one sound file (picked clips mixed together, the other tracks
+   silent) · a file each in a .zip (per clip over its own bars, or per track
+   for the song or bars) · notes only (MIDI).
+3. **Quality:** For sharing (WAV 16-bit, 44.1 kHz, normalized; the default) ·
+   For another music app (WAV 24-bit, 48 kHz, levels as they are) · My own
+   settings (the format, rate, normalize, dither and ring-out, folded under
+   More settings; changing one by hand picks this).
+
+A summary line before the button says what will be made and about how big
+("2 clips, as one WAV file, about 3.4 MB"); it's read out as it changes, and
+Export is off with the reason when nothing can be made. **Export** sits by
+Save in the title area (and Ctrl + Shift + E); a clip's ⋯ has "Export this
+clip…" (or "Export the 3 picked clips…"). **Song info (.txt)** moved to Home.
+The byline moved beside the title's wave so the buttons fit on one row.
+
+Under the hood: picked clips render from a copy of the song with only them
+(`songOf`), through the same `Render.renderSong`, `Wav`, `Zip` and `MidiFile`
+code as before. Also fixed: shortcuts checked "inside a dialog" rather than
+"inside an open dialog", so focus left in a closed dialog could block them.

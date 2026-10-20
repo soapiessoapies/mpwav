@@ -78,6 +78,7 @@
   // The clip being edited, and the clip selected on the timeline: { trackId, clipId }.
   let open = ui.open || null;
   let picked = ui.picked || null;
+  const pickedMany = new Set(); // more clips picked with Shift/Ctrl-click (for Export)
   function find(ref) {
     if (!ref) return null;
     const t = song.tracks.find((x) => x.id === ref.trackId);
@@ -648,10 +649,18 @@
   const spaceIsTheirs = (t) => typingInto(t) || (t.tagName === "INPUT" && ["checkbox", "radio"].includes(t.type));
 
   // Settings is its own little window: keys typed there aren't music.
-  const inDialog = (t) => !!(t && t.closest && t.closest("dialog"));
+  // (An open one: focus can stay on something in a dialog after it closes,
+  // and the studio's keys must work again then.)
+  const inDialog = (t) => !!(t && t.closest && t.closest("dialog[open]"));
 
   document.addEventListener("keydown", (e) => {
     // Ctrl + S saves from anywhere, even while typing (Shift: Save as).
+    // Ctrl + Shift + E: Export.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === "KeyE" && !inDialog(e.target)) {
+      e.preventDefault();
+      openExport();
+      return;
+    }
     // Ctrl + Alt + C / V: copy and paste a clip's style (its properties and color).
     // (Not while typing: on many keyboards AltGr is Ctrl + Alt, and AltGr + C types a letter.)
     if ((e.ctrlKey || e.metaKey) && e.altKey && !inDialog(e.target) && !e.target.closest("input, textarea, select, [contenteditable]") &&
@@ -740,9 +749,15 @@
   const timeline = Timeline.create($("timeline"), {
     song: () => song,
     noteColors: noteColorsShown,
+    isPickedToo: (id) => pickedMany.has(id),
     selectedClip: () => (find(picked) || {}).clip || null,
     onSelectTrack: (id, announce) => selectTrack(id, announce !== false),
-    onSelectClip(t, clip, announce) {
+    onSelectClip(t, clip, announce, add) {
+      // Shift- or Ctrl-click picks several (for Export); a plain click picks one.
+      if (add && picked && picked.clipId !== clip.id) {
+        if (pickedMany.has(clip.id)) pickedMany.delete(clip.id);
+        else { pickedMany.add(picked.clipId); pickedMany.add(clip.id); }
+      } else if (!add) pickedMany.clear();
       picked = { trackId: t.id, clipId: clip.id };
       showActions();
       if (song.selected !== t.id) selectTrack(t.id, false);
@@ -1507,6 +1522,7 @@
           requestAnimationFrame(() => $("prop-add").focus());
         }, keepFocus: true },
         { label: "Color…", run: () => pickClipColor(t, c, at()), keepFocus: true },
+        { label: pickedMany.size > 1 ? `Export the ${pickedMany.size} picked clips…` : "Export this clip…", run: () => openExport(pickedMany.size > 1 ? [...pickedMany] : [clip.id]), keepFocus: true },
         { label: "Rename…", run: () => { openFromMenu(t, clip); requestAnimationFrame(() => nameField.focus()); }, keepFocus: true },
         "-",
         { label: "Delete", keys: "Del", danger: true, run: () => deleteClip(t, clip, `Deleted ${c.name}`), keepFocus: true },
@@ -3580,67 +3596,142 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  // --- Export (like a DAW's bounce dialog): the mix as WAV or AIFF, stems
-  // (a file per track, in a .zip), MIDI notes, or the song info as text ---
+  // --- Export: two questions (what, how) and a sound-quality preset ---
+  //   what: the whole song · clips I pick · some bars (the loop or from-to)
+  //   how:  one sound file (mixed) · a file each (.zip: per clip, or per
+  //         track for the song or bars) · notes only (MIDI)
   const exportDlg = $("export");
   const exportMsg = $("export-dlg-status");
   const EXPORT_KEY = "sound-studio.export";
   const exportPrefs = (() => { try { return JSON.parse(localStorage.getItem(EXPORT_KEY)) || {}; } catch (e) { return {}; } })();
   const radio = (name) => exportDlg.querySelector(`input[name="${name}"]:checked`).value;
   const setRadio = (name, v) => { const r = exportDlg.querySelector(`input[name="${name}"][value="${v}"]`); if (r) r.checked = true; };
+  const PRESETS = { share: { format: "wav16", rate: "44100", normalize: true }, daw: { format: "wav24", rate: "48000", normalize: false } };
+  const exportTicks = new Set(); // clip ids ticked in "Clips I pick"
+  const allClips = () => song.tracks.flatMap((t) => t.clips.map((clip) => ({ t, clip, c: Song.content(song, clip) })));
+  const tickedClips = () => allClips().filter((x) => exportTicks.has(x.clip.id));
+
+  function buildClipList() {
+    const box = $("export-clips");
+    box.textContent = "";
+    for (const t of song.tracks) {
+      if (!t.clips.length) continue;
+      const g = document.createElement("fieldset");
+      g.className = "export-clip-group";
+      const lg = document.createElement("legend");
+      lg.textContent = t.name;
+      g.append(lg);
+      for (const clip of t.clips) {
+        const c = Song.content(song, clip);
+        const lab = document.createElement("label");
+        lab.className = "export-check";
+        const box2 = Object.assign(document.createElement("input"), { type: "checkbox", checked: exportTicks.has(clip.id) });
+        box2.dataset.clip = clip.id;
+        box2.addEventListener("change", () => { if (box2.checked) exportTicks.add(clip.id); else exportTicks.delete(clip.id); setRadio("export-what", "clips"); syncExport(); });
+        const sw = document.createElement("span");
+        sw.className = "theme-swatch";
+        sw.style.background = Colors.cssOf(c.color || t.color);
+        sw.setAttribute("aria-hidden", "true");
+        lab.append(box2, sw, document.createTextNode(` ${c.name}, ${clip.length === 1 ? `bar ${clip.start + 1}` : `bars ${clip.start + 1}–${Song.clipEnd(clip)}`}` + (c.audio ? " (sound file)" : "")));
+        g.append(lab);
+      }
+      box.append(g);
+    }
+    if (!box.children.length) box.textContent = "No clips yet.";
+  }
+
+  // The bars a choice covers, [from, to), or a reason it can't be exported.
+  function exportSpan() {
+    const bars = Song.songBars(song);
+    const what = radio("export-what");
+    if (what === "clips") {
+      const list = tickedClips();
+      if (!list.length) return { error: "Tick at least one clip." };
+      return { from: Math.min(...list.map((x) => x.clip.start)), to: Math.max(...list.map((x) => Song.clipEnd(x.clip))), list };
+    }
+    if (what === "bars") {
+      if (radio("export-range") === "loop") return { from: song.loop.start, to: song.loop.end, label: ` bars ${song.loop.start + 1}-${song.loop.end}` };
+      const from = Math.round(Number($("export-from").value)), to = Math.round(Number($("export-to").value));
+      if (!(from >= 1 && to >= from)) return { error: "Pick the bars: from a bar, to the same bar or a later one." };
+      if (to > Math.max(1, bars)) return { error: `The song is ${bars} bar${bars === 1 ? "" : "s"} long: pick bars up to ${Math.max(1, bars)}.` };
+      return { from: from - 1, to, label: ` bars ${from}-${to}` };
+    }
+    if (!bars) return { error: "Add a clip first: there's nothing to export yet." };
+    return { from: 0, to: bars, label: "" };
+  }
+  // Seconds a span plays for (tempo changes included), plus the ring-out.
+  function spanSeconds(from, to) {
+    let sec = 0;
+    for (let b = from; b < to; b++) sec += Song.STEPS * Song.stepSeconds(song, b * Song.STEPS);
+    return sec + ($("export-tail").checked ? 2 : 0);
+  }
+  const sizeText = (bytes) => (bytes > 1e6 ? `about ${(bytes / 1e6).toFixed(bytes > 1e7 ? 0 : 1)} MB` : `about ${Math.max(1, Math.round(bytes / 1e3))} KB`);
 
   function syncExport() {
-    const what = radio("export-what");
-    $("export-audio").disabled = what === "midi" || what === "info";
-    // A clip covers its own bars; the song info has none.
-    $("export-range-box").disabled = what === "info" || what === "clip";
+    const what = radio("export-what"), how = radio("export-how"), preset = radio("export-preset");
+    $("export-clips-box").hidden = what !== "clips";
+    $("export-bars-box").hidden = what !== "bars";
+    $("export-how-one").textContent = what === "clips" ? "the picked clips mixed together (other tracks silent)" : "everything mixed together";
+    $("export-how-each").textContent = what === "clips" ? "one sound file per clip, each over its own bars" : "one sound file per track, lined up to start together";
+    $("export-audio").disabled = how === "midi";
+    // A preset sets the detailed settings; changing them by hand is "My own settings".
+    if (PRESETS[preset]) {
+      $("export-format").value = PRESETS[preset].format;
+      $("export-rate").value = PRESETS[preset].rate;
+      $("export-normalize").checked = PRESETS[preset].normalize;
+    }
     const fmt = $("export-format").value;
     $("export-dither").disabled = !fmt.endsWith("16");
+    // The summary: what, how, and about how big.
+    const span = exportSpan();
+    let text;
+    if (span.error) text = span.error;
+    else {
+      const bars = span.to - span.from;
+      const part = what === "clips" ? `${span.list.length} clip${span.list.length === 1 ? "" : "s"}` : what === "bars" ? `bars ${span.from + 1}–${span.to}` : `the whole song (${bars} bar${bars === 1 ? "" : "s"})`;
+      if (how === "midi") text = `${part}, as one MIDI file (a few KB).`;
+      else {
+        const bps = Number($("export-rate").value) * 2 * (fmt.endsWith("16") ? 2 : fmt.endsWith("24") ? 3 : 4);
+        const ext = fmt.startsWith("aiff") ? "AIFF" : "WAV";
+        if (how === "one") text = `${part}, as one ${ext} file, ${sizeText(spanSeconds(span.from, span.to) * bps)}.`;
+        else {
+          const items = what === "clips" ? span.list : Song.audible(song);
+          const secs = what === "clips" ? span.list.reduce((a, x) => a + spanSeconds(x.clip.start, Song.clipEnd(x.clip)), 0) : items.length * spanSeconds(span.from, span.to);
+          text = `${part}, as a .zip of ${items.length} ${ext} file${items.length === 1 ? "" : "s"}, ${sizeText(secs * bps)}.`;
+        }
+      }
+    }
+    $("export-summary").textContent = text;
+    $("export-go").disabled = !!span.error;
     try {
       localStorage.setItem(EXPORT_KEY, JSON.stringify({
-        what, range: radio("export-range"), format: fmt, rate: $("export-rate").value,
+        what: what === "clips" ? "song" : what, how, preset, range: radio("export-range"), format: fmt, rate: $("export-rate").value,
         normalize: $("export-normalize").checked, dither: $("export-dither").checked, tail: $("export-tail").checked,
       }));
     } catch (e) { /* private window: just not remembered */ }
   }
 
-  // The clip to export: the one selected on the timeline, else the one open in the editor.
-  const exportClip = () => find(picked) || find(open);
-
-  function openExport() {
+  // Opens Export; `clips` (ids) start ticked and picked ("Clips I pick").
+  function openExport(clips) {
     const bars = Song.songBars(song);
-    const ec = exportClip();
-    const clipRadio = exportDlg.querySelector('input[name="export-what"][value="clip"]');
-    clipRadio.disabled = !ec;
-    $("export-clip-name").textContent = ec
-      ? `${ec.c.name} on ${ec.t.name}, bars ${ec.clip.start + 1}-${ec.clip.start + ec.clip.length}`
-      : "the selected clip (pick one on the timeline first)";
-    $("export-range-all").textContent = `The whole song (bars 1 to ${Math.max(1, bars)})`;
+    exportTicks.clear();
+    const start = clips && clips.length ? clips : [...pickedMany, ...(find(picked) ? [picked.clipId] : [])];
+    for (const id of start) exportTicks.add(id);
+    buildClipList();
+    $("export-song-bars").textContent = bars ? `(bars 1 to ${bars})` : "";
     $("export-range-loop").textContent = `The loop (bars ${song.loop.start + 1} to ${song.loop.end})`;
     $("export-from").max = $("export-to").max = String(Math.max(1, bars));
-    if (exportPrefs.what && !(exportPrefs.what === "clip" && !ec)) setRadio("export-what", exportPrefs.what);
-    else if (exportPrefs.what === "clip") setRadio("export-what", "mix");
-    if (exportPrefs.range && exportPrefs.range !== "bars") setRadio("export-range", exportPrefs.range);
+    if (exportPrefs.how) setRadio("export-how", exportPrefs.how);
+    if (exportPrefs.preset) setRadio("export-preset", exportPrefs.preset);
+    if (exportPrefs.range) setRadio("export-range", exportPrefs.range);
     if (exportPrefs.format) $("export-format").value = exportPrefs.format;
     if (exportPrefs.rate) $("export-rate").value = exportPrefs.rate;
     for (const k of ["normalize", "dither", "tail"]) if (typeof exportPrefs[k] === "boolean") $(`export-${k}`).checked = exportPrefs[k];
+    setRadio("export-what", clips && clips.length ? "clips" : exportPrefs.what === "bars" ? "bars" : "song");
+    $("export-more").open = radio("export-preset") === "custom";
     exportMsg.textContent = "";
     syncExport();
     exportDlg.showModal();
-  }
-
-  // The bars to export, [from, to), or a reason it can't.
-  function exportRange() {
-    const bars = Song.songBars(song);
-    const range = radio("export-range");
-    if (range === "loop") return { from: song.loop.start, to: song.loop.end, label: ` bars ${song.loop.start + 1}-${song.loop.end}` };
-    if (range === "bars") {
-      const from = Math.round(Number($("export-from").value)), to = Math.round(Number($("export-to").value));
-      if (!(from >= 1 && to >= from)) return { error: "Pick the bars to export: from a bar, to the same bar or a later one." };
-      if (to > Math.max(1, bars)) return { error: `The song is ${bars} bar${bars === 1 ? "" : "s"} long: pick bars up to ${Math.max(1, bars)}.` };
-      return { from: from - 1, to, label: ` bars ${from}-${to}` };
-    }
-    return { from: 0, to: bars, label: "" };
   }
 
   // One sound file from a rendered buffer, in the chosen format.
@@ -3652,82 +3743,68 @@
       ? { bytes: Wav.encodeAiff(buffer, opts), ext: ".aiff", type: "audio/aiff" }
       : { bytes: Wav.encode(buffer, opts), ext: ".wav", type: "audio/wav" };
   }
+  // A copy of the song with only these clips (and their tracks), all heard.
+  function songOf(list) {
+    const ids = new Set(list.map((x) => x.clip.id));
+    const copy = JSON.parse(JSON.stringify(song));
+    copy.tracks = copy.tracks.map((t) => ({ ...t, mute: false, solo: false, clips: t.clips.filter((c) => ids.has(c.id)) })).filter((t) => t.clips.length);
+    return copy;
+  }
 
   async function runExport() {
-    const what = radio("export-what");
+    const what = radio("export-what"), how = radio("export-how");
     const go = $("export-go");
     const done = (name, extra = "") => `Saved ${name}${extra}. ${isIOS ? "Keep it in Files." : "Check your downloads."}`;
-    if (what === "info") {
-      const name = Wav.fileName(song.title, " info.txt");
-      deliver(new Blob([SongInfo.text(song)], { type: "text/plain" }), name, done(name), exportMsg);
+    const span = exportSpan();
+    if (span.error) { exportMsg.textContent = span.error; return; }
+    const range = { from: span.from, to: span.to };
+    const base = what === "clips"
+      ? (span.list.length === 1 ? `${span.list[0].t.name} - ${span.list[0].c.name}` : `${song.title} - ${span.list.length} clips`)
+      : song.title + (span.label || "");
+    if (how === "midi") {
+      const src = what === "clips" ? songOf(span.list) : song;
+      if (!src.tracks.some((t) => t.kind !== "audio")) { exportMsg.textContent = "There are only sound-file clips here: no notes to export as MIDI."; return; }
+      const name = Wav.fileName(base, ".mid");
+      deliver(new Blob([MidiFile.encode(src, range)], { type: "audio/midi" }), name, done(name), exportMsg);
       return;
     }
-    if (!Song.songBars(song)) { exportMsg.textContent = "Add a clip first: there's nothing to export yet."; return; }
-    const r = what === "clip" ? { from: 0, to: 0, label: "" } : exportRange(); // a clip covers its own bars
-    if (r.error) { exportMsg.textContent = r.error; return; }
-    if (what === "midi") {
-      const noteTracks = song.tracks.filter((t) => t.kind !== "audio");
-      if (!noteTracks.length) { exportMsg.textContent = "This song has only sound-file tracks: there are no notes to export as MIDI."; return; }
-      const name = Wav.fileName(song.title + r.label, ".mid");
-      deliver(new Blob([MidiFile.encode(song, r)], { type: "audio/midi" }), name, done(name, ` (${noteTracks.length} track${noteTracks.length === 1 ? "" : "s"})`), exportMsg);
-      return;
-    }
-    const opts = { from: r.from, to: r.to, sampleRate: Number($("export-rate").value), tail: $("export-tail").checked };
+    const opts = { sampleRate: Number($("export-rate").value), tail: $("export-tail").checked };
+    const normalize = $("export-normalize").checked;
     go.disabled = true;
     exportMsg.textContent = "Getting the instruments ready…";
     await instrumentsReady();
+    const progress = (label) => (f) => { exportMsg.textContent = `${label}… ${Math.round(f * 100)}%`; };
     try {
-      if (what === "clip") {
-        // The clip's track alone, over the clip's bars: clips on a track never
-        // overlap, so that's this clip and nothing else, muted or not.
-        const ec = exportClip();
-        if (!ec) throw new Error("pick a clip on the timeline first");
-        const range = { from: ec.clip.start, to: ec.clip.start + ec.clip.length };
-        exportMsg.textContent = `Rendering ${ec.c.name}…`;
-        const buffer = await Render.renderSong(song, live, { ...opts, ...range, tracks: [ec.t], onProgress: (f) => { exportMsg.textContent = `Rendering ${ec.c.name}… ${Math.round(f * 100)}%`; } });
-        const clipGain = $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1;
-        const file = soundFile(buffer, clipGain);
-        const name = Wav.fileName(`${ec.t.name} - ${ec.c.name}`, file.ext);
-        const level = loudnessOf(Samples.channels(buffer), buffer.sampleRate, clipGain);
-        const notes = !ec.c.audio && ec.c.notes.length;
-        if (!notes) {
-          deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds; ${level})`), exportMsg);
-        } else {
-          // A note clip: its sound and its notes, together in a .zip.
-          const solo = { ...song, tracks: [ec.t] };
-          const files = [
-            { name, data: file.bytes },
-            { name: Wav.fileName(`${ec.t.name} - ${ec.c.name}`, ".mid"), data: MidiFile.encode(solo, range) },
-          ];
-          const zipName = Wav.fileName(`${ec.t.name} - ${ec.c.name}`, ".zip");
-          deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), zipName, done(zipName, ` (the sound, ${level}, and its ${ec.c.notes.length} notes as MIDI)`), exportMsg);
-        }
-      } else if (what === "mix") {
-        exportMsg.textContent = "Rendering the mix…";
-        const buffer = await Render.renderSong(song, live, { ...opts, onProgress: (f) => { exportMsg.textContent = `Rendering the mix… ${Math.round(f * 100)}%`; } });
-        const mixGain = $("export-normalize").checked ? Wav.normalizeGain(buffer) : 1;
-        const file = soundFile(buffer, mixGain);
-        const name = Wav.fileName(song.title + r.label, file.ext);
-        const level = loudnessOf(Samples.channels(buffer), buffer.sampleRate, mixGain);
-        deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds; ${level})`), exportMsg);
+      if (how === "one") {
+        const src = what === "clips" ? songOf(span.list) : song;
+        const tracks = what === "clips" ? src.tracks : undefined;
+        exportMsg.textContent = "Rendering…";
+        const buffer = await Render.renderSong(src, live, { ...opts, ...range, ...(tracks ? { tracks } : {}), onProgress: progress("Rendering") });
+        const gain = normalize ? Wav.normalizeGain(buffer) : 1;
+        const file = soundFile(buffer, gain);
+        const name = Wav.fileName(base, file.ext);
+        deliver(new Blob([file.bytes], { type: file.type }), name, done(name, ` (${Math.round(buffer.duration)} seconds; ${loudnessOf(Samples.channels(buffer), buffer.sampleRate, gain)})`), exportMsg);
       } else {
-        const tracks = Song.audible(song);
-        if (!tracks.length) throw new Error("every track is muted");
+        // A file each: per clip (each over its own bars), or per track.
+        const jobs = what === "clips"
+          ? span.list.map((x) => ({ name: `${x.t.name} - ${x.c.name}`, src: songOf([x]), range: { from: x.clip.start, to: Song.clipEnd(x.clip) } }))
+          : Song.audible(song).map((t) => ({ name: t.name, src: song, tracks: [t], range }));
+        if (!jobs.length) throw new Error("every track is muted");
         const buffers = [];
-        for (const [i, t] of tracks.entries()) {
-          const label = `Rendering stem ${i + 1} of ${tracks.length}: ${t.name}`;
+        for (const [i, j] of jobs.entries()) {
+          const label = `Rendering ${i + 1} of ${jobs.length}: ${j.name}`;
           exportMsg.textContent = label + "…";
-          buffers.push(await Render.renderSong(song, live, { ...opts, tracks: [t], onProgress: (f) => { exportMsg.textContent = `${label}… ${Math.round(f * 100)}%`; } }));
+          buffers.push(await Render.renderSong(j.src, live, { ...opts, ...j.range, tracks: j.tracks || j.src.tracks, onProgress: progress(label) }));
         }
-        // Normalizing stems uses one gain for all of them, so they still mix back to the same balance.
-        const gain = $("export-normalize").checked ? Math.min(...buffers.map((b) => Wav.normalizeGain(b))) : 1;
+        // Normalized together (one gain for all), so they keep their balance.
+        const gain = normalize ? Math.min(...buffers.map((b) => Wav.normalizeGain(b))) : 1;
         const files = buffers.map((b, i) => {
           const f = soundFile(b, gain);
-          return { name: `${String(i + 1).padStart(2, "0")} ${Wav.fileName(tracks[i].name, f.ext)}`, data: f.bytes };
+          return { name: `${String(i + 1).padStart(2, "0")} ${Wav.fileName(jobs[i].name, f.ext)}`, data: f.bytes };
         });
-        files.push({ name: "song info.txt", data: new TextEncoder().encode(SongInfo.text(song)) });
-        const name = Wav.fileName(song.title + r.label + " stems", ".zip");
-        deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), name, done(name, ` (${tracks.length} stem${tracks.length === 1 ? "" : "s"})`), exportMsg);
+        if (what !== "clips") files.push({ name: "song info.txt", data: new TextEncoder().encode(SongInfo.text(song)) });
+        const name = Wav.fileName(base + (what === "clips" ? "" : " stems"), ".zip");
+        deliver(new Blob([Zip.zip(files)], { type: "application/zip" }), name, done(name, ` (${files.length} file${files.length === 1 ? "" : "s"})`), exportMsg);
       }
     } catch (e) {
       exportMsg.textContent = "Couldn't export: " + (e && e.message ? e.message : e);
@@ -3735,14 +3812,24 @@
     go.disabled = false;
   }
 
-  $("export-wav").addEventListener("click", openExport);
+  $("export-wav").addEventListener("click", () => openExport());
+  $("export-btn").addEventListener("click", () => openExport());
   $("export-close").addEventListener("click", () => exportDlg.close());
   exportDlg.addEventListener("click", (e) => { if (e.target === exportDlg) exportDlg.close(); });
   exportDlg.addEventListener("change", (e) => {
-    if (e.target.id === "export-from" || e.target.id === "export-to") setRadio("export-range", "bars");
+    if (e.target.id === "export-from" || e.target.id === "export-to") { setRadio("export-what", "bars"); setRadio("export-range", "bars"); }
+    if (["export-format", "export-rate", "export-normalize"].includes(e.target.id)) setRadio("export-preset", "custom");
+    if (e.target.name === "export-preset") $("export-more").open = e.target.value === "custom";
     syncExport();
   });
+  exportDlg.addEventListener("input", (e) => { if (e.target.id === "export-from" || e.target.id === "export-to") syncExport(); });
+  $("export-clips-all").addEventListener("click", () => { for (const x of allClips()) exportTicks.add(x.clip.id); buildClipList(); setRadio("export-what", "clips"); syncExport(); });
+  $("export-clips-none").addEventListener("click", () => { exportTicks.clear(); buildClipList(); syncExport(); });
   $("export-go").addEventListener("click", runExport);
+  $("song-info").addEventListener("click", () => {
+    const name = Wav.fileName(song.title, " info.txt");
+    deliver(new Blob([SongInfo.text(song)], { type: "text/plain" }), name, `Saved ${name}. ${isIOS ? "Keep it in Files." : "Check your downloads."}`, exportStatus);
+  });
 
   $("export-file").addEventListener("click", () => saveSong(false));
   // Share by link (src/state/share-link.js): the song rides in the #fragment.

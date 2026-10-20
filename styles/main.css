@@ -1618,3 +1618,24 @@ fieldset:disabled { opacity: 0.55; }
 /* Zoomed-out clips: their notes painted on one canvas. */
 .clip-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .prop-top .check input[type="checkbox"] { width: 24px !important; height: 24px !important; min-width: 24px; }
+
+/* ---------- Export (v0.33) ---------- */
+.clip.picked-too { box-shadow: 0 0 0 2px var(--text); outline: 2px dashed var(--panel); outline-offset: -4px; }
+.export-sub { margin: 8px 0 0 28px; }
+.export-sub[hidden] { display: none; }
+.export-clips { max-height: 220px; overflow-y: auto; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.export-clip-group { border: 0; margin: 0 0 6px; padding: 0; }
+.export-clip-group legend { font-weight: 700; padding: 4px 0; }
+.export-clips .theme-swatch { margin: 0 2px 0 4px; }
+.export-more { margin-top: 8px; }
+.export-more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; font-weight: 600; }
+.export-summary { margin: 12px 0 4px; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--panel-2); font-weight: 600; }
+.muted { color: var(--muted); font-weight: 400; }
+/* The title row (Save, Export, Guide, Home) stays one line: the byline keeps
+   to one line and gives way first. */
+.title-row { gap: 6px; flex-wrap: nowrap; }
+/* The byline sits beside the wavy line under the title. */
+.title-sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.title-sub .title-wave { flex: 1 1 auto; min-width: 40px; margin: 0; }
+.title-sub .byline { flex: none; white-space: nowrap; }
+.title-row button { padding: 0 10px; flex: none; }
