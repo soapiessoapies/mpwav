@@ -176,6 +176,15 @@
   const AUDIO_BARS_MAX = 64, CUES_MAX = 32;
   const SOUND_RE = /^snd-[a-z0-9]{1,24}$/;
   const SAMPLER_DEF = { sampleId: null, root: 60, start: 0, end: null, reverse: false, gain: 0 };
+  // A kit of slices (Sample Studio): sound ids on keys base, base + 1, ...
+  // each played as it is (not pitched), like the drum track's hits.
+  const KIT_MAX = 48;
+  function cleanKit(x) {
+    if (!x || typeof x !== "object" || !Array.isArray(x.ids)) return null;
+    const ids = x.ids.filter((id) => typeof id === "string" && SOUND_RE.test(id)).slice(0, KIT_MAX);
+    if (!ids.length) return null;
+    return { base: clamp(int(x.base, 60), LOWEST, HIGHEST - ids.length + 1), ids };
+  }
   const AUDIO_DEF = { sampleId: null, start: 0, end: null, fadeIn: 0, fadeOut: 0, reverse: false, gain: 0, fit: false };
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -239,6 +248,7 @@
       kind,          // "synth" (notes), "drums" (drum hits) or "audio" (sound files)
       sampler: null, // a synth track playing a sound file instead of its oscillator
       instrument: null, // ...or a recorded instrument (src/audio/instruments.js), by id
+      kit: null,     // ...or a kit of slices from Sample Studio: { base, ids } (wins over both)
       params: Params.sanitize(Presets.find(preset).params),
       clips: [], // { id, contentId, start, length, offset } in bars, sorted by start, never overlapping
       gridBase,  // lowest row shown in the clip editor (a C)
@@ -892,7 +902,7 @@
 
   // Every sound a song uses (to load them before playing, or to export them).
   function soundIds(song) {
-    const ids = song.tracks.map((t) => t.sampler && t.sampler.sampleId);
+    const ids = song.tracks.flatMap((t) => [t.sampler && t.sampler.sampleId, ...(t.kit ? t.kit.ids : [])]);
     for (const c of Object.values(song.contents)) if (c.audio) ids.push(c.audio.sampleId);
     return [...new Set(ids.filter(Boolean))];
   }
@@ -1072,6 +1082,7 @@
       if (t.kind === "synth") t.sampler = cleanSampler(s.sampler);
       // One or the other: an instrument only when the track has no sound file of its own.
       if (t.kind === "synth" && !t.sampler && Instruments.find(s.instrument)) t.instrument = s.instrument;
+      if (t.kind === "synth" && cleanKit(s.kit)) t.kit = cleanKit(s.kit);
       const base = num(s.gridBase, t.gridBase);
       t.gridBase = clamp(base - (((base % 12) + 12) % 12), LOWEST, HIGHEST - 12);
       if (LENGTHS.includes(s.length)) t.length = s.length;
@@ -1117,7 +1128,7 @@
   const api = {
     VERSION, STEPS, MIN_VIEW, CONTENT_BARS, BPM, FADER, LOWEST, HIGHEST, LENGTHS, COLORS, cleanColor, VEL,
     MAX_TRACKS, BARS_MAX, SNAPS, SWING_MAX, SCALES, NOTE_FX, cleanFx, setNoteFx, noteFx,
-    AUDIO_BARS_MAX, CUES_MAX, cleanSampler, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
+    AUDIO_BARS_MAX, CUES_MAX, cleanSampler, cleanKit, KIT_MAX, SAMPLER_DEF, cleanAudio, addAudioClip, audioSegment, soundIds, barsFor,
     addTrack, removeTrack, moveTrack, inKey, nearestInKey, snapStep,
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName, freeSpan,

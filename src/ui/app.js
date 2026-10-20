@@ -127,6 +127,13 @@
     if (inst && !Instruments.zones(inst)) loadInstrument(inst);
     const a = audio[t.id];
     if (!a) return;
+    // A kit of slices (Sample Studio) wins over a sound file and an instrument.
+    if (t.kind === "synth" && t.kit) {
+      const zones = t.kit.ids.map((id, i) => ({ midi: t.kit.base + i, buffer: Samples.buffer(id) })).filter((z) => z.buffer);
+      a.synth.setSample({ kit: zones });
+      if (zones.length < t.kit.ids.length) Samples.load(t.kit.ids).then(() => { if (t.kit) applySampler(t); });
+      return;
+    }
     if (inst) {
       const zones = Instruments.zones(inst);
       a.synth.setSample(zones ? { zones } : null); // the synth plays until the notes arrive
@@ -166,6 +173,7 @@
   (function buildKeySound() {
     keySound.append(new Option("Synth", ""));
     keySound.append(Object.assign(new Option("My sound file", "own"), { hidden: true }));
+    keySound.append(Object.assign(new Option("Slice kit", "kit"), { hidden: true }));
     for (const g of Instruments.GROUPS) {
       const og = document.createElement("optgroup");
       og.label = g;
@@ -179,7 +187,10 @@
     keySound.options[0].textContent = "Synth: " + ((Presets.find(t.preset) || {}).name || "its own sound");
     const own = keySound.querySelector('option[value="own"]');
     own.hidden = own.disabled = !t.sampler;
-    const id = t.sampler ? "own" : t.instrument || "";
+    const kitOpt = keySound.querySelector('option[value="kit"]');
+    kitOpt.hidden = kitOpt.disabled = !t.kit;
+    if (t.kit) kitOpt.textContent = `Slice kit (${t.kit.ids.length} slices from C${Math.floor(t.kit.base / 12) - 1})`;
+    const id = t.kit ? "kit" : t.sampler ? "own" : t.instrument || "";
     keySound.value = id;
     const loading = t.instrument && !t.sampler && !Instruments.zones(t.instrument) && !instrumentFailed.has(t.instrument);
     keySound.setAttribute("aria-busy", String(!!loading));
@@ -188,7 +199,8 @@
   const NATURAL = { attack: 0.001, decay: 3, sustain: 1, release: 0.6, cutoff: 18000, resonance: 0.7, filterEnv: 0, filterType: "lowpass", octave: 0 };
   keySound.addEventListener("change", () => {
     const t = sel(), v = keySound.value;
-    if (v === "own") return;
+    if (v === "own" || v === "kit") return;
+    t.kit = null; // picking another sound takes the track off its slice kit
     if (!v) {
       t.instrument = null;
       applySampler(t);
@@ -527,7 +539,7 @@
   // until the last one lets go. ---
   const holds = new Map(); // midi -> { n, trackId, key }
   // A drum track's notes are drums: whose content is this?
-  const drumContent = (c) => (song.tracks.find((t) => t.id === c.trackId) || {}).kind === "drums";
+  const drumContent = (c) => { const t = song.tracks.find((x) => x.id === c.trackId) || {}; return t.kind === "drums" || !!t.kit; };
   // On a drum track the keys play drums (src/audio/drums.js).
   const liveNote = (m) => (sel().kind === "drums" ? Drums.fromKey(m, kb.base) : m);
   let lastSpoken = 0;
@@ -899,7 +911,7 @@
     onAdd(step, midi) {
       const o = find(open);
       if (!o) return null;
-      if (song.key.keep && o.t.kind !== "drums") midi = Song.nearestInKey(song, midi);
+      if (song.key.keep && o.t.kind !== "drums" && !o.t.kit) midi = Song.nearestInKey(song, midi);
       const n = Song.addNote(o.c, step, midi, o.t.length);
       if (n) preview(o.t, midi);
       return n;
@@ -913,7 +925,7 @@
     },
     onMove(n, step, midi) {
       const o = find(open);
-      if (o && song.key.keep && o.t.kind !== "drums" && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
+      if (o && song.key.keep && o.t.kind !== "drums" && !o.t.kit && midi !== n.midi) midi = Song.nearestInKey(song, midi, Math.sign(midi - n.midi));
       return !!o && Song.moveNote(o.c, n, step, midi);
     },
     onResize(n, len) {
@@ -4385,7 +4397,77 @@
     say: (t) => Announce.say(t), tell: (t, o) => Announce.tell(t, o), changed: () => save(),
     picked: () => renderEditing(),
     barSeconds: () => Song.STEPS * Song.stepSeconds(song, 0),
+    send: sendSlices,
+    trackName: () => (sel().kind === "synth" ? sel().name : null),
   });
+
+  // Slices from Sample Studio (each its own sound already, its settings baked
+  // in): items [{ name, sampleId, from, to }] of the sound `from`.
+  function sendSlices(kind, items, from) {
+    if (!items.length) return;
+    const n = items.length;
+    if (kind === "pads") {
+      const sec = Pads.addSection(padBank, from.slice(0, 24));
+      if (!sec) { Announce.tell("There's no room for another pads section: rename or remove one first"); return; }
+      let added = 0;
+      for (const it of items) if (Pads.addPad(padBank, sec.id, { name: it.name, sampleId: it.sampleId })) added++;
+      savePads();
+      ui.padsOpen = true;
+      renderPads();
+      Announce.tell(`Added ${added} pad${added === 1 ? "" : "s"} in a new section, ${sec.name}, under the keyboard${added < n ? ` (${n - added} didn't fit)` : ""}`);
+      save();
+      return;
+    }
+    if (kind === "timeline") {
+      const t = Song.addTrack(song, { kind: "audio", name: from.slice(0, 18) + " slices" });
+      if (!t) { Announce.tell(`${Song.MAX_TRACKS} tracks is the most a song can have`); return; }
+      const at = song.cursor;
+      items.forEach((it, i) => Song.addAudioClip(song, t, at + i, it.sampleId, it.name, it.to - it.from));
+      syncAudio();
+      rebuildMixer();
+      selectTrack(t.id, false);
+      afterChange();
+      Announce.tell(`${n} slice clip${n === 1 ? "" : "s"} on a new track, ${t.name}, from bar ${at + 1}`);
+      return;
+    }
+    if (kind === "kit") {
+      const t = Song.addTrack(song, { name: (from.slice(0, 18) + " kit") });
+      if (!t) { Announce.tell(`${Song.MAX_TRACKS} tracks is the most a song can have`); return; }
+      t.kit = { base: 60, ids: items.slice(0, Song.KIT_MAX).map((it) => it.sampleId) };
+      t.params = Params.sanitize({ ...t.params, ...NATURAL });
+      // A clip that plays the slices where they were, so the sound comes back
+      // as notes you can move (slices longer than 4 bars in are left off).
+      const step = Song.stepSeconds(song, 0);
+      const steps = Math.ceil(items[items.length - 1].to / step);
+      const bars = [1, 2, 4].find((b) => b * Song.STEPS >= steps) || 4;
+      const c = Song.makeContent(song, t.id, from.slice(0, 30) + " slices", bars,
+        items.map((it, i) => ({ step: Math.round(it.from / step), midi: 60 + i, len: Math.max(1, Math.round((it.to - it.from) / step)), vel: 0.8 }))
+          .filter((x) => x.step < bars * Song.STEPS && x.midi <= 60 + Song.KIT_MAX - 1)
+          .map((x) => ({ ...x, len: Math.min(x.len, bars * Song.STEPS - x.step) })));
+      Song.addClip(song, t, Song.freeSpan ? song.cursor : song.cursor, bars, c.id);
+      syncAudio();
+      rebuildMixer();
+      selectTrack(t.id, false);
+      applySampler(t);
+      afterChange();
+      renderKeySound();
+      Announce.tell(`${n} slices on the keys of a new track, ${t.name}: slice 1 is C4 (the A key), slice 2 C♯4 (W), and on up. A clip plays them where they were, from bar ${song.cursor + 1}.`);
+      return;
+    }
+    if (kind === "instrument") {
+      const t = sel();
+      if (t.kind !== "synth") { Announce.tell("Pick a synth track first: the slice plays up and down its keys"); return; }
+      t.kit = null;
+      t.instrument = null;
+      t.sampler = { ...Song.SAMPLER_DEF, sampleId: items[0].sampleId, root: 60 };
+      t.params = Params.sanitize({ ...t.params, ...NATURAL });
+      applySampler(t);
+      afterChange();
+      renderKeySound();
+      renderSoundPage();
+      Announce.tell(`${t.name} plays ${items[0].name} up and down its keys (C4 plays it as it is)`);
+    }
+  }
   if (ui.slide === "sample") sampleStudio.show();
 
   // --- Panel sizes, per workspace: Note Edit's width and the keyboard's

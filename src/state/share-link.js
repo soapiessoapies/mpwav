@@ -17,7 +17,7 @@
   const PREFIX = "v1.";
 
   function usesSounds(song) {
-    return (song.tracks || []).some((t) => t.kind === "audio" || (t.sampler && t.sampler.sampleId)) ||
+    return (song.tracks || []).some((t) => t.kind === "audio" || (t.sampler && t.sampler.sampleId) || (t.kit && t.kit.ids && t.kit.ids.length)) ||
       Object.values(song.contents || {}).some((c) => c && c.audio && c.audio.sampleId);
   }
 

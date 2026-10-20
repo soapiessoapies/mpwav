@@ -244,7 +244,7 @@
       const inf = pickedId && Samples.info(pickedId);
       $("ss-name").textContent = pickedId ? nameOf(pickedId) : "No sound picked";
       $("ss-meta").textContent = inf ? `${seconds(inf.duration)} · ${inf.channels === 1 ? "mono" : "stereo"} · ${(inf.rate / 1000).toFixed(1)} kHz` : "";
-      for (const id of ["ss-play", "ss-zoom-in", "ss-zoom-out", "ss-fit", "ss-cut", "ss-auto-btn"]) $(id).disabled = !inf;
+      for (const id of ["ss-play", "ss-zoom-in", "ss-zoom-out", "ss-fit", "ss-cut", "ss-auto-btn", "ss-send"]) $(id).disabled = !inf;
       $("ss-clear").disabled = !inf || !cutsNow().length;
       $("ss-wave").setAttribute("aria-label", inf ? `${nameOf(pickedId)} waveform. Cursor at ${clock(cursor)} of ${clock(inf.duration)}. Enter plays from the cursor; arrows move it, Shift for a second; plus and minus zoom.` : "Waveform: pick a sound first");
       showTime(cursor);
@@ -446,6 +446,9 @@
           { label: "Louder (+3 dB)", disabled: g >= 12, run: () => setMeta(s, { gain: Math.min(12, g + 3) }, `Slice ${i + 1} at ${g + 3} dB`) },
           { label: "Quieter (−3 dB)", disabled: g <= -24, run: () => setMeta(s, { gain: Math.max(-24, g - 3) }, `Slice ${i + 1} at ${g - 3} dB`) },
           "-",
+          { label: "Add to sound pads", run: () => send("pads", i) },
+          { label: h.trackName && h.trackName() ? `Use as ${h.trackName()}'s instrument` : "Use as an instrument (pick a synth track first)", disabled: !(h.trackName && h.trackName()), run: () => send("instrument", i) },
+          "-",
           { label: "Join with the next slice", disabled: i >= slicesNow().length - 1, run: () => change((en) => { en.cuts = en.cuts.filter((c) => Math.abs(c - s.to) > 0.0005); }, `Joined slices ${i + 1} and ${i + 2}`) },
         ],
       };
@@ -593,6 +596,48 @@
       const inf = pickedId && Samples.info(pickedId);
       return pickedId ? `${nameOf(pickedId)}${inf ? ` · ${inf.duration.toFixed(2)} s` : ""}` : "No sound picked";
     };
+    // --- sending slices: each becomes its own sound, its settings baked in ---
+    function sliceSound(s, i) {
+      const buf = Samples.buffer(pickedId);
+      const m = metaOf(s);
+      const rate = buf.sampleRate;
+      const a = Math.max(0, Math.floor(s.from * rate)), b = Math.min(buf.length, Math.ceil(s.to * rate));
+      const level = Math.pow(10, (m.gain || 0) / 20);
+      const ramp = Math.max(1, Math.round((m.fade ? Math.min(0.03, (s.to - s.from) / 4) : 0.002) * rate));
+      const chans = Samples.channels(buf).map((d) => {
+        const part = d.slice(a, b);
+        if (m.reverse) part.reverse();
+        for (let k = 0; k < part.length; k++) {
+          const edge = Math.min(1, k / ramp, (part.length - 1 - k) / ramp);
+          part[k] *= level * edge;
+        }
+        return part;
+      });
+      const name = (m.name || `${nameOf(pickedId)} ${i + 1}`).slice(0, 40);
+      return { name, sampleId: Samples.addChannels(chans, rate, name), from: s.from, to: s.to };
+    }
+    function send(kind, only) {
+      if (!pickedId || !Samples.buffer(pickedId)) return;
+      const all = slicesNow();
+      const list = only != null ? [[all[only], only]] : all.map((s, i) => [s, i]);
+      h.send(kind, list.map(([s, i]) => sliceSound(s, i)), nameOf(pickedId));
+    }
+    $("ss-send").addEventListener("click", () => {
+      const n = slicesNow().length;
+      const cur = Math.max(0, slicesNow().findIndex((s) => cursor >= s.from && cursor < s.to));
+      const track = h.trackName ? h.trackName() : null;
+      ItemMenu.open($("ss-send"), {
+        label: n > 1 ? `Send the ${n} slices` : "Send the sound (no cuts yet)",
+        items: [
+          { label: `To sound pads (a new section)`, run: () => send("pads") },
+          { label: `To the keys (a new kit track)`, run: () => send("kit") },
+          { label: `To the timeline (a clip per bar)`, run: () => send("timeline") },
+          "-",
+          { label: track ? `Slice ${cur + 1} as ${track}'s instrument` : "Slice as an instrument (pick a synth track first)", disabled: !track, run: () => send("instrument", cur) },
+        ],
+      });
+    });
+
     // Undo / redo for cuts (the app sends Ctrl+Z here on this workspace).
     const undo = () => { const ok = swap(undoStack, redoStack); if (ok) h.say("Undone"); return ok; };
     const redo = () => { const ok = swap(redoStack, undoStack); if (ok) h.say("Redone"); return ok; };

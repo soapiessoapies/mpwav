@@ -79,3 +79,19 @@ test("an audio clip's gain property adds to its sound's gain", () => {
   const seg = S.audioSegment(s, t, 0, 0, () => 2, 0.125);
   assert.equal(seg.gain, 3);
 });
+
+test("a slice kit on a synth track: cleaned, kept, and counted as the song's sounds", () => {
+  const s = S.createSong();
+  const t = S.track(s, "lead");
+  assert.equal(S.cleanKit({ ids: [] }), null);
+  assert.equal(S.cleanKit({ ids: ["nope"] }), null);
+  t.kit = { base: 60, ids: ["snd-aaa", "bad id", "snd-bbb"] };
+  const back = S.sanitize(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(S.track(back, "lead").kit, { base: 60, ids: ["snd-aaa", "snd-bbb"] });
+  assert.deepEqual(S.soundIds(back), ["snd-aaa", "snd-bbb"]);
+  // A kit at the top of the range moves down so every slice has a key.
+  assert.equal(S.cleanKit({ base: 200, ids: ["snd-a", "snd-b", "snd-c"] }).base, 106);
+  global.Blob = global.Blob || require("node:buffer").Blob;
+  const ShareLink = require("../src/state/share-link.js");
+  assert.equal(ShareLink.usesSounds(back), true, "a song with a kit is shared as a song file");
+});

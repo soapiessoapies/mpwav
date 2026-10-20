@@ -163,10 +163,21 @@
       return db <= Params.BY_ID.volume.min ? 0 : Params.dbToGain(db);
     }
 
+    let quiet = null;
+    const silence = (c) => (quiet = quiet || c.createBuffer(1, 1, c.sampleRate));
     function makeSource(midi) {
       if (sample) {
         const src = ctx.createBufferSource();
         const want = midi + p.octave * 12;
+        // A kit of slices: that key's slice as it is, or nothing on a key without one.
+        if (sample.kit) {
+          const k = sample.zones.find((x) => x.midi === want);
+          src.buffer = k ? k.buffer : silence(ctx);
+          src.sampleFrom = 0;
+          src.sampleLen = src.buffer.duration;
+          src.zoneGain = 1;
+          return src;
+        }
         // A recorded instrument: the nearest of its notes, played whole.
         const z = sample.zones ? root.Instruments.nearest(sample.zones, want) : null;
         src.buffer = z ? z.buffer : sample.buffer;
@@ -368,6 +379,7 @@
     // s: { buffer (already reversed if it should be), root, start, end, gain (dB) }
     // Or s: { zones: [{ midi, buffer }], gain } for a recorded instrument (src/audio/instruments.js).
     function setSample(s) {
+      if (s && Array.isArray(s.kit)) { sample = { zones: s.kit, kit: true, gain: Params.dbToGain(s.gain || 0) }; return; }
       if (s && Array.isArray(s.zones) && s.zones.length) { sample = { zones: s.zones, gain: Params.dbToGain(s.gain || 0) }; return; }
       if (!s || !s.buffer) { sample = null; return; }
       const dur = s.buffer.duration;

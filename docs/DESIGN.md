@@ -1008,3 +1008,29 @@ Next: slicing (hand cuts, by beats, equal parts, bars, silences).
 
 Next: sending slices to pads, the keys (as a kit), the timeline and an
 instrument.
+
+## Sample Studio, step 3 of 4: sending slices (v0.36.0)
+
+**Send slices** (by Play) sends every slice; a slice's own ⋯ sends just it.
+Each slice becomes its own sound first (`Samples.addChannels`), with its
+reverse, fade and gain baked in and a 2 ms edge so it never clicks, so it
+keeps working whatever happens to the cuts later.
+
+- **To sound pads:** a new pads section named after the sound, a pad per
+  slice (named after the slice).
+- **To the keys:** a new synth track playing a **slice kit**: slice 1 on C4
+  (the A key), slice 2 on C#4 (W) and on up, each played as it is, not
+  pitched, like the drum track (`track.kit = { base, ids }`, up to 48; a key
+  without a slice is silent; Keep in key leaves kit tracks alone). It also
+  gets a clip that plays the slices where they were, so the sound comes back
+  as notes you can move around (up to 4 bars). The keyboard's Sound picker
+  says "Slice kit"; picking another sound takes the track off it.
+- **To the timeline:** a new audio track with a clip per slice, one per bar
+  from the play cursor.
+- **As an instrument:** the slice under the cursor (or the one whose ⋯ was
+  used) becomes the selected synth track's sound file, played up and down the
+  keys (C4 plays it as it is).
+
+Kits play live and in exports (`render.js`), count as the song's sounds
+(saved in song files, kept by the tidy-up), and mark a song as needing a
+song file rather than a share link.

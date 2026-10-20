@@ -43,7 +43,8 @@
       const synth = Synth.create(ctx, channel.input, live(track), { reverb: bus.reverb, bpm: song.bpm });
       synth.setKit(track.kind === "drums");
       const s = track.sampler;
-      if (s) synth.setSample({ ...s, buffer: Samples.buffer(s.sampleId, s.reverse) });
+      if (track.kit) synth.setSample({ kit: track.kit.ids.map((id, i) => ({ midi: track.kit.base + i, buffer: Samples.buffer(id) })).filter((z) => z.buffer) });
+      else if (s) synth.setSample({ ...s, buffer: Samples.buffer(s.sampleId, s.reverse) });
       else if (track.instrument && root.Instruments.zones(track.instrument)) synth.setSample({ zones: root.Instruments.zones(track.instrument) });
       return { track, synth };
     });
