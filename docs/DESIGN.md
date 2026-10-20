@@ -980,3 +980,31 @@ startup (`Tabs.select` with no tab), and a file that isn't a sound left an
 unhandled rejection from `decodeAudioData`'s promise.
 
 Next: slicing (hand cuts, by beats, equal parts, bars, silences).
+
+## Sample Studio, step 2 of 4: slicing (v0.35.0)
+
+**Cuts** split the picked sound into numbered **slices**:
+
+- **By hand:** click the wave and press **Cut at the cursor** (or M), or
+  double-click the wave. Drag a cut's handle to move it; Delete (with the
+  wave focused) removes the cut nearest the cursor; Clear the cuts.
+- **Cut for me** (`src/audio/slicer.js`, tested with made-up sounds in
+  `tests/slicer.test.js`): at each hit (onsets: where the loudness jumps by
+  more than it usually does nearby, with "Only the strong ones / Some / Many");
+  at each quiet gap (the middle of every silence between sounds); every bar
+  or every beat at the song's tempo; or 2, 4, 8 or 16 equal parts. It
+  replaces the cuts.
+- **Snap to silence points** (on by default) moves a cut to the nearest zero
+  crossing (within 10 ms), so slices start and end without a click.
+- **Slices** are listed under the wave and drawn on it (numbered, every other
+  one shaded, the one under the cursor lit). Each plays from the list, or with
+  keys 1 to 9 on the wave. Its ⋯: Play, Rename…, Reverse, Fade the ends,
+  Louder / Quieter (3 dB steps), Join with the next slice. None of this
+  changes the sound file.
+- Cuts and slice settings are saved with the sound's library entry (`cuts`,
+  and `meta` by each slice's start in ms); cutting a song's sound adds it to
+  the library. **Undo / Redo** (Ctrl + Z / Y, and the transport buttons) take
+  back cuts while on Sample, through the studio's own history.
+
+Next: sending slices to pads, the keys (as a kit), the timeline and an
+instrument.

@@ -2553,6 +2553,8 @@
 
   function undo() {
     Announce.dropAction();
+    // On Sample Studio, Undo takes back its cuts first.
+    if (ui.slide === "sample") { try { if (sampleStudio.undo()) return; } catch (e) { /* not set up yet */ } }
     if (saveTimer) writeNow(); // a change still waiting to be saved counts first
     const json = history.undo();
     if (json === null) { Announce.say("Nothing to undo"); return; }
@@ -2561,6 +2563,7 @@
   }
   function redo() {
     Announce.dropAction();
+    if (ui.slide === "sample") { try { if (sampleStudio.redo()) return; } catch (e) { /* not set up yet */ } }
     if (saveTimer) writeNow();
     const json = history.redo();
     if (json === null) { Announce.say("Nothing to redo"); return; }
@@ -4381,6 +4384,7 @@
       .map((id) => ({ id, name: (Samples.info(id) || {}).name || "Sound" })),
     say: (t) => Announce.say(t), tell: (t, o) => Announce.tell(t, o), changed: () => save(),
     picked: () => renderEditing(),
+    barSeconds: () => Song.STEPS * Song.stepSeconds(song, 0),
   });
   if (ui.slide === "sample") sampleStudio.show();
 

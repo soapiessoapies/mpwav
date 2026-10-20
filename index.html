@@ -423,7 +423,7 @@
       <button type="button" id="ss-add">Add sound files…</button>
       <input type="file" id="ss-file" accept="audio/*,.wav,.mp3,.ogg,.m4a,.flac,.aif,.aiff" multiple hidden>
     </div>
-    <p class="help tip">Add MP3 or WAV files (or drop them anywhere on this panel), pick one, and play it from anywhere on its wave. Cutting sounds into slices, and sending slices to pads, the keys and the timeline, come next.</p>
+    <p class="help tip">Add MP3 or WAV files (or drop them anywhere on this panel) and pick one. Cut it into slices: click the wave and press M (or double-click), drag a cut to move it, or let Cut for me find the hits, the gaps, the bars or equal parts. Sending slices to pads, the keys and the timeline comes next.</p>
     <p id="ss-status" class="help" aria-live="polite"></p>
     <div class="ss-body">
       <div class="ss-lib">
@@ -442,9 +442,33 @@
             <button type="button" id="ss-fit" class="fit-btn" disabled>Fit</button>
           </div>
         </div>
+        <div class="ss-cuts toolbar" role="group" aria-label="Cuts">
+          <button type="button" id="ss-cut" aria-keyshortcuts="M" disabled>Cut at the cursor</button>
+          <button type="button" class="menu-btn" popovertarget="ss-auto-menu" id="ss-auto-btn" disabled>Cut for me</button>
+          <label class="check"><input type="checkbox" id="ss-snap" checked> Snap to silence points</label>
+          <button type="button" id="ss-clear" class="quiet" disabled>Clear the cuts</button>
+        </div>
+        <div id="ss-auto-menu" class="menu" popover role="group" aria-label="Cut for me">
+          <p class="menu-note">Replaces the cuts (Undo brings them back).</p>
+          <button type="button" data-auto="beats">At each hit (drums, plucks, words)</button>
+          <label class="inline">Hits found <select id="ss-sens"><option value="0.2">Only the strong ones</option><option value="0.5" selected>Some</option><option value="0.85">Many</option></select></label>
+          <button type="button" data-auto="silences">At each quiet gap (phrases, samples with space)</button>
+          <button type="button" data-auto="bars">Every bar, at the song's tempo</button>
+          <button type="button" data-auto="beat">Every beat, at the song's tempo</button>
+          <div class="menu-row">
+            <span>Equal parts:</span>
+            <button type="button" data-auto="eq2">2</button><button type="button" data-auto="eq4">4</button>
+            <button type="button" data-auto="eq8">8</button><button type="button" data-auto="eq16">16</button>
+          </div>
+        </div>
         <div id="ss-wave" class="ss-wave" tabindex="0" role="application" aria-roledescription="waveform"><canvas id="ss-canvas" aria-hidden="true"></canvas></div>
         <div id="ss-zoombar"></div>
         <p id="ss-time" class="ss-time" aria-hidden="true"></p>
+        <section class="ss-slices-box" aria-labelledby="ss-slices-h">
+          <h3 id="ss-slices-h">Slices <span id="ss-slices-count" class="muted"></span></h3>
+          <p class="help tip">Each slice plays from the list (or keys 1 to 9 with the wave focused). Its ⋯ names, reverses, fades or changes the loudness of just that slice: the sound file itself never changes.</p>
+          <ol id="ss-slices" class="ss-slices"></ol>
+        </section>
       </div>
     </div>
   </section>
@@ -1138,6 +1162,7 @@
 <script src="src/ui/colors.js"></script>
 <script src="src/ui/color-pick.js"></script>
 <script src="src/ui/item-menu.js"></script>
+<script src="src/audio/slicer.js"></script>
 <script src="src/ui/sample-studio.js"></script>
 <script src="src/ui/piano-roll.js"></script>
 <script src="src/ui/zoombar.js"></script>

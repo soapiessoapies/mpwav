@@ -64,6 +64,7 @@ const SHELL = [
   "src/ui/colors.js",
   "src/ui/color-pick.js",
   "src/ui/item-menu.js",
+  "src/audio/slicer.js",
   "src/ui/sample-studio.js",
   "src/ui/piano-roll.js",
   "src/ui/zoombar.js",
