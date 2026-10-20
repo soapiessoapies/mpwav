@@ -58,7 +58,7 @@
         if (bpm !== echoBpm) { echoBpm = bpm; for (const p of parts) p.synth.setTempo(bpm); }
         for (const p of parts) {
           for (const n of Song.notesAtPos(song, p.track, pos)) {
-            p.synth.playNote(n, at, dur);
+            p.synth.playNote(n, at + (n.shift || 0) * dur, dur);
           }
           const seg = Song.audioSegment(song, p.track, pos, from * Song.STEPS, durationOf, dur);
           if (seg) p.synth.playAudio(Samples.buffer(seg.sampleId, seg.reverse), seg, times[i]);

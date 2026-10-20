@@ -75,6 +75,32 @@
       const stepPx = barW() / Song.STEPS;
       const rowPx = (rowH - 28) / rows;
       const picked = h.selectedNotes ? h.selectedNotes(c) : null;
+      const colorOf = (n) => (n.color && h.noteColors && h.noteColors() ? n.color : c.color || t.color);
+      // Zoomed out, notes are a few px wide: paint them on one canvas (far
+      // lighter than a block each). Zoom in to grab single notes.
+      if (stepPx < 3 && !range) {
+        const W = Math.max(1, Math.round(clip.length * barW())), H = Math.max(1, Math.round(rowH - 17));
+        const cv = document.createElement("canvas");
+        cv.className = "clip-canvas";
+        cv.width = W;
+        cv.height = H;
+        const g = cv.getContext("2d");
+        const rh = H / rows;
+        for (const n of c.notes) {
+          const col = colorOf(n);
+          const sh = Colors.shades(col)[Notes.pitchClass(n.midi)];
+          g.globalAlpha = picked && picked.has(n) ? 1 : 0.5 + 0.5 * (n.vel || 0);
+          g.fillStyle = picked && picked.has(n) ? "#ffffff" : `rgb(${sh.join(",")})`;
+          for (let off = 0; off < total; off += loop) {
+            const x = off + n.step;
+            if (x >= total) continue;
+            const len = Math.min(n.len, total - x);
+            g.fillRect((x / total) * W, ((hi - n.midi + pad) / rows) * H, Math.max(1, (len / total) * W - 0.5), Math.max(1, rh - 0.5));
+          }
+        }
+        box.append(cv);
+        return box;
+      }
       c.notes.forEach((n, i) => {
         for (let off = 0; off < total; off += loop) {
           const x = off + n.step;
@@ -88,7 +114,7 @@
           d.style.height = 100 / rows + "%";
           // A note's own color shows where notes are sorted (Edit, Arrange);
           // elsewhere every note is its key's shade of the clip's color.
-          const col = n.color && h.noteColors && h.noteColors() ? n.color : c.color || t.color;
+          const col = colorOf(n);
           d.style.background = Colors.noteColor(col, n.midi);
           d.style.color = Colors.noteInk(col, n.midi);
           d.style.opacity = (0.5 + 0.5 * (n.vel || 0)).toFixed(2);
@@ -158,6 +184,11 @@
       rowH = fitRows(song);
       const sel = h.selectedClip();
       const hadFocus = scroller.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+      // The bars built: what's in view and half a screen either side. A long
+      // song zoomed in only builds what you can see; scrolling builds more.
+      const seen = avail() / bw, from = scroller.scrollLeft / bw;
+      built = { b0: Math.max(0, Math.floor(from - seen / 2)), b1: Math.ceil(from + seen * 1.5) + 1 };
+      const near = (clip) => Song.clipEnd(clip) > built.b0 && clip.start < built.b1;
       scroller.textContent = "";
       const tl = el("div", "tl");
       tl.style.setProperty("--bar-w", barW() + "px");
@@ -215,6 +246,7 @@
           "aria-label": `${t.name} track` + (t.mute ? ", muted" : "") + (t.solo ? ", soloed" : ""),
         });
         Colors.paint(name, t.color);
+        name.title = t.name; // a long name is cut short on screen
         name.innerHTML = '<span class="tl-swatch" aria-hidden="true"></span>';
         name.append(t.name);
         name.addEventListener("click", () => h.onSelectTrack(t.id));
@@ -228,8 +260,9 @@
 
         const lane = el("div", "tl-lane", { role: "group", "aria-label": `${t.name} clips` });
         lane.dataset.track = t.id;
-        const stopClip = t.clips.find((x) => sel && x.id === sel.id) || t.clips[0];
-        for (const clip of t.clips) {
+        const shown = t.clips.filter(near);
+        const stopClip = shown.find((x) => sel && x.id === sel.id) || shown[0];
+        for (const clip of shown) {
           const c = Song.content(song, clip);
           const b = el("button", "clip" + (sel && sel.id === clip.id ? " selected" : ""), {
             type: "button", "aria-label": clipLabel(song, t, clip),
@@ -527,8 +560,14 @@
     });
 
     function focusClip(clip) {
-      const b = scroller.querySelector(`[data-clip="${clip.id}"]`);
-      if (!b) return;
+      let b = scroller.querySelector(`[data-clip="${clip.id}"]`);
+      if (!b) {
+        // Not built yet (out of view): bring it into view first.
+        scroller.scrollLeft = Math.max(0, clip.start * bw - avail() / 3);
+        render();
+        b = scroller.querySelector(`[data-clip="${clip.id}"]`);
+        if (!b) return;
+      }
       for (const o of b.closest(".tl-lane").querySelectorAll(".clip")) o.tabIndex = o === b ? 0 : -1;
       b.focus();
     }
@@ -566,7 +605,15 @@
       e.preventDefault();
       zoomBy(e.deltaY < 0 ? 1.25 : 0.8);
     }, { passive: false });
-    scroller.addEventListener("scroll", () => h.onView());
+    // Scrolling past the clips built so far builds the ones coming into view.
+    let built = { b0: 0, b1: Infinity }, scrollRaf = 0;
+    scroller.addEventListener("scroll", () => {
+      h.onView();
+      if (drag || scrollRaf) return;
+      const from = scroller.scrollLeft / bw, to = from + avail() / bw;
+      if (from >= built.b0 && to <= built.b1) return;
+      scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; if (!drag) render(); });
+    });
     // The playing box changing height (a splitter, the window): rows refit.
     let lastH = 0;
     new ResizeObserver(() => {

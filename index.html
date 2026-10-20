@@ -424,6 +424,7 @@
         <button id="page-prev" type="button" class="page-arrow" aria-label="Previous page"><span aria-hidden="true">◀</span></button>
         <div class="pages" role="tablist" aria-label="Note Edit pages">
           <button type="button" role="tab" id="tab-p-note" aria-controls="p-note">Note</button>
+          <button type="button" role="tab" id="tab-p-clip" aria-controls="p-clip">Clip</button>
           <button type="button" role="tab" id="tab-p-track" aria-controls="p-track">Track</button>
           <button type="button" role="tab" id="tab-p-sound" aria-controls="p-sound">Sound</button>
           <button type="button" role="tab" id="tab-p-shape" aria-controls="p-shape">Shape</button>
@@ -489,6 +490,36 @@
           </fieldset>
           <p class="help tip">Number keys work too: 1–7 stamp a rhythm, 8 / 9 / 0 make an arpeggio up / down / up-and-down.</p>
         </section>
+      </div>
+      <!-- Clip: properties played on top of the clip's notes, and styles -->
+      <div id="p-clip" class="page" role="tabpanel" aria-labelledby="tab-p-clip" tabindex="0" hidden>
+        <p id="clip-props-for" class="loop-status"></p>
+        <div id="clip-props-body">
+          <div class="ctl">
+            <label for="prop-add">Add a property</label>
+            <select id="prop-add" aria-describedby="prop-add-help"></select>
+          </div>
+          <p id="prop-add-help" class="help tip">Properties change how this clip plays without changing its notes: take one off and the clip is back as it was. Each copy of a clip on the timeline has its own.</p>
+          <ul id="prop-list" class="prop-list" aria-label="This clip's properties"></ul>
+          <div class="note-pitch" role="group" aria-label="Style">
+            <button type="button" id="style-copy">Copy style</button>
+            <button type="button" id="style-paste">Paste style</button>
+            <button type="button" id="prop-bake" aria-describedby="prop-bake-help">Bake into notes</button>
+          </div>
+          <p id="prop-bake-help" class="help tip">Writes the properties into the notes for good and takes them off (swing and humanize stay, since notes sit on whole steps). A linked clip gets its own notes first.</p>
+          <section class="styles-box" aria-labelledby="styles-h">
+            <h3 id="styles-h">Saved styles</h3>
+            <div class="style-save-row">
+              <label class="inline">Name <input id="style-name" type="text" maxlength="30" autocomplete="off" placeholder="Laser zap"></label>
+              <button type="button" id="style-save">Save this style</button>
+            </div>
+            <div class="style-save-row">
+              <label class="inline">Style <select id="style-pick"></select></label>
+              <button type="button" id="style-apply">Apply</button>
+              <button type="button" id="style-delete" class="quiet">Delete</button>
+            </div>
+          </section>
+        </div>
       </div>
       <div id="p-track" class="page" role="tabpanel" aria-labelledby="tab-p-track" tabindex="0" hidden>
         <div class="ctl">

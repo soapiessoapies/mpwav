@@ -1597,3 +1597,24 @@ fieldset:disabled { opacity: 0.55; }
 [data-fit="on"][data-keys-short="true"] .keys-panel:has(#keys-toggle[aria-expanded="true"]) { display: block; }
 [data-fit="on"][data-keys-short="true"] .keys-panel .panel-head { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 6px; }
 [data-keys-short="true"] .keys-panel .chord-row, [data-keys-short="true"] .keys-panel #pads { display: none; }
+
+/* ---------- Clip properties (Note Edit > Clip) ---------- */
+.prop-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+.prop-list:empty { display: none; }
+.prop-card { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.prop-card.is-off { opacity: 0.75; }
+.prop-card.is-off input[type="range"] { filter: grayscale(1); }
+.prop-top { display: flex; align-items: center; gap: 8px; }
+.prop-top label { font-weight: 700; color: var(--text); }
+.prop-top output { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.prop-top .check { min-height: 32px; gap: 4px; font-size: 0.85rem; }
+.prop-top .prop-remove { min-width: 32px; min-height: 32px; padding: 0; }
+.prop-card input[type="range"] { width: 100%; }
+.styles-box h3 { margin: 12px 0 6px; font-size: 0.95rem; }
+.style-save-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.style-save-row input[type="text"] { width: 10em; }
+.prop-top .check input[type="checkbox"] { width: 24px; height: 24px; margin: 0; }
+
+/* Zoomed-out clips: their notes painted on one canvas. */
+.clip-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.prop-top .check input[type="checkbox"] { width: 24px !important; height: 24px !important; min-width: 24px; }

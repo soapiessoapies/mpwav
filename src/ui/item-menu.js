@@ -13,7 +13,7 @@
 (function (root) {
   "use strict";
 
-  let menu = null, back = null;
+  let menu = null, back = null, backKey = null;
 
   function build() {
     menu = document.createElement("div");
@@ -40,8 +40,10 @@
     document.body.append(menu);
   }
   function returnFocus() {
-    const b = back;
+    // The thing may have been redrawn meanwhile: find it again by its focus key.
+    const b = back && !back.isConnected && backKey ? document.querySelector(`[data-focus-key="${backKey}"]`) : back;
     back = null;
+    backKey = null;
     if (b && b.isConnected && !document.activeElement?.closest("dialog[open]")) b.focus({ preventScroll: true });
   }
 
@@ -49,6 +51,7 @@
     if (!menu) build();
     if (menu.matches(":popover-open, .open")) menu.hidePopover();
     back = anchor && anchor.isConnected ? anchor : document.activeElement;
+    backKey = back && back.dataset ? back.dataset.focusKey || null : null;
     menu.textContent = "";
     menu.setAttribute("aria-label", label || "Edits");
     if (label) {
@@ -102,9 +105,14 @@
   // Right-click, long press (touch) and the Menu key / Shift+F10.
   function attach(el, menuFor) {
     const show = (target, e, at) => {
+      // Where it is now (menuFor may redraw it).
+      const anchor = target.closest("button, [tabindex]") || target;
+      const r = anchor.getBoundingClientRect();
+      const key = anchor.dataset && anchor.dataset.focusKey;
       const m = menuFor(target, e);
       if (!m) return false;
-      open(target.closest("button, [tabindex]") || target, { ...m, at });
+      const now = anchor.isConnected ? anchor : (key && document.querySelector(`[data-focus-key="${key}"]`)) || anchor;
+      open(now, { ...m, at: at || { x: r.left, y: r.bottom + 4 } });
       return true;
     };
     el.addEventListener("contextmenu", (e) => {

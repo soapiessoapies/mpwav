@@ -17,9 +17,9 @@
   // once) lives in Settings > Layout.
   const LIST = [
     { id: "all", name: "All panels", about: "everything on one screen", panels: ["playbox", "clip-editor", "note-edit", "keys-section"] },
-    { id: "make", name: "Make", about: "play and record ideas into one clip", panels: ["clip-editor", "note-edit", "keys-section"], page: "tab-p-note", pages: ["tab-p-note", "tab-p-track"] },
-    { id: "arrange", name: "Arrange", about: "lay the clips out into a song", panels: ["playbox", "note-edit"], page: "tab-p-track", pages: ["tab-p-track", "tab-p-song"] },
-    { id: "edit", name: "Edit", about: "play the whole song and change any note", panels: ["playbox", "note-edit"], page: "tab-p-note", pages: ["tab-p-note"] },
+    { id: "make", name: "Make", about: "play and record ideas into one clip", panels: ["clip-editor", "note-edit", "keys-section"], page: "tab-p-note", pages: ["tab-p-note", "tab-p-clip", "tab-p-track"] },
+    { id: "arrange", name: "Arrange", about: "lay the clips out into a song", panels: ["playbox", "note-edit"], page: "tab-p-track", pages: ["tab-p-clip", "tab-p-track", "tab-p-song"] },
+    { id: "edit", name: "Edit", about: "play the whole song and change any note", panels: ["playbox", "note-edit"], page: "tab-p-note", pages: ["tab-p-note", "tab-p-clip"] },
     { id: "sound", name: "Sound", about: "shape one sound", panels: ["clip-editor", "note-edit", "keys-section"], page: "tab-p-sound", pages: ["tab-p-sound", "tab-p-shape", "tab-p-filter", "tab-p-warp"] },
     { id: "mix", name: "Mix", about: "balance the tracks", panels: ["note-edit"], page: "tab-p-mix", pages: ["tab-p-mix"] },
   ];

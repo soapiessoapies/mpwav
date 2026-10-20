@@ -27,6 +27,11 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(writeNow, 200);
   }
+  // Leaving the page (closing the tab, reloading, switching apps on a phone)
+  // saves what's still waiting, so the last change is never lost.
+  const flushSave = () => { if (saveTimer) writeNow(); };
+  addEventListener("pagehide", flushSave);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSave(); });
   function writeNow() {
     clearTimeout(saveTimer);
     saveTimer = 0;
@@ -303,7 +308,7 @@
       const at = pos % 2 ? time + song.swing * dur : time; // swing: offbeat sixteenths play late
       for (const n of Song.notesAtPos(song, t, pos)) {
         if (t.id === song.selected && skipOnce.delete(pos + ":" + n.midi)) continue;
-        synth.playNote(n, at, dur);
+        synth.playNote(n, at + (n.shift || 0) * dur, dur); // shift: a clip's swing or humanize
       }
       const seg = Song.audioSegment(song, t, pos, r.start * Song.STEPS, soundSecs, dur);
       if (seg) synth.playAudio(Samples.buffer(seg.sampleId, seg.reverse), seg, time);
@@ -647,6 +652,19 @@
 
   document.addEventListener("keydown", (e) => {
     // Ctrl + S saves from anywhere, even while typing (Shift: Save as).
+    // Ctrl + Alt + C / V: copy and paste a clip's style (its properties and color).
+    // (Not while typing: on many keyboards AltGr is Ctrl + Alt, and AltGr + C types a letter.)
+    if ((e.ctrlKey || e.metaKey) && e.altKey && !inDialog(e.target) && !e.target.closest("input, textarea, select, [contenteditable]") &&
+        (e.code === "KeyC" || e.code === "KeyV")) {
+      const o = propTarget();
+      if (o) {
+        e.preventDefault();
+        if (e.code === "KeyC") copyStyle(o);
+        else if (styleBoard) pasteStyle(o, styleBoard);
+        else Announce.say("Copy a clip's style first");
+        return;
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
       e.preventDefault();
       saveSong(e.shiftKey);
@@ -654,7 +672,7 @@
     }
     if (inDialog(e.target)) return;
     // Alt + 1 to 5: the workspaces, in order; Alt + 0: All panels.
-    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[0-5]$/.test(e.code)) {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[0-5]$/.test(e.code) && !e.target.closest("input[type=text], input:not([type]), textarea, [contenteditable]")) {
       e.preventDefault();
       const n = Number(e.code.slice(5));
       setSlide(n ? Slides.STEPS[n - 1].id : "all", true);
@@ -815,6 +833,7 @@
     Announce.tell(text, { action: { label: "Undo", run: undo } });
   }
   function afterChange(text) {
+    Announce.dropAction();
     timeline.render();
     renderEditor();
     showSongStatus();
@@ -1101,6 +1120,7 @@
 
   function renderNotePage() {
     renderEditing();
+    try { renderClipPage(); } catch (e) { if (!(e instanceof ReferenceError)) throw e; } // (not set up yet at startup)
     const list = [...selNotes];
     const o = find(open);
     $("note-controls").hidden = !list.length;
@@ -1257,6 +1277,202 @@
     deleted(`Deleted ${n} note${n > 1 ? "s" : ""}`);
   });
 
+  // --- Clip properties and styles (Note Edit > Clip; Song.CLIP_PROPS) ---
+  // The clip they go to: like the Editing strip (Arrange: the picked one).
+  const propTarget = () => (ui.slide === "arrange" ? find(picked) : find(open) || find(picked));
+  const STYLES_KEY = "sound-studio.styles";
+  let savedStyles = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(STYLES_KEY));
+      return Array.isArray(v) ? v.filter((s) => s && typeof s.name === "string").slice(0, 60) : [];
+    } catch (e) { return []; }
+  })();
+  const saveStyles = () => { try { localStorage.setItem(STYLES_KEY, JSON.stringify(savedStyles)); } catch (e) { /* storage blocked */ } };
+  let styleBoard = null; // Copy style
+  let noteStyleBoard = null; // Copy note style
+  const propText = (d, v) => (d.fx ? FX_TEXT[d.fx](v) : d.unit === "%" ? `${v}%` : d.unit === "keys" ? (v === 0 ? "none" : `${v > 0 ? "+" : ""}${v} key${Math.abs(v) === 1 ? "" : "s"}`) : `${v > 0 ? "+" : ""}${v} ${d.unit}`);
+  (function buildPropAdd() {
+    const sel = $("prop-add");
+    sel.append(new Option("Choose one…", ""));
+    for (const g of [...new Set(Song.CLIP_PROPS.map((d) => d.group))]) {
+      const og = document.createElement("optgroup");
+      og.label = g;
+      for (const d of Song.CLIP_PROPS.filter((x) => x.group === g)) og.append(new Option(d.label, d.id));
+      sel.append(og);
+    }
+    sel.addEventListener("change", () => {
+      const o = propTarget();
+      const id = sel.value;
+      sel.value = "";
+      if (!o || !id) return;
+      Song.addProp(o.clip, id);
+      renderClipPage(true);
+      afterChange(`Added ${Song.PROP_BY_ID[id].label} to ${o.c.name}`);
+      requestAnimationFrame(() => $("prop-" + id)?.focus());
+    });
+  })();
+  function renderClipPage(rebuild) {
+    const o = propTarget();
+    const list = $("prop-list");
+    $("clip-props-body").hidden = !o;
+    if (!o) {
+      $("clip-props-for").textContent = ui.slide === "arrange" ? "Pick a clip on the timeline to give it properties." : "Open a clip to give it properties.";
+      return;
+    }
+    const kind = o.c.audio ? "audio" : "notes";
+    $("clip-props-for").textContent = `${o.c.name} on ${o.t.name}` + (o.clip.props ? ` · ${o.clip.props.length} propert${o.clip.props.length === 1 ? "y" : "ies"}` : "");
+    const props = o.clip.props || [];
+    for (const opt of $("prop-add").querySelectorAll("option[value]")) {
+      if (!opt.value) continue;
+      const d = Song.PROP_BY_ID[opt.value];
+      opt.disabled = d.kind !== kind || props.some((p) => p.id === d.id);
+    }
+    const same = list.dataset.clip === o.clip.id && list.dataset.ids === props.map((p) => p.id).join(",");
+    if (same && !rebuild) {
+      for (const p of props) {
+        const d = Song.PROP_BY_ID[p.id], input = $("prop-" + p.id);
+        if (!input) continue;
+        if (document.activeElement !== input) input.value = p.v;
+        $("prop-" + p.id + "-out").textContent = propText(d, p.v);
+        input.setAttribute("aria-valuetext", propText(d, p.v));
+        $("prop-" + p.id + "-on").checked = !p.off;
+        input.closest(".prop-card").classList.toggle("is-off", !!p.off);
+      }
+    } else {
+      list.textContent = "";
+      list.dataset.clip = o.clip.id;
+      list.dataset.ids = props.map((p) => p.id).join(",");
+      for (const p of props) list.append(propCard(o, p));
+    }
+    $("style-copy").disabled = !props.length && !o.c.color;
+    $("style-paste").disabled = !styleBoard;
+    $("prop-bake").disabled = !props.some((p) => !p.off && p.id !== "swing" && p.id !== "human");
+    const pick = $("style-pick"), had = pick.value;
+    pick.textContent = "";
+    if (!savedStyles.length) pick.append(new Option("None saved yet", ""));
+    savedStyles.forEach((s, i) => pick.append(new Option(s.name, String(i))));
+    pick.value = savedStyles[had] ? had : savedStyles.length ? "0" : "";
+    $("style-apply").disabled = $("style-delete").disabled = !savedStyles.length;
+  }
+  function propCard(o, p) {
+    const d = Song.PROP_BY_ID[p.id];
+    const li = document.createElement("li");
+    li.className = "prop-card" + (p.off ? " is-off" : "");
+    const top = document.createElement("div");
+    top.className = "prop-top";
+    const label = Object.assign(document.createElement("label"), { htmlFor: "prop-" + p.id, textContent: d.label });
+    const out = Object.assign(document.createElement("output"), { id: "prop-" + p.id + "-out", textContent: propText(d, p.v) });
+    out.setAttribute("aria-hidden", "true");
+    const onBox = document.createElement("label");
+    onBox.className = "check";
+    const on = Object.assign(document.createElement("input"), { type: "checkbox", id: "prop-" + p.id + "-on", checked: !p.off });
+    on.setAttribute("aria-label", `${d.label} on`);
+    onBox.append(on, document.createTextNode(" On"));
+    const rm = Object.assign(document.createElement("button"), { type: "button", className: "quiet prop-remove", textContent: "×" });
+    rm.setAttribute("aria-label", `Remove ${d.label}`);
+    top.append(label, out, onBox, rm);
+    const input = Object.assign(document.createElement("input"), { type: "range", id: "prop-" + p.id, min: d.min, max: d.max, step: d.step, value: p.v });
+    input.setAttribute("aria-valuetext", propText(d, p.v));
+    if (d.help) {
+      const help = Object.assign(document.createElement("p"), { className: "help tip", id: "prop-" + p.id + "-help", textContent: d.help });
+      input.setAttribute("aria-describedby", help.id);
+      li.append(top, input, help);
+    } else li.append(top, input);
+    input.addEventListener("input", () => {
+      p.v = Number(input.value);
+      out.textContent = propText(d, p.v);
+      input.setAttribute("aria-valuetext", propText(d, p.v));
+      save();
+    });
+    input.addEventListener("change", () => Announce.say(`${d.label} ${propText(d, p.v)}`));
+    input.addEventListener("dblclick", () => { p.v = d.def; renderClipPage(); save(); Announce.say(`${d.label} back to ${propText(d, d.def)}`); });
+    on.addEventListener("change", () => {
+      if (on.checked) delete p.off;
+      else p.off = true;
+      li.classList.toggle("is-off", !on.checked);
+      afterChange(`${d.label} ${on.checked ? "on" : "off"}`);
+    });
+    rm.addEventListener("click", () => {
+      Song.removeProp(o.clip, p.id);
+      renderClipPage(true);
+      afterChange(`Removed ${d.label} from ${o.c.name}`);
+      ($("prop-list").querySelector("input[type=range]") || $("prop-add")).focus();
+    });
+    return li;
+  }
+  function copyStyle(o) {
+    styleBoard = Song.styleOf(o.clip, o.c);
+    renderClipPage();
+    Announce.say(`Copied ${o.c.name}'s style: ${styleBoard.props.length ? styleBoard.props.map((p) => Song.PROP_BY_ID[p.id].label).join(", ") : "no properties"}${styleBoard.color ? ", and its color" : ""}`);
+  }
+  function pasteStyle(o, style, words) {
+    if (!o || !style) return;
+    const kind = o.c.audio ? "audio" : "notes";
+    const props = Song.cleanProps(style.props).filter((p) => Song.PROP_BY_ID[p.id].kind === kind);
+    if (props.length) o.clip.props = props;
+    else delete o.clip.props;
+    if (style.color) o.c.color = style.color;
+    renderClipPage(true);
+    afterChange(words || `Pasted the style onto ${o.c.name}`);
+  }
+  $("style-copy").addEventListener("click", () => { const o = propTarget(); if (o) copyStyle(o); });
+  $("style-paste").addEventListener("click", () => pasteStyle(propTarget(), styleBoard));
+  $("prop-bake").addEventListener("click", () => {
+    const o = propTarget();
+    if (!o) return;
+    const baked = Song.bakeProps(song, o.t, o.clip);
+    selNotes.clear();
+    renderClipPage(true);
+    afterChange(baked.length ? `Baked ${baked.map((p) => Song.PROP_BY_ID[p.id].label).join(", ")} into ${o.c.name}'s notes` : "Nothing to bake");
+  });
+  $("style-save").addEventListener("click", () => {
+    const o = propTarget();
+    const name = $("style-name").value.trim();
+    if (!o) return;
+    if (!name) { $("style-name").focus(); Announce.say("Give the style a name first"); return; }
+    const style = { name: name.slice(0, 30), ...Song.styleOf(o.clip, o.c) };
+    const i = savedStyles.findIndex((s) => s.name.toLowerCase() === style.name.toLowerCase());
+    if (i >= 0) savedStyles[i] = style;
+    else savedStyles.push(style);
+    saveStyles();
+    $("style-name").value = "";
+    renderClipPage();
+    $("style-pick").value = String(i >= 0 ? i : savedStyles.length - 1);
+    Announce.say(`Saved the style ${style.name}`);
+  });
+  $("style-apply").addEventListener("click", () => {
+    const s = savedStyles[Number($("style-pick").value)];
+    if (s) pasteStyle(propTarget(), s, `Applied the style ${s.name}`);
+  });
+  $("style-delete").addEventListener("click", () => {
+    const i = Number($("style-pick").value);
+    const s = savedStyles[i];
+    if (!s) return;
+    savedStyles.splice(i, 1);
+    saveStyles();
+    renderClipPage();
+    Announce.tell(`Deleted the style ${s.name}`, { action: { label: "Undo", run: () => { savedStyles.splice(i, 0, s); saveStyles(); renderClipPage(); Announce.say(`${s.name} is back`); } } });
+  });
+  // Note styles: a note's length, loudness, own sound and color onto others.
+  function copyNoteStyle() {
+    const n = [...selNotes][0];
+    if (!n) return;
+    noteStyleBoard = { len: n.len, vel: n.vel, ...(n.fx ? { fx: { ...n.fx } } : {}), ...(n.color ? { color: n.color } : {}) };
+    Announce.say(`Copied the note style of ${Notes.noteName(n.midi)}`);
+  }
+  function pasteNoteStyle() {
+    const s = noteStyleBoard;
+    if (!s) return;
+    editNotes((c, n) => {
+      Song.resizeNote(c, n, s.len);
+      n.vel = s.vel;
+      if (s.fx) n.fx = { ...s.fx }; else delete n.fx;
+      if (s.color) n.color = s.color; else delete n.color;
+    }, `Pasted the note style onto ${plural(selNotes.size, "note")}`);
+  }
+
+  renderClipPage(true);
+
   // --- the ⋯ menus (src/ui/item-menu.js): simple edits on screen ---
   function openFromMenu(t, clip) {
     openClip(t, clip, true);
@@ -1280,6 +1496,16 @@
         { label: "Linked copy", run: () => clipDuplicate(true), keepFocus: true },
         { label: "Snip at play cursor", run: clipSplit },
         "-",
+        { label: "Copy style", keys: "Ctrl+Alt+C", run: () => copyStyle({ t, clip, c }) },
+        { label: "Paste style", keys: "Ctrl+Alt+V", disabled: !styleBoard, run: () => pasteStyle({ t, clip, c }, styleBoard) },
+        { label: "Properties…", run: () => {
+          picked = { trackId: t.id, clipId: clip.id };
+          if ($("tab-p-clip").hidden) setSlide("arrange", true);
+          pages.select("tab-p-clip", false);
+          if (document.documentElement.dataset.twopanels === "true") $("pp-side").click();
+          renderClipPage(true);
+          requestAnimationFrame(() => $("prop-add").focus());
+        }, keepFocus: true },
         { label: "Color…", run: () => pickClipColor(t, c, at()), keepFocus: true },
         { label: "Rename…", run: () => { openFromMenu(t, clip); requestAnimationFrame(() => nameField.focus()); }, keepFocus: true },
         "-",
@@ -1334,6 +1560,8 @@
         { label: "Paste at cursor", keys: "Ctrl+V", disabled: !hasNotes, run: () => notesPaste() },
         { label: "Duplicate", keys: "Ctrl+D", disabled: !n, run: notesDuplicate },
         { label: "Select all", keys: "Ctrl+A", run: notesSelectAll },
+        { label: "Copy note style", disabled: !n, run: copyNoteStyle },
+        { label: "Paste note style", disabled: !n || !noteStyleBoard, run: pasteNoteStyle },
         { label: "Snip at cursor", disabled: !crossing, run: () => {
           const made = Song.snipNotes(o.c, [...selNotes], at);
           for (const m of made) selNotes.add(m);
@@ -2307,6 +2535,7 @@
   }
 
   function undo() {
+    Announce.dropAction();
     if (saveTimer) writeNow(); // a change still waiting to be saved counts first
     const json = history.undo();
     if (json === null) { Announce.say("Nothing to undo"); return; }
@@ -2314,6 +2543,7 @@
     Announce.say("Undone");
   }
   function redo() {
+    Announce.dropAction();
     if (saveTimer) writeNow();
     const json = history.redo();
     if (json === null) { Announce.say("Nothing to redo"); return; }
@@ -2538,6 +2768,7 @@
 
   function showActions() {
     renderEditing();
+    try { renderClipPage(); } catch (e) { if (!(e instanceof ReferenceError)) throw e; } // follows the picked clip
     const p = pickedClip();
     for (const id of ["clip-copy", "clip-cut", "clip-dup", "clip-link", "clip-split", "clip-delete"]) $(id).disabled = !p;
     $("clip-paste").disabled = !(clipboard && clipboard.kind === "clip");

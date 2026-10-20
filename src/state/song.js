@@ -91,6 +91,87 @@
   ];
   const FX_BY_ID = Object.fromEntries(NOTE_FX.map((d) => [d.id, d]));
 
+  // Clip properties: added to a clip and removed at will, played on top of
+  // its notes (the notes themselves never change, so taking one off puts the
+  // clip back). Each clip on the timeline has its own list, so a linked copy
+  // can be transposed differently: clip.props = [{ id, v, off }] in the order
+  // added. `fx` ones add to the note's own sound setting of that name.
+  const FX_PROP = (id, group, extra = {}) => ({ ...FX_BY_ID[id], group, fx: id, kind: "notes", ...extra });
+  const CLIP_PROPS = [
+    { id: "transpose", group: "Pitch", label: "Transpose", min: -24, max: 24, step: 1, def: 0, unit: "keys", kind: "notes",
+      help: "Every note this many keys up or down." },
+    FX_PROP("tune", "Pitch"), FX_PROP("bend", "Pitch"), FX_PROP("sweep", "Pitch"), FX_PROP("vib", "Pitch"),
+    { id: "loud", group: "Feel", label: "Loudness", min: 10, max: 200, step: 5, def: 100, unit: "%", kind: "notes",
+      help: "Every note's loudness times this." },
+    { id: "lenx", group: "Feel", label: "Note length", min: 25, max: 400, step: 5, def: 100, unit: "%", kind: "notes",
+      help: "Every note longer or shorter: under 100% for short, punchy notes." },
+    { id: "swing", group: "Feel", label: "Swing", min: 0, max: 60, step: 5, def: 0, unit: "%", kind: "notes",
+      help: "Every other sixteenth plays late, for a shuffle (on top of the song's swing)." },
+    { id: "human", group: "Feel", label: "Humanize", min: 0, max: 100, step: 5, def: 0, unit: "%", kind: "notes",
+      help: "Small random changes to each note's timing and loudness, the same every time it plays." },
+    FX_PROP("cut", "Tone"), FX_PROP("pan", "Tone"), FX_PROP("ratchet", "Tone"), FX_PROP("noise", "Tone"),
+    { id: "gain", group: "Sound file", label: "Gain", min: -24, max: 12, step: 1, def: 0, unit: "dB", kind: "audio",
+      help: "The clip's sound louder or quieter, on top of its own gain." },
+  ];
+  const PROP_BY_ID = Object.fromEntries(CLIP_PROPS.map((d) => [d.id, d]));
+  const PROPS_MAX = CLIP_PROPS.length;
+
+  // A clip's property list, cleaned: known ids once each, values in range.
+  function cleanProps(list) {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set(), out = [];
+    for (const p of list) {
+      const d = p && PROP_BY_ID[p.id];
+      if (!d || seen.has(p.id)) continue;
+      seen.add(p.id);
+      const v = Number((Math.round(clamp(num(p.v, d.def), d.min, d.max) / d.step) * d.step).toFixed(4));
+      out.push(p.off === true ? { id: p.id, v, off: true } : { id: p.id, v });
+    }
+    return out.slice(0, PROPS_MAX);
+  }
+  // Adds a property to a clip (at its default, or `v`), or returns the one it has.
+  function addProp(clip, id, v) {
+    const d = PROP_BY_ID[id];
+    if (!d) return null;
+    clip.props = clip.props || [];
+    let p = clip.props.find((x) => x.id === id);
+    if (!p) { p = { id, v: d.def }; clip.props.push(p); }
+    if (v !== undefined) p.v = cleanProps([{ id, v }])[0].v;
+    return p;
+  }
+  function removeProp(clip, id) {
+    if (!clip.props) return;
+    clip.props = clip.props.filter((p) => p.id !== id);
+    if (!clip.props.length) delete clip.props;
+  }
+  // The same small "random" number for a note every time (-1 to 1).
+  const wobble = (a, b) => { const x = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; };
+  // A note as it plays with a clip's properties on top: a copy, with
+  // `shift` (in steps) when swing or humanize moves it in time.
+  function playedNote(n, props) {
+    const out = { ...n, ...(n.fx ? { fx: { ...n.fx } } : {}) };
+    for (const p of props) {
+      if (p.off) continue;
+      const d = PROP_BY_ID[p.id];
+      if (d.fx) {
+        const now = out.fx && out.fx[d.fx] !== undefined ? out.fx[d.fx] : FX_BY_ID[d.fx].def;
+        const v = d.fx === "ratchet" ? Math.max(now, p.v) : clamp(now + p.v, FX_BY_ID[d.fx].min, FX_BY_ID[d.fx].max);
+        out.fx = { ...(out.fx || {}), [d.fx]: v };
+      } else if (p.id === "transpose") out.midi = clamp(out.midi + p.v, LOWEST, HIGHEST);
+      else if (p.id === "loud") out.vel = clamp(out.vel * p.v / 100, 0.02, 1);
+      else if (p.id === "lenx") out.len = Math.max(0.25, out.len * p.v / 100);
+      else if (p.id === "swing") { if (n.step % 2) out.shift = (out.shift || 0) + p.v / 100; }
+      else if (p.id === "human" && p.v) {
+        out.shift = (out.shift || 0) + Math.max(-0.15, wobble(n.step, n.midi) * 0.25 * p.v / 100);
+        out.vel = clamp(out.vel * (1 + wobble(n.midi, n.step) * 0.25 * p.v / 100), 0.02, 1);
+      }
+    }
+    return out;
+  }
+  const liveProps = (clip) => (clip && clip.props ? clip.props.filter((p) => !p.off) : []);
+  // A clip's properties as a style (for Copy style / saved styles): a copy.
+  const styleOf = (clip, c) => ({ props: cleanProps(clip.props || []), ...(c && c.color ? { color: c.color } : {}) });
+
   // Sounds: an audio clip loops up to this many bars, and sound ids look like this.
   const AUDIO_BARS_MAX = 64, CUES_MAX = 32;
   const SOUND_RE = /^snd-[a-z0-9]{1,24}$/;
@@ -291,6 +372,7 @@
     const at = freeBar(t, clipEnd(clip), clip.length);
     const copy = addClip(song, t, at, clip.length, target.id);
     copy.offset = clip.offset;
+    if (clip.props) copy.props = cleanProps(clip.props);
     return copy;
   }
 
@@ -298,7 +380,8 @@
   function copyClip(song, clip) {
     const c = content(song, clip);
     return { kind: "clip", name: c.name, bars: c.bars, notes: c.notes.map((n) => ({ ...n })), length: clip.length, offset: clip.offset,
-      ...(c.audio ? { audio: { ...c.audio } } : {}), ...(c.color ? { color: c.color } : {}) };
+      ...(c.audio ? { audio: { ...c.audio } } : {}), ...(c.color ? { color: c.color } : {}),
+      ...(clip.props ? { props: cleanProps(clip.props) } : {}) };
   }
 
   // Pastes a copied clip onto a track at the first free space from `bar`.
@@ -309,6 +392,7 @@
       data.bars, data.notes.map((n) => ({ ...n })), data.audio);
     if (cleanColor(data.color)) c.color = cleanColor(data.color);
     const clip = addClip(song, t, freeBar(t, bar, data.length), data.length, c.id);
+    if (data.props && cleanProps(data.props).length) clip.props = cleanProps(data.props);
     clip.offset = data.offset % data.bars;
     return clip;
   }
@@ -319,6 +403,7 @@
     if (bar <= clip.start || bar >= clipEnd(clip)) return null;
     const right = { id: newId(song, "c"), contentId: clip.contentId, start: bar, length: clipEnd(clip) - bar,
       offset: (clip.offset + bar - clip.start) % content(song, clip).bars };
+    if (clip.props) right.props = cleanProps(clip.props);
     clip.length = bar - clip.start;
     t.clips.push(right);
     sortClips(t);
@@ -405,6 +490,7 @@
       if (!made[c.contentId]) made[c.contentId] = cloneContent(song, song.contents[c.contentId], song.contents[c.contentId].name + " copy");
       const copy = addClip(song, t, c.start + n, c.length, made[c.contentId].id);
       copy.offset = c.offset;
+      if (c.props) copy.props = cleanProps(c.props);
     }
     return true;
   }
@@ -601,6 +687,40 @@
     return made;
   }
 
+  // Bakes a clip's properties into its notes (or its sound's gain) and takes
+  // them off. Swing and humanize stay (notes sit on whole steps). A clip
+  // that shares its notes with linked copies gets its own copy first, so the
+  // others don't change. Returns the properties baked.
+  function bakeProps(song, t, clip) {
+    const props = liveProps(clip).filter((p) => p.id !== "swing" && p.id !== "human");
+    if (!props.length) return [];
+    let c = content(song, clip);
+    if (linkCount(song, c.id) > 1) {
+      c = cloneContent(song, c, c.name);
+      clip.contentId = c.id;
+    }
+    if (c.audio) {
+      const g = props.filter((p) => p.id === "gain").reduce((s, p) => s + p.v, 0);
+      c.audio.gain = clamp(c.audio.gain + g, -48, 24);
+    } else {
+      const loop = c.bars * STEPS;
+      c.notes = c.notes.map((n) => {
+        const m = playedNote(n, props);
+        delete m.shift;
+        m.len = clamp(Math.round(m.len), 1, loop - m.step);
+        m.vel = Number(m.vel.toFixed(3));
+        const fx = cleanFx(m.fx);
+        if (fx) m.fx = fx;
+        else delete m.fx;
+        return m;
+      }).filter((n, i, all) => all.findIndex((x) => x.step === n.step && x.midi === n.midi) === i);
+    }
+    const baked = new Set(props.map((p) => p.id));
+    clip.props = (clip.props || []).filter((p) => !baked.has(p.id));
+    if (!clip.props.length) delete clip.props;
+    return props;
+  }
+
   // Duplicates notes right after themselves (after the last one ends).
   function duplicateNotes(c, notes) {
     const first = Math.min(...notes.map((n) => n.step));
@@ -727,7 +847,10 @@
   // The notes a track plays at an absolute step: its clip there, if any.
   function notesAtPos(song, t, pos) {
     const clip = clipAt(t, Math.floor(pos / STEPS));
-    return clip ? notesAt(content(song, clip), localStep(song, clip, pos)) : [];
+    if (!clip) return [];
+    const notes = notesAt(content(song, clip), localStep(song, clip, pos));
+    const props = liveProps(clip);
+    return props.length ? notes.map((n) => playedNote(n, props)) : notes;
   }
 
   // The part of an audio clip's sound that starts playing at step `pos`:
@@ -763,7 +886,7 @@
     return {
       sampleId: a.sampleId, offset, length, rate,
       fadeIn: into === 0 ? a.fadeIn : 0,
-      fadeOut: a.fadeOut, gain: a.gain, reverse: a.reverse,
+      fadeOut: a.fadeOut, gain: clamp(a.gain + liveProps(clip).filter((p) => p.id === "gain").reduce((s, p) => s + p.v, 0), -48, 24), reverse: a.reverse,
     };
   }
 
@@ -967,6 +1090,7 @@
             id: typeof c.id === "string" ? c.id : newId(out, "c"), contentId: c.contentId,
             start: int(c.start, -1), length: int(c.length, 0),
             offset: Math.max(0, int(c.offset, 0)) % out.contents[c.contentId].bars,
+            ...(cleanProps(c.props).length ? { props: cleanProps(c.props) } : {}),
           }))
           .filter((c) => c.start >= 0 && c.length >= 1)
           .sort((a, b) => a.start - b.start);
@@ -998,7 +1122,8 @@
     createSong, demoSong, sanitize, track, content, clipEnd, clipAt, fits,
     addClip, moveClip, resizeClip, removeClip, linkCount, makeContent, nextName, freeSpan,
     freeBar, cloneContent, duplicateClip, copyClip, pasteClip, splitClip, splitApart, insertBars, deleteBars, duplicateBars,
-    copyNotes, pasteNotes, duplicateNotes, snipNotes, setTempo, removeTempo, bpmAt, stepSeconds,
+    copyNotes, pasteNotes, duplicateNotes, snipNotes,
+    CLIP_PROPS, PROP_BY_ID, cleanProps, addProp, removeProp, playedNote, styleOf, bakeProps, setTempo, removeTempo, bpmAt, stepSeconds,
     STAMPS, repeatNotes, stampNotes, arpeggiate,
     noteStarting, hasNote, noteAt, notesAt, addNote, toggleNote, removeNotes, moveNote, resizeNote, setContentBars,
     localStep, notesAtPos, songBars, viewBars, playRange, audible,

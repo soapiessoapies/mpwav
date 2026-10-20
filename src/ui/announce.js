@@ -56,5 +56,11 @@
     hide();
   }
 
-  root.Announce = { attach, say, tell };
+  // Takes down a notice that has a button (its Undo would undo something
+  // else once anything else has changed).
+  function dropAction() {
+    if (box && box.classList.contains("has-action") && !box.hidden && !box.contains(document.activeElement)) box.hidden = true;
+  }
+
+  root.Announce = { attach, say, tell, dropAction };
 })(window);

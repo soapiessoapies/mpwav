@@ -30,3 +30,11 @@ test("computer keys: A is the base C, K is the C above, W and E are black", () =
   const offs = Object.values(K);
   assert.equal(new Set(offs).size, offs.length, "each offset is used once");
 });
+
+// The piano roll speaks note names through Notes.spokenName (it once called
+// itself instead, and every spoken message in the roll crashed).
+test("the piano roll's spoken note names come from Notes.spokenName", () => {
+  const src = require("node:fs").readFileSync(require("node:path").join(__dirname, "../src/ui/piano-roll.js"), "utf8");
+  const line = src.split("\n").find((l) => /const spoken = /.test(l));
+  assert.ok(line && line.includes("Notes.spokenName(m)") && !/:\s*spoken\(m\)/.test(line), line);
+});

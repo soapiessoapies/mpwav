@@ -71,6 +71,7 @@ body { font-family: var(--ui-font); }
 .pages [role="tab"], .note-edit .page { --line: var(--cell-edge); --ink: var(--cell-edge); }
 #tab-p-note, #p-note { --paper-c: var(--c-orange); }
 #tab-p-track, #p-track { --paper-c: var(--c-rose); }
+#tab-p-clip, #p-clip { --paper-c: var(--c-sky); }
 #tab-p-sound, #p-sound { --paper-c: var(--c-violet); }
 #tab-p-shape, #p-shape { --paper-c: var(--c-sky); }
 #tab-p-filter, #p-filter { --paper-c: var(--c-mint); }
@@ -134,12 +135,12 @@ button:active:not(:disabled):not(.clip):not(.tl-bar):not(.key) { transform: tran
 
 /* Paper tabs get pixel-notched corners and an ink outline. */
 :root:not([data-look="smooth"]) .pages [role="tab"] {
-  border: 0; border-radius: 0; font-family: var(--pixel-font); font-weight: 500; letter-spacing: 0.02em;
+  border: 0; border-radius: 0; font-family: var(--pixel-font); font-weight: 500; letter-spacing: 0.05em;
   clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% 100%, 0 100%);
   box-shadow: inset 3px 0 0 0 var(--ink), inset -3px 0 0 0 var(--ink), inset 0 3px 0 0 var(--ink), inset 0 -3px 0 0 var(--ink);
 }
 :root:not([data-look="smooth"]) .pages [role="tab"][aria-selected="true"] {
-  margin-bottom: -3px; padding-bottom: 3px; font-weight: 700;
+  margin-bottom: -3px; padding-bottom: 3px; font-weight: 600; /* at 700 the pixel C closes into an O ("Clip" read "Olip") */
   box-shadow: inset 3px 0 0 0 var(--ink), inset -3px 0 0 0 var(--ink), inset 0 3px 0 0 var(--ink);
 }
 :root:not([data-look="smooth"]) .pages [role="tab"]:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--focus); }

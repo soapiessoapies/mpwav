@@ -870,3 +870,52 @@ in a toolbar), and it wasn't always clear which clip or notes a change hit.
   Edit wide, Short keyboard, Tall keyboard, Reset sizes.
 - Under the hood: `--side-w` on `.studio` feeds the wide grid's side column,
   and `--keys-h` the keys' height, in every layout.
+
+## Beta step 5: clip properties and styles, and a bug hunt (v0.32.0)
+
+**Clip properties** (`Song.CLIP_PROPS`): Note Edit's new **Clip** page (in
+Make, Arrange and Edit) adds properties to the clip from a list (Pitch:
+Transpose, Fine tune, Pitch slide, Pitch sweep, Vibrato · Feel: Loudness, Note
+length, Swing, Humanize · Tone: Brightness, Pan, Retrigger, Noise burst ·
+Sound file: Gain). Each is a card with a slider, an On switch and ×.
+
+- They're played on top of the notes (`Song.notesAtPos` → `playedNote`, live
+  and in exports alike), so the notes never change and taking one off puts the
+  clip back. Swing and humanize move a note in time (`shift`, in steps);
+  humanize is the same every time a note plays.
+- Each clip on the timeline has its own list (`clip.props`), so a linked copy
+  can be transposed differently. Copies, pastes, duplicates, snips and section
+  copies keep them.
+- **Bake into notes** writes them into the notes (a linked clip gets its own
+  notes first) and takes them off; swing and humanize stay.
+- **Copy style / Paste style** (the Clip page, the clip's ⋯, Ctrl + Alt + C /
+  V): the properties and the clip's own color. **Saved styles** keep a style
+  by name for every song (`sound-studio.styles`). Notes get **Copy note style /
+  Paste note style** (length, loudness, own sound, color) in their ⋯.
+- MIDI export still writes the notes as they are (bake first to include them).
+
+**Bug hunt for the alpha** (headless Chrome): a seeded random tester (clicks,
+odd values, typing, right-clicks, undo, play, resizes; 2,800 steps over 8
+seeds) and a real-input tester (mouse drags on clips, notes, bars and zoom
+bars, key presses on whatever has focus; 1,500 steps), checking for errors,
+sideways scrolling, "NaN/undefined" on screen and whether the saved song still
+loads whole; plus 23 targeted checks and a 768-clip, 12,288-note song. Found
+and fixed:
+
+- **The piano roll's spoken note names crashed** (since v0.11): `spoken()`
+  called itself instead of `Notes.spokenName`, so arrow keys in the roll and
+  every "Moved to …" message threw on synth tracks. A test guards it now.
+- **The last change before leaving was lost**: saves wait 200 ms and nothing
+  saved on leaving. `pagehide` / `visibilitychange` now save what's waiting.
+- **Big songs were slow** (about 1 s to switch workspace with 768 clips): the
+  timeline now builds only the clips near the view (more as you scroll; the
+  arrow keys bring an unbuilt clip into view), and zoomed out paints each
+  clip's notes on one canvas. 1000 → 250 ms; 18,638 → 5,138 elements.
+- Ctrl + Alt + C/V and Alt + 1–5 no longer fire while typing (AltGr is Ctrl +
+  Alt on many keyboards; Option + 1 types "¡" on a Mac).
+- The notice's Undo goes away once anything else changes (it would have
+  undone something else).
+- ⋯ menus opened with the Menu key find their clip again after a redraw.
+- The Clip page follows the clip picked on the timeline; long track names show
+  in full on hover; the pixel tab "Clip" read "Olip" in bold (selected tabs are
+  600 now); the property On switch is 24 px.

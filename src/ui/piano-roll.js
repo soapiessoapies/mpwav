@@ -48,7 +48,7 @@
     const rowIndex = (midi) => (view && view.rows ? view.rows.indexOf(midi) : TOP - midi);
     const yOf = (midi) => Math.max(0, rowIndex(midi)) * rowH();
     const nameOf = (m) => (view && view.rowName ? view.rowName(m) : Notes.noteName(m));
-    const spoken = (m) => (view && view.rowName ? view.rowName(m) : spoken(m));
+    const spoken = (m) => (view && view.rowName ? view.rowName(m) : Notes.spokenName(m));
     const clampMidi = (m) => {
       const rows = rowsOf();
       if (!(view && view.rows)) return Math.max(BOTTOM, Math.min(TOP, m));
