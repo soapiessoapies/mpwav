@@ -5,15 +5,15 @@ const path = require("node:path");
 const Slides = require("../src/ui/slides.js");
 
 const read = (f) => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
-const PANELS = ["playbox", "clip-editor", "note-edit", "keys-section"];
+const PANELS = ["playbox", "clip-editor", "note-edit", "keys-section", "sample-studio"];
 
 test("the slides: All first, then the steps of making a song, each with a name and a line to read out", () => {
-  assert.deepEqual(Slides.LIST.map((s) => s.id), ["all", "make", "arrange", "edit", "sound", "mix"]);
+  assert.deepEqual(Slides.LIST.map((s) => s.id), ["all", "make", "arrange", "edit", "sound", "mix", "sample"]);
   for (const s of Slides.LIST) {
     assert.ok(s.name && s.about, s.id);
     assert.ok(s.panels.length && s.panels.every((p) => PANELS.includes(p)), s.id + " shows real panels");
   }
-  assert.deepEqual(Slides.find("all").panels, PANELS, "All shows everything");
+  assert.deepEqual(Slides.find("all").panels, PANELS.filter((p) => p !== "sample-studio"), "All shows every panel but Sample Studio (its own workspace)");
 });
 
 test("an unknown slide falls back to All", () => {
@@ -38,14 +38,14 @@ test("the stylesheet hides exactly the panels each slide leaves out", () => {
 });
 
 test("the switcher numbers the five steps; All is reached from Settings", () => {
-  assert.deepEqual(Slides.STEPS.map((s) => s.id), ["make", "arrange", "edit", "sound", "mix"]);
+  assert.deepEqual(Slides.STEPS.map((s) => s.id), ["make", "arrange", "edit", "sound", "mix", "sample"]);
   const html = read("index.html");
   assert.ok(html.includes('id="all-panels"'), "Settings has Show all panels at once");
 });
 
 test("each workspace offers only its own Note Edit pages, and opens on one of them", () => {
   const html = read("index.html");
-  for (const s of Slides.STEPS) {
+  for (const s of Slides.STEPS.filter((x) => x.panels.includes("note-edit"))) {
     assert.ok(Array.isArray(s.pages) && s.pages.length, s.id);
     assert.ok(s.pages.includes(s.page), `${s.id} opens on a page it offers`);
     for (const p of s.pages) assert.ok(html.includes(`id="${p}"`), `${s.id}: ${p}`);

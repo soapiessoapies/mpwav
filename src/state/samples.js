@@ -81,7 +81,8 @@
   const decoderCtx = () => (decoder = decoder || new Offline(1, 1, 44100));
   const decode = (bytes) => new Promise((resolve, reject) => {
     if (!Offline) { reject(new Error("this browser can't play sounds")); return; }
-    decoderCtx().decodeAudioData(bytes.slice(0), resolve, (e) => reject(e || new Error("not a sound this browser can read")));
+    const p = decoderCtx().decodeAudioData(bytes.slice(0), resolve, (e) => reject(e || new Error("not a sound this browser can read")));
+    if (p && p.catch) p.catch(() => {}); // (newer browsers also return a promise: the callback above already handles it)
   });
 
   function outline(buf) {

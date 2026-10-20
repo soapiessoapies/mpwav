@@ -32,6 +32,7 @@
   --ws-edit: #7fe3cf;
   --ws-sound: #c39bff;
   --ws-mix: #ffdc7a;
+  --ws-sample: #ff9fd2;
   --ws-ink: #1d1b55;
   --focus: #8fd0ff;
   --white-key: #eceff4;
@@ -1639,3 +1640,56 @@ fieldset:disabled { opacity: 0.55; }
 .title-sub .title-wave { flex: 1 1 auto; min-width: 40px; margin: 0; }
 .title-sub .byline { flex: none; white-space: nowrap; }
 .title-row button { padding: 0 10px; flex: none; }
+
+/* ---------- Sample Studio (workspace 6) ---------- */
+.slide-btn[data-slide="sample"], [data-slide="sample"] .ws-head { --ws-c: var(--ws-sample); }
+[data-slide="sample"] { --ws-now: var(--ws-sample); }
+/* Only on its own workspace; on every other one (All too) it's away. */
+[data-slide="all"] #sample-studio, [data-slide="make"] #sample-studio, [data-slide="arrange"] #sample-studio,
+[data-slide="edit"] #sample-studio, [data-slide="sound"] #sample-studio, [data-slide="mix"] #sample-studio { display: none !important; }
+[data-slide="sample"] #playbox, [data-slide="sample"] #clip-editor, [data-slide="sample"] #note-edit, [data-slide="sample"] #keys-section { display: none !important; }
+[data-slide="sample"] .col-side, [data-slide="sample"] .col-bottom, [data-slide="sample"] .col-split { display: none !important; }
+[data-layout="wide"][data-slide="sample"] .studio {
+  grid-template-columns: minmax(0, 1fr) var(--side-w, clamp(320px, 24vw, 560px));
+  grid-template-areas: "transport title" "bar bar" "main main";
+}
+[data-layout="wide"][data-side="left"][data-slide="sample"] .studio { grid-template-areas: "title transport" "bar bar" "main main"; }
+[data-fit="on"][data-slide="sample"] .studio { grid-template-rows: auto auto minmax(0, 1fr); }
+[data-slide="sample"] .col-main { display: none !important; }
+[data-layout="wide"] #sample-studio { grid-area: main; }
+.sample-studio { display: flex; flex-direction: column; min-height: 0; }
+[data-fit="on"] .sample-studio { flex: 1 1 auto; }
+.sample-studio.ss-dropping { outline: 3px dashed var(--ws-sample); outline-offset: -6px; }
+.ss-body { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: 14px; flex: 1 1 auto; min-height: 0; }
+[data-layout="compact"] .ss-body, [data-layout="medium"] .ss-body { grid-template-columns: 1fr; }
+.ss-lib { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.ss-lib input[type="search"] { width: 100%; }
+.ss-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; max-height: 60vh; }
+[data-layout="compact"] .ss-list { max-height: 240px; }
+.ss-group { margin: 8px 0 4px; color: var(--muted); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.ss-row { display: flex; gap: 4px; margin-bottom: 4px; }
+.ss-item { flex: 1 1 auto; min-width: 0; display: flex; justify-content: space-between; gap: 8px; text-align: left; min-height: 40px; }
+.ss-item[aria-pressed="true"] { border-color: var(--ws-sample); background: var(--panel-2); box-shadow: inset 4px 0 0 var(--ws-sample); }
+.ss-item-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-item-len { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.ss-rename { width: 100%; min-height: 40px; }
+.ss-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.ss-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ss-title { margin: 0 auto 0 0; min-width: 0; }
+.ss-wave { --ss-wave: var(--ws-sample); position: relative; flex: 1 1 auto; min-height: 180px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 12, 18, 0.55); cursor: text; touch-action: none; }
+.ss-wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ss-wave:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.ss-time { margin: 0; font-variant-numeric: tabular-nums; color: var(--muted); }
+/* The Editing strip in Sample Studio: the picked sound, no clip picture. */
+[data-slide="sample"] .ws-mini, [data-slide="sample"] .ws-editing .more-btn, [data-slide="sample"] .ws-sizes { display: none; }
+/* Wide: the switcher leads the workspace header; its pressed button names
+   the workspace, so the number badge and name step aside there. */
+[data-layout="wide"] .ws-head > .slides { flex: none; flex-wrap: nowrap; gap: 4px; }
+[data-layout="wide"] .ws-head > .slides .slide-btn { min-height: 34px; padding: 0 9px 0 5px; }
+[data-layout="wide"] .ws-head:has(> .slides) .ws-num, [data-layout="wide"] .ws-head:has(> .slides) #ws-name { display: none; }
+[data-layout="wide"] .ws-head:has(> .slides) .ws-about::before { content: none; }
+[data-layout="wide"] .ws-head:has(> .slides) { padding-left: 4px; }
+/* Phones: the chords in one scrolling row (their inner box mustn't wrap either),
+   and no More button (Speak notes and Shortcuts are for computer keyboards). */
+[data-layout="compact"] .chords { flex-wrap: nowrap; flex: none; }
+[data-layout="compact"] .keys-panel [popovertarget="keys-menu"] { display: none; }

@@ -217,6 +217,7 @@
     const scan = (text) => { for (const m of String(text).matchAll(/snd-[a-z0-9]{1,24}/g)) keep.add(m[0]); };
     scan(JSON.stringify(song));
     try { scan(localStorage.getItem("sound-studio.pads") || ""); } catch (e) { /* no storage */ }
+    try { scan(localStorage.getItem("sound-studio.samplelib") || ""); } catch (e) { /* no storage */ } // Sample Studio's library
     for (const e of library.list()) if (e.id !== songId) scan(JSON.stringify(library.load(e.id)));
     if (withUndo) for (const json of history.all()) scan(json);
     return keep;
@@ -680,8 +681,8 @@
       return;
     }
     if (inDialog(e.target)) return;
-    // Alt + 1 to 5: the workspaces, in order; Alt + 0: All panels.
-    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[0-5]$/.test(e.code) && !e.target.closest("input[type=text], input:not([type]), textarea, [contenteditable]")) {
+    // Alt + 1 to 6: the workspaces, in order; Alt + 0: All panels.
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[0-6]$/.test(e.code) && !e.target.closest("input[type=text], input:not([type]), textarea, [contenteditable]")) {
       e.preventDefault();
       const n = Number(e.code.slice(5));
       setSlide(n ? Slides.STEPS[n - 1].id : "all", true);
@@ -2725,6 +2726,14 @@
     // (runs during startup too, before later helpers are set up)
     const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
     const slide = ui.slide;
+    if (slide === "sample") {
+      // Sample Studio: the sound picked in its library.
+      let words = "No sound picked";
+      try { words = sampleStudio.describe(); } catch (e) { /* set up further down */ }
+      $("ws-editing-text").textContent = words;
+      box.querySelector(".more-btn")?.remove();
+      return;
+    }
     const o = slide === "arrange" ? find(picked) : find(open) || find(picked);
     const t = o ? o.t : sel();
     const mini = $("ws-mini"), cv = $("ws-mini-canvas");
@@ -4124,10 +4133,12 @@
     const fit = ui.fit && want === "wide" ? "on" : "off";
     if (layoutReady && layoutShown !== want) Announce.tell(LAYOUT_NOTE[want]);
     layoutShown = want;
-    // The slide switcher: in the transport bar on a desktop, on its own row under it otherwise.
-    const bar = document.querySelector(".transport-bar"), nav = $("slides");
-    if (want === "wide" && nav.parentElement !== bar) bar.insertBefore(nav, bar.querySelector(".tempo"));
-    else if (want !== "wide" && nav.parentElement === bar) bar.after(nav);
+    // The workspace switcher: at the start of the workspace header on a
+    // desktop (the pressed button says where you are), on its own row under
+    // the transport otherwise.
+    const bar = document.querySelector(".transport-bar"), nav = $("slides"), head = $("ws-head");
+    if (want === "wide" && nav.parentElement !== head) head.prepend(nav);
+    else if (want !== "wide" && nav.parentElement === head) bar.after(nav);
     if (document.documentElement.dataset.layout !== want || document.documentElement.dataset.fit !== fit) {
       document.documentElement.dataset.layout = want;
       document.documentElement.dataset.fit = fit;
@@ -4335,6 +4346,8 @@
     document.documentElement.dataset.onepage = String(!!s.pages && s.pages.length === 1);
     showPhonePanel(s);
     renderEditing();
+    // (Sample Studio is set up further down: at startup it isn't there yet.)
+    try { if (s.id === "sample") sampleStudio.show(); else sampleStudio.stop(); } catch (e) { if (!(e instanceof ReferenceError)) throw e; }
     if (typeof applySizes === "function" && document.querySelector(".studio")) try { applySizes(true); } catch (e) { /* first run: set up below */ }
     if (byHand && arrange.arranging) setArranging(false);
     // Any change of slide opens its page (also when a new song moves you
@@ -4361,6 +4374,15 @@
   }
   setSlide(ui.slide, false);
   $("all-panels").addEventListener("click", () => setSlide(ui.slide === "all" ? "make" : "all", true));
+  // Sample Studio (src/ui/sample-studio.js).
+  const sampleStudio = SampleStudio.create($("sample-studio"), {
+    ready, ctx: () => Engine.ctx, out: () => Engine.input,
+    songSounds: () => [...new Set(Object.values(song.contents).map((c) => c.audio && c.audio.sampleId).concat(song.tracks.map((t) => t.sampler && t.sampler.sampleId)).filter(Boolean))]
+      .map((id) => ({ id, name: (Samples.info(id) || {}).name || "Sound" })),
+    say: (t) => Announce.say(t), tell: (t, o) => Announce.tell(t, o), changed: () => save(),
+    picked: () => renderEditing(),
+  });
+  if (ui.slide === "sample") sampleStudio.show();
 
   // --- Panel sizes, per workspace: Note Edit's width and the keyboard's
   // height (ui.panelSizes[slide] = { side, keys } in px; none = the default) ---

@@ -947,3 +947,36 @@ Under the hood: picked clips render from a copy of the song with only them
 (`songOf`), through the same `Render.renderSong`, `Wav`, `Zip` and `MidiFile`
 code as before. Also fixed: shortcuts checked "inside a dialog" rather than
 "inside an open dialog", so focus left in a closed dialog could block them.
+
+## Sample Studio, step 1 of 4: the workspace and the library (v0.34.0)
+
+A sixth workspace, **6 Sample** (Alt + 6, its own color `--ws-sample`, a pink
+from the poster's family), shows only the Sample Studio panel
+(`src/ui/sample-studio.js`):
+
+- **The library** (left): every sound added here, then (under "In this song")
+  the sound files the open song uses. **Add sound files…** takes several at
+  once (MP3, WAV, OGG, M4A, FLAC, AIFF); files can also be dropped anywhere on
+  the panel. A file that isn't a sound is named in the message and skipped.
+  Find filters by name. Each row's ⋯: Play, Rename…, Remove from the library
+  (with Undo in the notice), or Keep in the library for a song's sound.
+- **The library is kept:** it's a list of sound ids and names in
+  `sound-studio.samplelib`; the storage tidy-up (which clears sounds no song
+  uses) keeps everything on it.
+- **The waveform** (right): the picked sound, big, in the workspace color. A
+  click or tap puts the cursor there; Play (or Enter with the wave focused)
+  plays from the cursor, with a playhead, and stops at the end. Zoom with − /
+  + / Fit, Ctrl + wheel, or the zoom bar (in milliseconds, as in the wave
+  editor). Arrows move the cursor (Shift: a second), Home/End.
+- The workspace header's Editing strip names the picked sound.
+
+Also in this step: on wide screens the **workspace switcher moved into the
+workspace header** (six buttons no longer fit the transport bar, which is one
+row again at 1100–1920 px); on phones the six buttons share the row, the
+chords stay in one scrolling row (their inner box wrapped), and the
+keyboard's More button is hidden (it only held Speak notes and Shortcuts).
+Fixed on the way: a workspace with no Note Edit pages crashed the page tabs at
+startup (`Tabs.select` with no tab), and a file that isn't a sound left an
+unhandled rejection from `decodeAudioData`'s promise.
+
+Next: slicing (hand cuts, by beats, equal parts, bars, silences).

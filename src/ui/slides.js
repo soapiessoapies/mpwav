@@ -22,6 +22,7 @@
     { id: "edit", name: "Edit", about: "play the whole song and change any note", panels: ["playbox", "note-edit"], page: "tab-p-note", pages: ["tab-p-note", "tab-p-clip"] },
     { id: "sound", name: "Sound", about: "shape one sound", panels: ["clip-editor", "note-edit", "keys-section"], page: "tab-p-sound", pages: ["tab-p-sound", "tab-p-shape", "tab-p-filter", "tab-p-warp"] },
     { id: "mix", name: "Mix", about: "balance the tracks", panels: ["note-edit"], page: "tab-p-mix", pages: ["tab-p-mix"] },
+    { id: "sample", name: "Sample", about: "cut sound files up for sampling", panels: ["sample-studio"], pages: [] },
   ];
   // The steps in the switcher (All is reached from Settings).
   const STEPS = LIST.filter((s) => s.id !== "all");

@@ -14,6 +14,7 @@
     function select(tab, focus) {
       if (typeof tab === "string") tab = document.getElementById(tab);
       if (!tab || tab.hidden) tab = shown()[0];
+      if (!tab) return; // no tab showing (a workspace without these pages)
       current = tab;
       for (const t of shown()) {
         const on = t === tab;

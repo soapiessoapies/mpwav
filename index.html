@@ -416,6 +416,39 @@
   <!-- The bar between the work panel and Note Edit: drag it (or arrows) to share the width -->
   <div id="col-split" class="col-split" role="separator" aria-orientation="vertical" tabindex="0" aria-controls="col-side"
        aria-label="Width of Note Edit" aria-keyshortcuts="ArrowLeft ArrowRight Home End Enter" title="Drag to resize. Double-click to reset."></div>
+  <!-- Sample Studio (workspace 6): a library of sound files, and the picked one as a big waveform -->
+  <section id="sample-studio" class="panel sample-studio" aria-labelledby="ss-h">
+    <div class="panel-head">
+      <h2 id="ss-h">Sample Studio</h2>
+      <button type="button" id="ss-add">Add sound files…</button>
+      <input type="file" id="ss-file" accept="audio/*,.wav,.mp3,.ogg,.m4a,.flac,.aif,.aiff" multiple hidden>
+    </div>
+    <p class="help tip">Add MP3 or WAV files (or drop them anywhere on this panel), pick one, and play it from anywhere on its wave. Cutting sounds into slices, and sending slices to pads, the keys and the timeline, come next.</p>
+    <p id="ss-status" class="help" aria-live="polite"></p>
+    <div class="ss-body">
+      <div class="ss-lib">
+        <label for="ss-search" class="sr-only">Find a sound</label>
+        <input id="ss-search" class="text-field" type="search" placeholder="Find a sound" autocomplete="off">
+        <ul id="ss-list" class="ss-list" aria-label="Sounds"></ul>
+        <p id="ss-empty" class="help">No sounds yet.</p>
+      </div>
+      <div class="ss-main">
+        <div class="ss-top">
+          <p class="ss-title"><strong id="ss-name">No sound picked</strong> <span id="ss-meta" class="muted"></span></p>
+          <button type="button" id="ss-play" aria-pressed="false" disabled>Play</button>
+          <div class="octave" role="group" aria-label="Zoom">
+            <button type="button" id="ss-zoom-out" aria-label="Zoom out" disabled>−</button>
+            <button type="button" id="ss-zoom-in" aria-label="Zoom in" disabled>+</button>
+            <button type="button" id="ss-fit" class="fit-btn" disabled>Fit</button>
+          </div>
+        </div>
+        <div id="ss-wave" class="ss-wave" tabindex="0" role="application" aria-roledescription="waveform"><canvas id="ss-canvas" aria-hidden="true"></canvas></div>
+        <div id="ss-zoombar"></div>
+        <p id="ss-time" class="ss-time" aria-hidden="true"></p>
+      </div>
+    </div>
+  </section>
+
   <div id="col-side" class="col col-side" data-col="side">
     <!-- Note Edit: paged settings for the selected notes and the selected track -->
     <section id="note-edit" class="panel note-edit" aria-labelledby="note-edit-h">
@@ -901,7 +934,7 @@
   <p class="help">The computer keys either <strong>play</strong> notes or <strong>edit</strong>: switch with Ctrl + E or the switch by the keyboard. Single-key shortcuts can be turned off in Settings.</p>
     <h3>Workspaces</h3>
     <table><tbody>
-      <tr><th scope="row">Alt + 1 to 5</th><td>The workspaces: 1 Make, 2 Arrange, 3 Edit, 4 Sound, 5 Mix. Each shows only the panels for that job</td></tr>
+      <tr><th scope="row">Alt + 1 to 6</th><td>The workspaces: 1 Make, 2 Arrange, 3 Edit, 4 Sound, 5 Mix, 6 Sample. Each shows only the panels for that job</td></tr>
       <tr><th scope="row">Alt + 0</th><td>All panels at once (also in Settings, Layout)</td></tr>
     </tbody></table>
     <h3>Anywhere</h3>
@@ -1105,6 +1138,7 @@
 <script src="src/ui/colors.js"></script>
 <script src="src/ui/color-pick.js"></script>
 <script src="src/ui/item-menu.js"></script>
+<script src="src/ui/sample-studio.js"></script>
 <script src="src/ui/piano-roll.js"></script>
 <script src="src/ui/zoombar.js"></script>
 <script src="src/ui/timeline.js"></script>
